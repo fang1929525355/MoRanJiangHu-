@@ -13,7 +13,8 @@ import {
     小说拆分物品档案结构,
     小说拆分来源类型,
     小说拆分树节点结构,
-    小说拆分注入目标类型
+    小说拆分注入目标类型,
+    题材模式类型
 } from '../../../types';
 import GameButton from '../../ui/GameButton';
 import ToggleSwitch from '../../ui/ToggleSwitch';
@@ -52,7 +53,8 @@ import {
     type 小说分解创意工坊条目
 } from '../../../services/workshopNovelDecomposition';
 import { 发布创意工坊模块, 导入本地创意工坊模块 } from '../../../services/creativeWorkshop';
-import { 构建小说拆分模式包创意工坊模块, AI补全小说模式包配置 } from '../../../services/novelDecompositionWorkshopBridge';
+import { 构建小说拆分模式包创意工坊模块, AI补全小说模式包配置, 解析小说模式包题材 } from '../../../services/novelDecompositionWorkshopBridge';
+import { 题材模式顺序 } from '../../../utils/topicModeProfiles';
 import { generateNovelSegmentFieldCompletion } from '../../../services/ai/storyTasks';
 import {
     构建小说分段字段补全原文输入,
@@ -68,6 +70,24 @@ interface Props {
     onNotify?: (toast: { title: string; message: string; tone?: 'info' | 'success' | 'error' }) => void;
     mode?: 'desktop' | 'mobile';
 }
+
+export const 小说模式包题材选择器: React.FC<{
+    value: 题材模式类型;
+    onChange: (value: 题材模式类型) => void;
+}> = ({ value, onChange }) => (
+    <label className="novel-mode-topic-picker inline-flex flex-col gap-1 rounded-lg border border-amber-500/25 bg-amber-950/15 px-3 py-2 text-xs">
+        <span className="font-medium text-amber-200">模式包题材</span>
+        <select
+            className="novel-mode-topic-select min-w-32 rounded-md border border-amber-500/30 bg-black/40 px-2 py-1.5 text-amber-100 outline-none focus:border-amber-400"
+            value={value}
+            data-novel-mode-topic={value}
+            onChange={(event) => onChange(event.target.value as 题材模式类型)}
+        >
+            {题材模式顺序.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+        </select>
+        <span className="text-[10px] text-amber-100/65">自动识别：{value}；手动选择会覆盖自动识别</span>
+    </label>
+);
 
 interface 分段编辑草稿 {
     标题: string;
@@ -522,6 +542,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
     const [modePackagePublishing, setModePackagePublishing] = useState(false);
     const [aiCompletionRunning, setAiCompletionRunning] = useState(false);
     const [aiCompletionDraft, setAiCompletionDraft] = useState<Partial<import('../../../models/system').ModeRuntimeProfile> | null>(null);
+    const [modePackageTopic, setModePackageTopic] = useState<题材模式类型>('武侠');
     const [aiCompletionLog, setAiCompletionLog] = useState('');
     const [aiCompletionExpanded, setAiCompletionExpanded] = useState<Record<string, boolean>>({});
     const [workshopAnonymous, setWorkshopAnonymous] = useState(false);
@@ -530,12 +551,6 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
     const [workshopEditDraft, setWorkshopEditDraft] = useState({ title: '', workName: '', contributor: '', note: '', tags: '', anonymous: false });
     const [selectedDatasetId, setSelectedDatasetId] = useState('');
     const segmentDetailScrollRef = useRef<HTMLDivElement | null>(null);
-    // Clear AI completion draft when switching datasets
-    useEffect(() => {
-        setAiCompletionDraft(null);
-        setAiCompletionLog('');
-        setAiCompletionExpanded({});
-    }, [selectedDatasetId]);
     const [selectedSegmentId, setSelectedSegmentId] = useState('');
     const [showStrategySection, setShowStrategySection] = useState(false);
     const [showLiveMonitor, setShowLiveMonitor] = useState(false);
@@ -769,6 +784,21 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
     const runningTaskCount = tasks.filter((item) => item.状态 === 'running').length;
     const resumableTaskCount = 筛选可后台续跑任务(tasks).length;
     const selectedDataset = datasetList.find((item) => item.id === selectedDatasetId) || datasetList[0] || null;
+    useEffect(() => {
+        if (selectedDataset) {
+            setModePackageTopic(解析小说模式包题材(聚合小说拆分数据集(selectedDataset)));
+        }
+        setAiCompletionDraft(null);
+        setAiCompletionLog('');
+        setAiCompletionExpanded({});
+    }, [selectedDataset?.id]);
+
+    const handleModePackageTopicChange = (value: 题材模式类型) => {
+        setModePackageTopic(value);
+        setAiCompletionDraft(null);
+        setAiCompletionLog('');
+        setAiCompletionExpanded({});
+    };
     const selectedSnapshots = snapshots.filter((item) => item.数据集ID === (selectedDataset?.id || ''));
     const selectedSnapshotTrees = useMemo<Record<小说拆分注入目标类型, 小说拆分树节点结构[]>>(() => ({
         main_story: 过滤目标注入树节点(selectedDataset?.注入树 || [], 'main_story'),
@@ -1828,6 +1858,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
             const result = await AI补全小说模式包配置({
                 dataset: 聚合小说拆分数据集(selectedDataset),
                 apiConfig,
+                baseMode: modePackageTopic,
                 onDelta: (delta, accumulated) => {
                     setAiCompletionLog(accumulated);
                 }
@@ -2106,6 +2137,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
             const module = 构建小说拆分模式包创意工坊模块({
                 dataset: 聚合小说拆分数据集(selectedDataset),
                 contributor: workshopUsername || '',
+                baseMode: modePackageTopic,
                 aiCompletion: aiCompletionDraft
             });
             const local = 导入本地创意工坊模块(module);
@@ -2144,6 +2176,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
             const module = 构建小说拆分模式包创意工坊模块({
                 dataset: 聚合小说拆分数据集(selectedDataset),
                 contributor: workshopUsername,
+                baseMode: modePackageTopic,
                 aiCompletion: aiCompletionDraft
             });
             const local = 导入本地创意工坊模块(module);
@@ -2690,6 +2723,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3 pt-2">
+                                <小说模式包题材选择器 value={modePackageTopic} onChange={handleModePackageTopicChange} />
                                 <button
                                     onClick={() => void handleStartTaskForDataset()}
                                     className="px-5 py-2.5 rounded-lg text-xs font-medium border border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-all"
@@ -2827,6 +2861,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
+                            <小说模式包题材选择器 value={modePackageTopic} onChange={handleModePackageTopicChange} />
                             <button
                                 type="button"
                                 onClick={() => void refreshWorkshopEntries()}

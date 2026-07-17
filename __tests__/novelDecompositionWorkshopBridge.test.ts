@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { 创建空小说拆分数据集 } from '../services/novelDecompositionStore';
 import { 聚合小说拆分数据集, 基于分段构建注入树 } from '../services/novelDecompositionPipeline';
-import { 构建小说拆分模式包创意工坊模块 } from '../services/novelDecompositionWorkshopBridge';
+import { 构建小说拆分模式包创意工坊模块, 解析小说模式包题材 } from '../services/novelDecompositionWorkshopBridge';
 import type { 小说拆分分段结构 } from '../types';
 
 const 创建分段 = (patch: Partial<小说拆分分段结构>): 小说拆分分段结构 => ({
@@ -63,6 +63,27 @@ const 序列化客户可见运行时配置 = (profile: any): string => JSON.stri
 });
 
 describe('novelDecompositionWorkshopBridge', () => {
+    it('手动选择题材时覆盖自动识别结果', () => {
+        const dataset = 聚合小说拆分数据集(创建空小说拆分数据集({
+            id: 'dataset-manual-wuxia',
+            标题: '轮回刀客',
+            作品名: '轮回刀客',
+            来源类型: 'txt',
+            原始文本摘要: '江湖刀客被人称作轮回者，但故事始终发生在武林门派与镖局之间。',
+            世界观规则: ['传闻中有人把秘境称为任务世界。']
+        }));
+
+        expect(解析小说模式包题材(dataset)).toBe('无限流');
+        expect(解析小说模式包题材(dataset, '武侠')).toBe('武侠');
+
+        const module = 构建小说拆分模式包创意工坊模块({
+            dataset,
+            baseMode: '武侠',
+            now: 1
+        });
+        expect(module.modeRuntimeProfile?.identity.baseMode).toBe('武侠');
+    });
+
     it('非主神异世界小说不会被误判成无限流模式包', () => {
         const dataset = 聚合小说拆分数据集(创建空小说拆分数据集({
             id: 'dataset-yaotian',

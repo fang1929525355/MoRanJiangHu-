@@ -128,6 +128,22 @@ html[data-theme="day"] .day-mode-novel-dataset-switcher .novel-dataset-switcher-
   background: rgba(132, 91, 45, 0.08) !important;
 }
 
+html[data-theme="day"] .novel-mode-topic-picker {
+  border-color: rgba(180, 83, 9, 0.35) !important;
+  background: rgba(255, 251, 235, 0.92) !important;
+  color: #78350f !important;
+}
+
+html[data-theme="day"] .novel-mode-topic-picker > span {
+  color: #78350f !important;
+}
+
+html[data-theme="day"] .novel-mode-topic-select {
+  border-color: rgba(180, 83, 9, 0.45) !important;
+  background: #ffffff !important;
+  color: #451a03 !important;
+}
+
 .novel-archive-fields {
   display: flex;
   flex-direction: column;

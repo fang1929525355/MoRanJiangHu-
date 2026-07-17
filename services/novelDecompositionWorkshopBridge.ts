@@ -147,6 +147,11 @@ const 推断题材模式 = (dataset: 小说拆分数据集结构): 题材模式�
     return '武侠';
 };
 
+export const 解析小说模式包题材 = (
+    dataset: 小说拆分数据集结构,
+    baseMode?: 题材模式类型
+): 题材模式类型 => baseMode || 推断题材模式(dataset);
+
 const 构建模式世界书条目 = (
     id: string,
     标题: string,
@@ -189,7 +194,7 @@ export const 构建小说拆分模式包创意工坊模块 = (params: {
     const now = params.now || Date.now();
     const iso = new Date(now).toISOString();
     const workName = dataset.作品名 || dataset.标题 || '未命名小说';
-    const baseMode = params.baseMode || 推断题材模式(dataset);
+    const baseMode = 解析小说模式包题材(dataset, params.baseMode);
     const suiteId = `novel-${生成安全ID片段(workName)}-${now}`;
     const suiteTitle = `${workName}同人模式包`;
     const crossWorldRules = 构建小说拆分跨世界时间线规则(dataset);
@@ -648,6 +653,7 @@ export const AI补全小说模式包配置 = async (
     params: {
         dataset: 小说拆分数据集结构;
         apiConfig: 当前可用接口结构;
+        baseMode?: 题材模式类型;
         signal?: AbortSignal;
         onDelta?: (delta: string, accumulated: string) => void;
     }
@@ -655,7 +661,7 @@ export const AI补全小说模式包配置 = async (
     const { dataset, apiConfig, signal, onDelta } = params;
     const streamOptions = onDelta ? { stream: true, onDelta } : undefined;
     const result = await generateNovelModePackCompletion(dataset, apiConfig, streamOptions, signal);
-    const baseMode = 推断题材模式(dataset);
+    const baseMode = 解析小说模式包题材(dataset, params.baseMode);
     const hasInfiniteEvidence = baseMode === '无限流' || 小说拆分疑似无限流题材(dataset);
     return {
         ...result,
