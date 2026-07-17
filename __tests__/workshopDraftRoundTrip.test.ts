@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    构建官方模板草稿,
     构建模式包模块,
     构建贡献模块,
     空贡献草稿,
@@ -10,6 +11,7 @@ import { 规范化模式运行时配置 } from '../utils/modeRuntimeProfile';
 import { 创意工坊模块列表, 整合创意工坊模式包, type 创意工坊模块条目 } from '../data/creativeWorkshopModules';
 import { 规范能力类别键列表 } from '../utils/abilityCategoryLabels';
 import { 功法类型列表 } from '../models/kungfu';
+import { 构建世界书注入文本 } from '../utils/worldbook';
 
 const 构建红楼式草稿 = () => {
     const draft = 空贡献草稿();
@@ -57,6 +59,9 @@ const 构建红楼式草稿 = () => {
 describe('模式包模块 round-trip', () => {
     it('表单草稿 → 模式包模块 → 草稿：关键字段无损还原', () => {
         const draft = 构建红楼式草稿();
+        draft.mainStoryDirection = '主线围绕家族日常、人情往来与个人成长展开。';
+        draft.hiddenPlotPolicy = '暗线只做轻量伏笔，不升级为灭门阴谋。';
+        draft.worldEvolutionPolicy = '后台世界以节庆、婚丧嫁娶和产业变化平缓推进。';
         const entry = 构建模式包模块(draft, '测试贡献者');
         const restored = 模块转贡献草稿(entry);
         expect(restored).not.toBeNull();
@@ -72,6 +77,9 @@ describe('模式包模块 round-trip', () => {
         expect(r.topicBody).toBe(draft.topicBody);
         expect(r.worldRulesBody).toBe(draft.worldRulesBody);
         expect(r.abilityBody).toBe(draft.abilityBody);
+        expect(r.mainStoryDirection).toBe(draft.mainStoryDirection);
+        expect(r.hiddenPlotPolicy).toBe(draft.hiddenPlotPolicy);
+        expect(r.worldEvolutionPolicy).toBe(draft.worldEvolutionPolicy);
         expect(r.usagePrompt).toBe(draft.usagePrompt);
         expect(r.versionNote).toBe(draft.versionNote);
         expect(r.safetyNotes).toBe(draft.safetyNotes);
@@ -83,6 +91,93 @@ describe('模式包模块 round-trip', () => {
         expect(r.presetItemKeywords.split(/[、,，]/)).toEqual(['月钱袋', '名帖', '钥匙串']);
         expect(r.backgroundSuggestions).toContain('公府嫡系');
         expect(r.talentSuggestions).toContain('过目成诵');
+    });
+
+    it('叙事方向按职责生成独立世界书条目，且不能覆盖底层协议', () => {
+        const draft = 构建红楼式草稿();
+        draft.mainStoryDirection = '轻松日常主线';
+        draft.hiddenPlotPolicy = '低强度生活伏笔';
+        draft.worldEvolutionPolicy = '平缓社会演变';
+        const entry = 构建模式包模块(draft, '测试贡献者');
+        const entries = entry.modeWorldbooks?.flatMap((book) => book.条目 || []) || [];
+        const main = entries.find((item) => item.id.endsWith('-narrative-main-story'));
+        const hidden = entries.find((item) => item.id.endsWith('-narrative-hidden-plot'));
+        const world = entries.find((item) => item.id.endsWith('-narrative-world-evolution'));
+        expect(main?.作用域).toEqual(['main', 'opening', 'story_plan', 'heroine_plan']);
+        expect(hidden?.作用域).toEqual(['main', 'opening', 'story_plan', 'heroine_plan', 'world_evolution']);
+        expect(world?.作用域).toEqual(['main', 'world_evolution', 'story_plan']);
+        for (const item of [main, hidden, world]) {
+            expect(item?.内容).toContain('不得覆盖变量协议、命令格式、数据结构、安全规则或存档一致性规则');
+        }
+        expect((entry.payload as any).mainStoryDirection).toBe('轻松日常主线');
+        expect((entry.payload as any).hiddenPlotPolicy).toBe('低强度生活伏笔');
+        expect((entry.payload as any).worldEvolutionPolicy).toBe('平缓社会演变');
+    });
+
+    it('轻松现代都市叙事规则进入匹配链路且不污染无关作用域', () => {
+        const draft = 构建官方模板草稿('现代都市');
+        draft.mainStoryDirection = '轻松愉快现代都市主线';
+        draft.hiddenPlotPolicy = '生活化暗线';
+        draft.worldEvolutionPolicy = '平缓现实世界推进';
+        const books = 构建模式包模块(draft, '测试贡献者').modeWorldbooks || [];
+        const main = 构建世界书注入文本({ books, scopes: ['main'], maxChars: 100000 }).combinedText;
+        const opening = 构建世界书注入文本({ books, scopes: ['opening'], maxChars: 100000 }).combinedText;
+        const planning = 构建世界书注入文本({ books, scopes: ['story_plan'], maxChars: 100000 }).combinedText;
+        const evolution = 构建世界书注入文本({ books, scopes: ['world_evolution'], maxChars: 100000 }).combinedText;
+        const calibration = 构建世界书注入文本({ books, scopes: ['variable_calibration'], maxChars: 100000 }).combinedText;
+        expect(main).toContain('轻松愉快现代都市主线');
+        expect(main).toContain('生活化暗线');
+        expect(main).toContain('平缓现实世界推进');
+        expect(opening).toContain('轻松愉快现代都市主线');
+        expect(opening).toContain('生活化暗线');
+        expect(opening).not.toContain('平缓现实世界推进');
+        expect(planning).toContain('轻松愉快现代都市主线');
+        expect(planning).toContain('生活化暗线');
+        expect(planning).toContain('平缓现实世界推进');
+        expect(evolution).not.toContain('轻松愉快现代都市主线');
+        expect(evolution).toContain('生活化暗线');
+        expect(evolution).toContain('平缓现实世界推进');
+        expect(calibration).not.toContain('轻松愉快现代都市主线');
+        expect(calibration).not.toContain('生活化暗线');
+        expect(calibration).not.toContain('平缓现实世界推进');
+    });
+
+    it('旧模式包没有叙事方向字段时不生成空覆盖条目', () => {
+        const entry = 构建模式包模块(构建红楼式草稿(), '测试贡献者');
+        const entries = entry.modeWorldbooks?.flatMap((book) => book.条目 || []) || [];
+        expect(entries.some((item) => item.id.includes('-narrative-'))).toBe(false);
+        expect((entry.payload as any).mainStoryDirection).toBeUndefined();
+        expect((entry.payload as any).hiddenPlotPolicy).toBeUndefined();
+        expect((entry.payload as any).worldEvolutionPolicy).toBeUndefined();
+    });
+
+    it('清空已有叙事方向后会删除受管世界书条目', () => {
+        const draft = 构建红楼式草稿();
+        draft.mainStoryDirection = '旧主线方向';
+        draft.hiddenPlotPolicy = '旧暗线策略';
+        draft.worldEvolutionPolicy = '旧世界推进';
+        const first = 构建模式包模块(draft, '测试贡献者');
+        const restored = 模块转贡献草稿(first)!;
+        restored.mainStoryDirection = '';
+        restored.hiddenPlotPolicy = '';
+        restored.worldEvolutionPolicy = '';
+        const rebuilt = 构建模式包模块(restored, '测试贡献者', [first]);
+        const entries = rebuilt.modeWorldbooks?.flatMap((book) => book.条目 || []) || [];
+        expect(entries.some((item) => item.id.includes('-narrative-'))).toBe(false);
+        expect((rebuilt.payload as any).mainStoryDirection).toBeUndefined();
+        expect((rebuilt.payload as any).hiddenPlotPolicy).toBeUndefined();
+        expect((rebuilt.payload as any).worldEvolutionPolicy).toBeUndefined();
+    });
+
+    it('现代都市官方模板携带真实官方内容和可编辑叙事方向', () => {
+        const draft = 构建官方模板草稿('现代都市');
+        expect(draft.topicBody).toContain('本存档以现代都市为核心题材');
+        expect(draft.worldRulesBody).toContain('人民币');
+        expect(draft.abilityBody).toContain('成长体系');
+        expect([draft.topicBody, draft.worldRulesBody, draft.abilityBody].join('\n')).not.toContain('模板：在此填写');
+        expect(draft.mainStoryDirection).toContain('现实日常');
+        expect(draft.hiddenPlotPolicy).toContain('不过度阴谋化');
+        expect(draft.worldEvolutionPolicy).toContain('现实社会');
     });
 
     it('round-trip 保留 uiLabels 与行情模板', () => {

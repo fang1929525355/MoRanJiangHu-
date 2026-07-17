@@ -241,6 +241,9 @@ export type 贡献草稿 = {
     topicBody: string;
     worldRulesBody: string;
     abilityBody: string;
+    mainStoryDirection: string;
+    hiddenPlotPolicy: string;
+    worldEvolutionPolicy: string;
     aiGenerateWorldDetails: boolean;
     importantPeople: string;
     importantFactions: string;
@@ -319,6 +322,9 @@ export const 空贡献草稿 = (): 贡献草稿 => ({
     topicBody: '',
     worldRulesBody: '',
     abilityBody: '',
+    mainStoryDirection: '',
+    hiddenPlotPolicy: '',
+    worldEvolutionPolicy: '',
     aiGenerateWorldDetails: false,
     importantPeople: '',
     importantFactions: '',
@@ -329,6 +335,37 @@ export const 空贡献草稿 = (): 贡献草稿 => ({
     scope: 'main',
     versionNote: ''
 });
+
+export const 构建官方模板草稿 = (mode: 题材模式类型): 贡献草稿 => {
+    const profile = 题材模式配置表[mode];
+    const isModernCity = mode === '现代都市';
+    return {
+        ...空贡献草稿(),
+        mode,
+        ...创建默认模式元数据草稿(mode),
+        title: `${mode}模式包模板`,
+        subtitle: `${mode} · 官方默认值模板`,
+        description: `以${mode}官方默认配置生成的模式包模板，可下载后修改或直接在表单中改造。`,
+        aiGenerateWorldDetails: true,
+        topicBody: profile.promptLines.join('\n'),
+        worldRulesBody: [
+            profile.worldDefaults.worldExtraRequirement,
+            profile.promptBoundary,
+            `社会与势力格局：${profile.worldDefaults.dynastySetting}`,
+            `人物成长环境：${profile.worldDefaults.tianjiaoSetting}`
+        ].filter(Boolean).join('\n'),
+        abilityBody: profile.manualRealmPrompt,
+        mainStoryDirection: isModernCity
+            ? '主线优先承接现实日常、工作学习、家庭朋友、兴趣成长和城市生活中的可解决问题；允许轻松、温暖、幽默与阶段性小目标，不默认升级为超凡危机、黑恶阴谋或生死主线。'
+            : `主线围绕${profile.hint}自然展开，优先承接玩家选择、当前关系和可持续成长，不用无依据的更大危机强行改写玩家正在体验的方向。`,
+        hiddenPlotPolicy: isModernCity
+            ? '暗线可以来自人情误会、职场信息差、家庭心事、邻里传闻或小型现实悬念；保持可理解、可回收、不过度阴谋化，不默认扩张为跨国组织、超凡黑幕、连环命案或全城灾难。'
+            : '暗线必须来自已出现的人物、势力、资源或信息差，按证据逐步铺垫并保留回收路径；不得凭空升级规模，也不得越过玩家行动提前把伏笔写成既成事实。',
+        worldEvolutionPolicy: isModernCity
+            ? '后台世界按现实社会节奏推进：公司、学校、社区、家庭、商业、交通与公共事件产生有限且合乎常识的变化；优先生活气息和关系余波，不为制造刺激而持续生成重大事故、犯罪升级或系统性崩坏。'
+            : `后台世界遵循${profile.label}的社会秩序、资源逻辑和时间尺度渐进变化；演变应留下可追踪余波，但不得脱离当前题材或持续用灾难抢走玩家主线。`
+    };
+};
 
 const 分割文本行 = (value: string): string[] => value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 const 分割短语 = (value: string): string[] => value.split(/[，,、\n]+/).map((line) => line.trim()).filter(Boolean);
@@ -797,7 +834,10 @@ export const 模块转贡献草稿 = (entry: 创意工坊模块条目): 贡献�
             modeRuntimeProfile: runtime,
             topicBody: 读取模式包正文(entry, 'topic'),
             worldRulesBody: 读取模式包正文(entry, 'worldRules'),
-            abilityBody: 读取模式包正文(entry, 'ability')
+            abilityBody: 读取模式包正文(entry, 'ability'),
+            mainStoryDirection: typeof payload?.mainStoryDirection === 'string' ? payload.mainStoryDirection : '',
+            hiddenPlotPolicy: typeof payload?.hiddenPlotPolicy === 'string' ? payload.hiddenPlotPolicy : '',
+            worldEvolutionPolicy: typeof payload?.worldEvolutionPolicy === 'string' ? payload.worldEvolutionPolicy : ''
         };
     }
     const mode = (官方题材模式集.has(String(payload?.mode)) ? payload.mode : (entry.tags || []).find((tag) => 官方题材模式集.has(tag)) || '武侠') as 题材模式类型;
@@ -984,12 +1024,62 @@ const 构建贡献模式世界书 = (draft: 贡献草稿, suiteId: string, suite
             启用: true,
             创建时间: Date.now(),
             更新时间: Date.now()
+        },
+        {
+            id: `${suiteId}-narrative-main-story`,
+            标题: '主线方向',
+            内容: draft.mainStoryDirection.trim() ? `【模式包主线方向】\n${draft.mainStoryDirection.trim()}\n\n边界：本规则只调整叙事取向，不得覆盖变量协议、命令格式、数据结构、安全规则或存档一致性规则。` : '',
+            条目形态: 'normal',
+            类型: 'system_rule',
+            作用域: ['main', 'opening', 'story_plan', 'heroine_plan'],
+            注入模式: 'always',
+            关键词: [],
+            优先级: 99,
+            启用: true,
+            创建时间: Date.now(),
+            更新时间: Date.now()
+        },
+        {
+            id: `${suiteId}-narrative-hidden-plot`,
+            标题: '暗线策略',
+            内容: draft.hiddenPlotPolicy.trim() ? `【模式包暗线策略】\n${draft.hiddenPlotPolicy.trim()}\n\n边界：本规则只调整叙事取向，不得覆盖变量协议、命令格式、数据结构、安全规则或存档一致性规则。` : '',
+            条目形态: 'normal',
+            类型: 'system_rule',
+            作用域: ['main', 'opening', 'story_plan', 'heroine_plan', 'world_evolution'],
+            注入模式: 'always',
+            关键词: [],
+            优先级: 98,
+            启用: true,
+            创建时间: Date.now(),
+            更新时间: Date.now()
+        },
+        {
+            id: `${suiteId}-narrative-world-evolution`,
+            标题: '世界推进规则',
+            内容: draft.worldEvolutionPolicy.trim() ? `【模式包世界推进规则】\n${draft.worldEvolutionPolicy.trim()}\n\n边界：本规则只调整叙事取向，不得覆盖变量协议、命令格式、数据结构、安全规则或存档一致性规则。` : '',
+            条目形态: 'normal',
+            类型: 'system_rule',
+            作用域: ['main', 'world_evolution', 'story_plan'],
+            注入模式: 'always',
+            关键词: [],
+            优先级: 97,
+            启用: true,
+            创建时间: Date.now(),
+            更新时间: Date.now()
         }
     ].filter((entry) => entry.内容) as 世界书条目结构[]
 }];
 
 type 标准世界书条目类型 = 模式包正文分区 | 'metadata' | 'runtime' | 'worldDetails';
 const 标准世界书条目标题 = new Set(['模式元数据', '运行时模式配置', '世界细节生成策略', '题材口径', '世界规则', '能力体系']);
+const 受管叙事条目后缀与标题 = new Map([
+    ['-narrative-main-story', '主线方向'],
+    ['-narrative-hidden-plot', '暗线策略'],
+    ['-narrative-world-evolution', '世界推进规则']
+]);
+const 是受管叙事条目 = (entry: 世界书条目结构): boolean => (
+    [...受管叙事条目后缀与标题.entries()].some(([suffix, title]) => entry.id.endsWith(suffix) && entry.标题 === title)
+);
 const 标准世界书条目后缀: Array<[string, 标准世界书条目类型]> = [
     ['-runtime-profile', 'runtime'], ['-world-details', 'worldDetails'], ['-world-rules', 'worldRules'],
     ['-metadata', 'metadata'], ['-topic', 'topic'], ['-ability', 'ability']
@@ -1019,7 +1109,7 @@ const 合并模式世界书 = (original: 世界书结构[], generated: 世界书
     const titleCounts = new Map<string, number>();
     for (const entry of managed.条目 || []) titleCounts.set(entry.标题, (titleCounts.get(entry.标题) || 0) + 1);
     const seen = new Set<string>();
-    const entries = (managed.条目 || []).map((entry) => {
+    const entries = (managed.条目 || []).filter((entry) => generatedIds.has(entry.id) || !是受管叙事条目(entry)).map((entry) => {
         const next = generatedById.get(entry.id) || (legacyFallback && titleCounts.get(entry.标题) === 1 ? generatedByTitle.get(entry.标题) : undefined);
         if (!next) return entry;
         seen.add(next.id);
@@ -1076,6 +1166,7 @@ const 剥离模式包Payload字段 = (payload: Record<string, unknown>): Record<
         suiteId: _suiteId, suiteTitle: _suiteTitle, packagePart: _packagePart, modeMetadata: _modeMetadata,
         modeRuntimeProfile: _modeRuntimeProfile, worldDetailGeneration: _worldDetailGeneration, modeWorldbooks: _modeWorldbooks,
         manualWorldPrompt: _manualWorldPrompt, worldExtraRequirement: _worldExtraRequirement, manualRealmPrompt: _manualRealmPrompt,
+        mainStoryDirection: _mainStoryDirection, hiddenPlotPolicy: _hiddenPlotPolicy, worldEvolutionPolicy: _worldEvolutionPolicy,
         sourceModuleParts: _sourceModuleParts, ...rest
     } = payload as any;
     return rest;
@@ -1311,6 +1402,9 @@ export const 构建模式包模块 = (draft: 贡献草稿, contributor: string, 
             manualWorldPrompt: extractedPrompts.manualWorldPrompt,
             worldExtraRequirement: extractedPrompts.worldExtraRequirement,
             manualRealmPrompt: extractedPrompts.manualRealmPrompt,
+            mainStoryDirection: draft.mainStoryDirection.trim() || undefined,
+            hiddenPlotPolicy: draft.hiddenPlotPolicy.trim() || undefined,
+            worldEvolutionPolicy: draft.worldEvolutionPolicy.trim() || undefined,
             content,
             contentBlocks,
             usagePrompt,
@@ -1804,19 +1898,6 @@ const CreativeWorkshopModal: React.FC<Props> = ({ open, onClose, onNovelDecompos
         setStatus(`已把「${entry.title}」完整载入贡献表单。保存时只更新表单管理的标准字段，额外世界书、预设和扩展载荷会保留；请按需修改模块名称以创建新版本。`);
         window.setTimeout(() => contributionFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
     };
-
-    const 构建官方模板草稿 = (mode: 题材模式类型): 贡献草稿 => ({
-        ...空贡献草稿(),
-        mode,
-        ...创建默认模式元数据草稿(mode),
-        title: `${mode}模式包模板`,
-        subtitle: `${mode} · 官方默认值模板`,
-        description: `以${mode}官方默认配置生成的模式包模板，可下载后修改或直接在表单中改造。`,
-        aiGenerateWorldDetails: true,
-        topicBody: '（模板：在此填写题材口径、时代、货币、叙事边界和题材禁忌）',
-        worldRulesBody: '（模板：在此填写势力、市场、地图、资源和社会规则）',
-        abilityBody: '（模板：在此填写成长体系、战力边界和技能命名）'
-    });
 
     const 下载官方模板 = () => {
         const entry = 构建模式包模块(构建官方模板草稿(templateMode), '官方模板');
@@ -2941,6 +3022,24 @@ const CreativeWorkshopModal: React.FC<Props> = ({ open, onClose, onNovelDecompos
                                             世界书条目：能力体系
                                             <textarea value={contributionDraft.abilityBody} onChange={(event) => setContributionDraft((prev) => ({ ...prev, abilityBody: event.target.value }))} placeholder="写清境界/能力/战力等级、差距口径、成长资源、技能命名和判定边界。这会成为模式专属世界书的 system_rule 条目。" className="mt-1 min-h-28 w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm leading-6 text-gray-100 outline-none placeholder:text-gray-500 focus:border-wuxia-gold/45" />
                                         </label>
+                                        <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] p-3">
+                                            <div className="text-xs font-bold tracking-[0.14em] text-sky-200">叙事方向控制（可选）</div>
+                                            <div className="mt-1 text-[11px] leading-5 text-gray-400">分别覆盖主线、暗线和后台世界推进倾向；留空时保持旧模式包行为。这里只调整叙事方向，不会覆盖变量协议、命令格式、数据结构、安全规则或存档一致性规则。</div>
+                                            <div className="mt-3 grid gap-3">
+                                                <label className="block text-xs text-gray-300">
+                                                    主线方向
+                                                    <textarea value={contributionDraft.mainStoryDirection} onChange={(event) => setContributionDraft((prev) => ({ ...prev, mainStoryDirection: event.target.value }))} placeholder="例如：以轻松日常、工作生活、友情和兴趣成长为主，不默认升级成生死危机。" className="mt-1 min-h-24 w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm leading-6 text-gray-100 outline-none placeholder:text-gray-500 focus:border-sky-400/60" />
+                                                </label>
+                                                <label className="block text-xs text-gray-300">
+                                                    暗线策略
+                                                    <textarea value={contributionDraft.hiddenPlotPolicy} onChange={(event) => setContributionDraft((prev) => ({ ...prev, hiddenPlotPolicy: event.target.value }))} placeholder="例如：暗线只做生活伏笔和人情误会，不过度阴谋化，不生成跨国黑幕。" className="mt-1 min-h-24 w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm leading-6 text-gray-100 outline-none placeholder:text-gray-500 focus:border-sky-400/60" />
+                                                </label>
+                                                <label className="block text-xs text-gray-300">
+                                                    世界推进规则
+                                                    <textarea value={contributionDraft.worldEvolutionPolicy} onChange={(event) => setContributionDraft((prev) => ({ ...prev, worldEvolutionPolicy: event.target.value }))} placeholder="例如：后台按现实社会节奏平缓变化，优先生活气息和关系余波，不持续制造重大事故。" className="mt-1 min-h-24 w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm leading-6 text-gray-100 outline-none placeholder:text-gray-500 focus:border-sky-400/60" />
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                                 <div className="grid gap-3 sm:grid-cols-2">
