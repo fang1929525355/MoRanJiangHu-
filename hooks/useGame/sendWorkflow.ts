@@ -2641,6 +2641,7 @@ export const 执行主剧情发送工作流 = async (
                             };
                             const result = await deps.执行世界演变更新({
                                 来源: "story_dynamic",
+                                playerInput: sendInput,
                                 动态世界线索: [],
                                 applyCommands: false,
                                 currentResponse: worldContextResponse,

@@ -127,6 +127,7 @@ describe('history turn variable retry', () => {
         const workflow = 创建历史回合工作流(createBaseDeps({
             执行世界演变更新: async (params: any) => {
                 expect(params.applyCommands).toBe(true);
+                expect(params.playerInput).toBe('继续探索');
                 expect(params.currentResponse.body).toBe('正文仍应保留');
                 params.onStreamDelta?.('世界', '世界演变流式内容');
                 return {

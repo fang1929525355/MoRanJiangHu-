@@ -77,6 +77,7 @@ type 历史回合工作流依赖 = {
     世界演变功能已开启: () => boolean;
     执行世界演变更新?: (params?: {
         来源?: 'manual' | 'auto_due' | 'story_dynamic' | 'story_dynamic_and_due';
+        playerInput?: string;
         动态世界线索?: string[];
         到期摘要?: string[];
         force?: boolean;
@@ -694,6 +695,7 @@ export const 创建历史回合工作流 = (deps: 历史回合工作流依赖) =
                 options?.onWorldEvolutionProgress?.({ phase: 'start', text: '正在重新执行动态世界更新...' });
                 const result = await deps.执行世界演变更新({
                     来源: 'story_dynamic',
+                    playerInput,
                     动态世界线索: [],
                     applyCommands: true,
                     currentResponse: parsed,

@@ -35,6 +35,7 @@ vi.mock('../services/novelDecompositionCalibration', () => ({
 }));
 
 import { 创建规划更新工作流 } from '../hooks/useGame/planningUpdateWorkflow';
+import * as textAIService from '../services/ai/text';
 
 const 创建基础依赖 = () => ({
     apiConfig: {},
@@ -80,6 +81,7 @@ const 创建基础依赖 = () => ({
 describe('规划更新工作流', () => {
     it('隔离 onStreamDelta 消费端异常，避免打断规划分析流程', async () => {
         const workflow = 创建规划更新工作流(创建基础依赖());
+        const playerInput = '本轮只观察，不要安排刺客袭击。';
 
         await expect(workflow.后台执行统一规划分析({
             state: {
@@ -89,7 +91,7 @@ describe('规划更新工作流', () => {
                 剧情: {},
                 剧情规划: {}
             },
-            playerInput: '继续',
+            playerInput,
             gameTime: '辰时',
             response: { logs: [] } as any,
             onStreamDelta: () => {
@@ -99,6 +101,9 @@ describe('规划更新工作流', () => {
             updated: false,
             message: '无需更新',
             rawText: '累计文本'
+        });
+        expect(vi.mocked(textAIService.generatePlanningAnalysis).mock.calls.at(-1)?.[0]).toMatchObject({
+            playerInput
         });
     });
 });

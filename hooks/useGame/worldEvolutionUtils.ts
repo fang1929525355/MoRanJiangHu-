@@ -477,6 +477,7 @@ export const 构建世界演变上下文文本 = (params: {
     storyData?: unknown;
     shortMemoryTexts?: string[];
     scriptText?: string;
+    playerInput?: string;
     currentTurnBody?: string;
     currentTurnPlanText?: string;
     currentTurnCommandsText?: string;
@@ -490,6 +491,7 @@ export const 构建世界演变上下文文本 = (params: {
         .filter(Boolean)
         .join('\n') || '暂无';
     const scriptBlock = (params.scriptText || '').trim() || '暂无';
+    const playerInput = (params.playerInput || '').trim();
     const currentTurnBody = (params.currentTurnBody || '').trim() || '暂无';
     const currentTurnPlanText = (params.currentTurnPlanText || '').trim() || '无';
     const currentTurnCommandsText = (params.currentTurnCommandsText || '').trim() || '无';
@@ -529,6 +531,16 @@ export const 构建世界演变上下文文本 = (params: {
         '【当前剧情锚点】',
         序列化世界演变展示上下文(提炼世界演变剧情锚点(params.storyData)),
         '',
+        ...(playerInput ? [
+            '【本轮玩家原始指令】',
+            playerInput,
+            '',
+            '【玩家原始指令使用说明】',
+            '- 这是玩家本轮的意图、要求和限制，不代表这些内容已经发生。',
+            '- 必须结合本轮最终正文、已落地命令和当前状态判断哪些事实真正成立。',
+            '- 对“不要、暂缓、仅观察、禁止推进”等限制应予以尊重。',
+            ''
+        ] : []),
         '【本回合前台已发生事实】',
         currentTurnBody,
         '',

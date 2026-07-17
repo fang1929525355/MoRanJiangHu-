@@ -23,6 +23,7 @@ import { 执行游戏后台重计算 } from '../../utils/gameHeavyWorkerClient';
 
 export type 世界演变触发参数 = {
     来源?: 'manual' | 'auto_due' | 'story_dynamic' | 'story_dynamic_and_due';
+    playerInput?: string;
     动态世界线索?: string[];
     到期摘要?: string[];
     force?: boolean;
@@ -298,8 +299,10 @@ export const 执行世界演变更新工作流 = async (
         const currentTurnCommandsText = probe.time('序列化当前回合命令', () => 序列化上下文命令(params?.currentResponse?.tavern_commands || []), {
             commandCount: Array.isArray(params?.currentResponse?.tavern_commands) ? params.currentResponse.tavern_commands.length : 0
         });
+        const playerInput = typeof params?.playerInput === 'string' ? params.playerInput.trim() : '';
         const envCanonical = 环境时间转标准串(worldStateBase?.环境 || deps.环境) || '';
         probe.mark('世界演变基础上下文准备完成', {
+            playerInputLength: playerInput.length,
             scriptLength: worldScriptText.length,
             currentBodyLength: currentTurnBody.length,
             currentPlanLength: currentTurnPlanText.length,
@@ -309,6 +312,7 @@ export const 执行世界演变更新工作流 = async (
         const signature = [
             triggerSource,
             envCanonical,
+            playerInput,
             dynamicHints.join('|'),
             dueHints.join('|'),
             currentTurnBody,
@@ -332,6 +336,7 @@ export const 执行世界演变更新工作流 = async (
             storyData: worldStory,
             shortMemoryTexts: worldShortMemoryTexts,
             scriptText: worldScriptText,
+            playerInput,
             currentTurnBody,
             currentTurnPlanText,
             currentTurnCommandsText,
@@ -355,7 +360,7 @@ export const 执行世界演变更新工作流 = async (
             environment: worldEnv,
             world: worldState,
             history: worldHistory,
-            extraTexts: [currentTurnBody, currentTurnPlanText, currentTurnCommandsText, ...dynamicHints, ...dueHints]
+            extraTexts: [playerInput, currentTurnBody, currentTurnPlanText, currentTurnCommandsText, ...dynamicHints, ...dueHints]
         };
         const worldbookExtraPrompt = await probe.timeAsync('构建世界演变世界书注入(worker)', () => 执行游戏后台重计算<string>(
             'buildWorldbookText',

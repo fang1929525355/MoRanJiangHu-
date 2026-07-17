@@ -3118,6 +3118,7 @@ export const useGame = () => {
 
     const 执行世界演变更新 = async (params?: {
         来源?: 'manual' | 'auto_due' | 'story_dynamic' | 'story_dynamic_and_due';
+        playerInput?: string;
         动态世界线索?: string[];
         到期摘要?: string[];
         force?: boolean;

@@ -1781,6 +1781,7 @@ const 规范化新小说拆分物品档案 = (raw: any): NovelDecompositionItemP
 const 构建规划分析消息链 = (
     params: {
         playerName: string;
+        playerInput?: string;
         currentStoryJson: string;
         currentHeroinePlanJson: string;
         worldJson: string;
@@ -1789,6 +1790,7 @@ const 构建规划分析消息链 = (
         recentBodiesText: string;
         currentPlanText?: string;
         auditFocusText: string;
+        genderRatioConstraintText?: string;
         heroineEnabled?: boolean;
         ntlEnabled?: boolean;
         fandomEnabled?: boolean;
@@ -1804,6 +1806,7 @@ const 构建规划分析消息链 = (
     const fandomCotPrompt = params.fandomEnabled ? 同人规划分析附加COT提示词 : '';
     const taskPrompt = [
         `【本次任务】\n${构建统一规划分析用户提示词({
+            playerInput: params.playerInput,
             currentStoryJson: params.currentStoryJson,
             currentHeroinePlanJson: params.currentHeroinePlanJson,
             worldJson: params.worldJson,
@@ -1843,6 +1846,7 @@ const 构建规划分析消息链 = (
 export const generatePlanningAnalysis = async (
     params: {
         playerName: string;
+        playerInput?: string;
         currentStoryJson: string;
         currentHeroinePlanJson: string;
         worldJson: string;

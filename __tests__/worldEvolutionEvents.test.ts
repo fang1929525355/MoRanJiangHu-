@@ -188,4 +188,31 @@ describe('worldEvolution visible events', () => {
         expect(context).toContain('势力补录：正文提到疑似新势力');
         expect(context).toContain('push 世界.势力列表');
     });
+
+    it('injects current player input as intent constraints without treating it as body facts', () => {
+        const context = 构建世界演变上下文文本({
+            playerInput: '本轮只观察，不要让追兵立刻袭击。',
+            currentTurnBody: '主角停在茶棚外观察雨势。',
+            currentTurnPlanText: '',
+            currentTurnCommandsText: ''
+        });
+
+        expect(context).toContain('【本轮玩家原始指令】');
+        expect(context).toContain('本轮只观察，不要让追兵立刻袭击。');
+        expect(context).toContain('不代表这些内容已经发生');
+        expect(context).toContain('对“不要、暂缓、仅观察、禁止推进”等限制应予以尊重');
+        expect(context).toContain('【本回合前台已发生事实】\n主角停在茶棚外观察雨势。');
+    });
+
+    it('omits player input block when current player input is empty', () => {
+        const context = 构建世界演变上下文文本({
+            playerInput: '   ',
+            currentTurnBody: '主角停在茶棚外观察雨势。',
+            currentTurnPlanText: '',
+            currentTurnCommandsText: ''
+        });
+
+        expect(context).not.toContain('【本轮玩家原始指令】');
+        expect(context).not.toContain('【玩家原始指令使用说明】');
+    });
 });

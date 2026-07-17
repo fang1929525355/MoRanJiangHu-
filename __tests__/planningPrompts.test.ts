@@ -59,6 +59,43 @@ describe('planning prompts', () => {
         expect(userPrompt).not.toContain('【当前女主规划树】');
     });
 
+    it('injects current player input as intent constraints without treating it as facts', () => {
+        const userPrompt = 构建统一规划分析用户提示词({
+            playerInput: '本轮暂缓主线，只观察，不要安排刺客袭击。',
+            currentStoryJson: '{}',
+            currentHeroinePlanJson: '{}',
+            worldJson: '{}',
+            socialJson: '[]',
+            envJson: '{}',
+            recentBodiesText: '旁白：主角坐在窗边观察雨夜。',
+            auditFocusText: '常规回合固定审计',
+            heroineEnabled: false
+        });
+
+        expect(userPrompt).toContain('【本轮玩家原始指令】');
+        expect(userPrompt).toContain('本轮暂缓主线，只观察，不要安排刺客袭击。');
+        expect(userPrompt).toContain('不代表已经发生');
+        expect(userPrompt).toContain('不得违背玩家明确提出的“不要、暂缓、禁止、只观察”等限制');
+        expect(userPrompt).toContain('不应因为玩家表达想法，就直接把它安排为已完成或已触发事件');
+    });
+
+    it('omits current player input block when player input is empty', () => {
+        const userPrompt = 构建统一规划分析用户提示词({
+            playerInput: '   ',
+            currentStoryJson: '{}',
+            currentHeroinePlanJson: '{}',
+            worldJson: '{}',
+            socialJson: '[]',
+            envJson: '{}',
+            recentBodiesText: '旁白：主角坐在窗边观察雨夜。',
+            auditFocusText: '常规回合固定审计',
+            heroineEnabled: false
+        });
+
+        expect(userPrompt).not.toContain('【本轮玩家原始指令】');
+        expect(userPrompt).not.toContain('【玩家原始指令使用说明】');
+    });
+
     it('requires opening planning initialization to preserve gender ratio constraints', () => {
         const auditFocus = 构建开局规划初始化审计重点({ heroineEnabled: true });
 

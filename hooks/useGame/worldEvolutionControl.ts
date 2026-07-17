@@ -19,6 +19,7 @@ type 世界演变控制依赖 = {
     规范化世界状态: (raw?: any) => any;
     执行世界演变更新: (params?: {
         来源?: 'manual' | 'auto_due' | 'story_dynamic' | 'story_dynamic_and_due';
+        playerInput?: string;
         动态世界线索?: string[];
         到期摘要?: string[];
         force?: boolean;

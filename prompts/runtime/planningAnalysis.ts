@@ -121,6 +121,7 @@ export const 构建统一规划分析系统提示词 = (options?: { heroineEnabl
 };
 
 export const 构建统一规划分析用户提示词 = (params: {
+    playerInput?: string;
     currentStoryJson: string;
     currentHeroinePlanJson: string;
     worldJson: string;
@@ -131,7 +132,9 @@ export const 构建统一规划分析用户提示词 = (params: {
     auditFocusText: string;
     genderRatioConstraintText?: string;
     heroineEnabled?: boolean;
-}): string => [
+}): string => {
+    const playerInput = (params.playerInput || '').trim();
+    return [
     '【当前章节状态与当前激活主线规划树】',
     params.currentStoryJson,
     '',
@@ -149,6 +152,17 @@ export const 构建统一规划分析用户提示词 = (params: {
     '【当前环境】',
     params.envJson,
     '',
+    ...(playerInput ? [
+        '【本轮玩家原始指令】',
+        playerInput,
+        '',
+        '【玩家原始指令使用说明】',
+        '- 这是玩家本轮意图与约束，不代表已经发生，也不是已发生事实。',
+        '- 应以最终正文和已落地状态判断事实。',
+        '- 不得违背玩家明确提出的“不要、暂缓、禁止、只观察”等限制。',
+        '- 不应因为玩家表达想法，就直接把它安排为已完成或已触发事件。',
+        ''
+    ] : []),
     (params.genderRatioConstraintText || '').trim()
         ? params.genderRatioConstraintText.trim()
         : '【规划性别比例约束】\n- 当前上下文未注入明确比例；若当前世界状态中存在世界观/NPC系统男女比例或性别比例设定，仍需在新增人物池时读取并遵守。',
@@ -193,4 +207,5 @@ export const 构建统一规划分析用户提示词 = (params: {
     params.recentBodiesText,
     '',
     '任务：基于本回合已发生事实，统一分析章节状态、当前激活主线规划树、当前激活女主规划树与当前世界状态是否需要同步修订、清理、迁移、补承接或切章。只输出最小补丁命令。'
-].join('\n');
+    ].join('\n');
+};
