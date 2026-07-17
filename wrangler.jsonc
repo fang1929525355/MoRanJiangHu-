@@ -22,7 +22,6 @@
     }
   ],
   "vars": {
-    "CNB_SYNC_R2_KEY": "moranjianghu/cnb-sync-registry.json",
     "ONLINE_SESSIONS_R2_PREFIX": "moranjianghu/online",
     "FANDOM_PRESET_REPO_OWNER": "ypq123456789",
     "FANDOM_PRESET_REPO_NAME": "MoRanJiangHu",
@@ -30,12 +29,6 @@
     "MORAN_OPENLIST_API_BASE_URL": "http://159.138.7.126:5244",
     "MORAN_OPENLIST_DIRECT_BASE_URL": "http://159.138.7.126:5244"
   },
-  "r2_buckets": [
-    {
-      "binding": "CNB_SYNC_R2",
-      "bucket_name": "quark-downloads-bacon"
-    }
-  ],
   "kv_namespaces": [
     {
       "binding": "RELEASE_MANIFEST",
