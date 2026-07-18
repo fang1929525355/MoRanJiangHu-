@@ -741,13 +741,15 @@ const 规范化开局运行时快照 = (raw?: any): OpeningRuntimeSnapshot | und
             }))
             .filter((item) => item.名称 && item.描述 && item.效果)
         : [];
+    const mainStoryDirection = 读取文本(raw?.mainStoryDirection);
+    const hiddenPlotPolicy = 读取文本(raw?.hiddenPlotPolicy);
     const snapshot: OpeningRuntimeSnapshot = {
         openingStreaming: raw?.openingStreaming !== false,
         openingExtraRequirement: 读取文本(raw?.openingExtraRequirement),
         openingExtraPrompt: 读取文本(raw?.openingExtraPrompt),
         activeModuleExtraRules: 读取文本(raw?.activeModuleExtraRules),
-        mainStoryDirection: 读取文本(raw?.mainStoryDirection),
-        hiddenPlotPolicy: 读取文本(raw?.hiddenPlotPolicy),
+        ...(mainStoryDirection ? { mainStoryDirection } : {}),
+        ...(hiddenPlotPolicy ? { hiddenPlotPolicy } : {}),
         ...(modeWorldbooks.length > 0 ? { modeWorldbooks } : {}),
         ...(workshopSelection ? { workshopSelection } : {}),
         ...(modeBackgrounds.length > 0 ? { modeBackgrounds } : {}),

@@ -274,13 +274,15 @@ export const 构建开局运行时快照 = (params: {
 }): OpeningRuntimeSnapshot | undefined => {
     const modeBackgrounds = 合并去重背景(params.modeBackgrounds || []);
     const modeTalents = 合并去重天赋(params.modeTalents || []);
+    const mainStoryDirection = 标准化文本(params.mainStoryDirection);
+    const hiddenPlotPolicy = 标准化文本(params.hiddenPlotPolicy);
     const snapshot: OpeningRuntimeSnapshot = {
         openingStreaming: params.openingStreaming !== false,
         openingExtraRequirement: 标准化文本(params.openingExtraRequirement),
         openingExtraPrompt: 标准化文本(params.openingExtraPrompt),
         activeModuleExtraRules: 标准化文本(params.activeModuleExtraRules),
-        mainStoryDirection: 标准化文本(params.mainStoryDirection),
-        hiddenPlotPolicy: 标准化文本(params.hiddenPlotPolicy),
+        ...(mainStoryDirection ? { mainStoryDirection } : {}),
+        ...(hiddenPlotPolicy ? { hiddenPlotPolicy } : {}),
         ...(Array.isArray(params.modeWorldbooks) && params.modeWorldbooks.length > 0 ? { modeWorldbooks: params.modeWorldbooks } : {}),
         ...(params.workshopSelection?.selectedMode || Object.keys(params.workshopSelection?.selectedModules || {}).length > 0
             ? {
