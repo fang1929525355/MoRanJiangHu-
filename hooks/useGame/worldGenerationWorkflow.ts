@@ -5,6 +5,7 @@ import type { 当前可用接口结构 } from '../../utils/apiConfig';
 import { 获取主剧情接口配置, 接口配置是否可用 } from '../../utils/apiConfig';
 import { 构建世界观种子提示词, 构建世界生成任务上下文提示词 } from '../../prompts/runtime/worldSetup';
 import { 世界观生成COT提示词, 世界观生成COT伪装历史消息提示词 } from '../../prompts/runtime/worldGenerationCot';
+import { 构建模式包世界观叙事约束 } from '../../prompts/runtime/worldGenerationRuntimeConstraints';
 import { 构建同人运行时提示词包 } from '../../prompts/runtime/fandom';
 import { 核心_境界体系 } from '../../prompts/core/realm';
 import { 设置键 } from '../../utils/settingsSchema';
@@ -466,9 +467,13 @@ export const 执行世界生成工作流 = async (
             openingConfig: effectiveOpeningConfig,
             realmPrompt: realmPromptContent
         });
+        const modeNarrativeWorldConstraint = 构建模式包世界观叙事约束(
+            effectiveOpeningConfig?.runtimeSnapshot
+        );
         const worldGenerationExtraPrompt = 按功能开关过滤提示词内容([
             世界观生成COT提示词,
             fandomPromptBundle.世界观创建补丁,
+            modeNarrativeWorldConstraint,
             启用修炼体系 && (fandomEnabled || isXianxiaOpening)
                 ? [
                     isXianxiaOpening ? '【已固定仙侠境界体系参考】' : '【已生成同人境界体系参考】',

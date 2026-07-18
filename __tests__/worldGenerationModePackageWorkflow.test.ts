@@ -31,6 +31,21 @@ describe('worldGenerationWorkflow mode package opening', () => {
         expect(xianxiaPackage?.preset).toBeTruthy();
         const worldConfig = xianxiaPackage!.preset!.worldConfig as WorldGenConfig;
         expect(worldConfig.manualWorldPrompt).toBe('');
+        const openingConfig = JSON.parse(JSON.stringify(xianxiaPackage!.preset!.openingConfig));
+        openingConfig.modeRuntimeProfile.identity.modeId = 'custom-world-generation-test';
+        openingConfig.modeRuntimeProfile.identity.displayName = '世界观约束测试模式';
+        openingConfig.modeRuntimeProfile.economy.exchangeRules = '三层货币：铜钱、银子、金元宝。';
+        openingConfig.modeRuntimeProfile.economy.currencySystem = {
+            id: 'credits',
+            name: '信用点体系',
+            baseUnitId: 'credit',
+            units: [{ id: 'credit', name: '信用点', symbol: 'CR', aliases: [], baseRate: 1, order: 0 }]
+        };
+        openingConfig.runtimeSnapshot = {
+            ...(openingConfig.runtimeSnapshot || {}),
+            mainStoryDirection: '围绕市井生活和个人成长展开',
+            hiddenPlotPolicy: '只保留轻量人情误会和可回收伏笔'
+        };
 
         const history: any[] = [];
         const 设置历史记录 = vi.fn((value: any) => {
@@ -106,7 +121,7 @@ describe('worldGenerationWorkflow mode package opening', () => {
                 天赋列表: [{ 名称: '灵觉敏锐', 描述: '感知敏锐', 效果: '提升感知' }],
                 出身背景: { 名称: '散修遗孤', 描述: '独自修行', 效果: '熟悉底层修行' }
             } as 角色数据结构,
-            xianxiaPackage!.preset!.openingConfig,
+            openingConfig,
             'step',
             false,
             '',
@@ -115,6 +130,13 @@ describe('worldGenerationWorkflow mode package opening', () => {
         );
 
         expect(textAIService.generateWorldFoundationData).toHaveBeenCalledTimes(1);
+        const worldGenerationCall = vi.mocked(textAIService.generateWorldFoundationData).mock.calls[0];
+        expect(worldGenerationCall[0]).toContain('本世界仅使用“信用点”');
+        expect(worldGenerationCall[0]).not.toContain('铜钱、银子、金元宝');
+        expect(worldGenerationCall[4]).toContain('【模式包世界观生成约束】');
+        expect(worldGenerationCall[4]).toContain('市井生活和个人成长');
+        expect(worldGenerationCall[4]).toContain('轻量人情误会');
+        expect(worldGenerationCall[4]).toContain('不得点名幕后黑手');
         expect(textAIService.解析世界观提示词内容).not.toHaveBeenCalled();
         expect(setPrompts).toHaveBeenLastCalledWith(expect.arrayContaining([
             expect.objectContaining({ id: 'core_world', 内容: 'AI模式包世界观' })
