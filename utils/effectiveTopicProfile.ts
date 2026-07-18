@@ -1,6 +1,7 @@
 import type { ModeRuntimeProfile, 模式界面文案覆盖, 题材模式类型 } from '../models/system';
 import { 获取题材模式配置, 题材模式顺序 } from './topicModeProfiles';
 import type { 题材模式配置 } from './topicModeProfiles';
+import { 构建世界观货币口径 } from '../prompts/runtime/worldGenerationRuntimeConstraints';
 
 /**
  * 生效题材配置：官方题材配置 + 模式包 runtime 覆盖后的单一真实来源。
@@ -113,11 +114,12 @@ export const 解析生效题材配置 = (
         非空文本(runtimeProfile.ability?.primaryAxis),
         非空文本(runtimeProfile.ability?.combatResolution)
     ].filter(Boolean).join('；');
+    const currencyRules = 构建世界观货币口径(runtimeProfile, official.currencyExchangePrompt);
 
     const runtimePromptLines = [
         `本存档使用「${runtimeLabel}」自定义模式包，请严格使用模式包自身的世界观与用词口径。`,
         `交易口径：${非空文本(runtimeProfile.economy?.primaryCurrency) || official.currencyPrompt}`,
-        `统一换算口径：${非空文本(runtimeProfile.economy?.exchangeRules) || official.currencyExchangePrompt}`,
+        `统一换算口径：${currencyRules}`,
         `地图/势力口径：${非空文本(runtimeProfile.map?.mapPrompt) || official.mapPrompt}`,
         组织口径片段 ? `组织口径：${组织口径片段}` : '',
         能力口径片段 ? `能力口径：${能力口径片段}` : ''
@@ -136,7 +138,7 @@ export const 解析生效题材配置 = (
         marketName,
         marketVerb: 非空文本(runtimeProfile.economy?.marketVerb) || official.marketVerb,
         currencyPrompt: 非空文本(runtimeProfile.economy?.primaryCurrency) || official.currencyPrompt,
-        currencyExchangePrompt: 非空文本(runtimeProfile.economy?.exchangeRules) || official.currencyExchangePrompt,
+        currencyExchangePrompt: currencyRules,
         mapPrompt: 非空文本(runtimeProfile.map?.mapPrompt) || official.mapPrompt,
         skillNames: skillPool.length > 0 ? skillPool : official.skillNames,
         presetItemKeywords: itemPool.length > 0 ? itemPool : official.presetItemKeywords,

@@ -1112,10 +1112,13 @@ const 渲染动态货币体系摘要 = (currencySystem?: CurrencySystem): string
     return `动态货币体系：${currencySystem.name}；baseUnitId=${currencySystem.baseUnitId}；单位=${units}`;
 };
 
-export const 渲染模式运行时配置世界书内容 = (profile: ModeRuntimeProfile): string => ([
+export const 渲染模式运行时配置世界书内容 = (profile: ModeRuntimeProfile): string => {
+    const economySummary = profile.economy.currencySystem
+        ? `经济系统：市场=${profile.economy.marketName}；行为=${profile.economy.marketVerb}；${渲染动态货币体系摘要(profile.economy.currencySystem)}`
+        : `经济系统：市场=${profile.economy.marketName}；行为=${profile.economy.marketVerb}；上层=${profile.economy.currencyTiers.upperName}；中层=${profile.economy.currencyTiers.middleName}；底层=${profile.economy.currencyTiers.lowerName}；汇率=${profile.economy.currencyTiers.upperToMiddleRate}/${profile.economy.currencyTiers.middleToLowerRate}`;
+    return ([
     `题材身份：${profile.identity.displayName}（继承 ${profile.identity.baseMode}；现代=${profile.identity.isModern ? '是' : '否'}；修炼=${profile.identity.usesCultivation ? '是' : '否'}；生存=${profile.identity.isSurvival ? '是' : '否'}；同人/IP=${profile.identity.isFandomIp ? '是' : '否'}）`,
-    `经济系统：市场=${profile.economy.marketName}；行为=${profile.economy.marketVerb}；上层=${profile.economy.currencyTiers.upperName}；中层=${profile.economy.currencyTiers.middleName}；底层=${profile.economy.currencyTiers.lowerName}；汇率=${profile.economy.currencyTiers.upperToMiddleRate}/${profile.economy.currencyTiers.middleToLowerRate}`,
-    渲染动态货币体系摘要(profile.economy.currencySystem),
+    economySummary,
     `时间系统：显示=${profile.time.displayFormat}；历法=${profile.time.calendarName}；叙事=${profile.time.narrativeStyle}；时段=${profile.time.dayPeriodNames.join('、')}；允许=${profile.time.allowedTimeTerms.join('、') || '无'}；禁用=${profile.time.bannedTimeTerms.join('、') || '无'}；推进=${profile.time.progressionPrompt}`,
     `组织系统：组织=${profile.organization.organizationName}；成员=${profile.organization.memberName}；贡献=${profile.organization.contributionName}；等级=${profile.organization.rankNames.join('、')}`,
     `能力系统：主轴=${profile.ability.primaryAxis}；阶段=${profile.ability.progressionNames.join('、')}；技艺=${profile.ability.skillPool.join('、')}；结算=${profile.ability.combatResolution}`,
@@ -1127,6 +1130,7 @@ export const 渲染模式运行时配置世界书内容 = (profile: ModeRuntimeP
     `开局系统：背景=${profile.opening.defaultBackgrounds.join('、')}；天赋=${profile.opening.defaultTalents.join('、')}；切入=${profile.opening.cutInTemplates.join('、')}；初始任务=${profile.opening.initialQuestTemplates.join('、')}；允许生成性别=${profile.opening.allowedGeneratedGenders.join('、')}；性别锁定=${profile.opening.lockGeneratedGenders ? '是' : '否'}`,
     `校验系统：禁词=${profile.validation.bannedWords.join('、')}；冲突检测=${profile.validation.conflictChecks.join('、')}；迁移清理=${profile.validation.migrationCleanupRules.join('、')}`
 ]).filter(Boolean).join('\n');
+};
 
 export const 获取题材顶部时间显示格式 = (
     runtimeProfile?: ModeRuntimeProfile | null,

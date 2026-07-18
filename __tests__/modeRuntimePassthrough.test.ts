@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ModeRuntimeProfile } from '../models/system';
 import { 获取题材模式配置, 题材模式顺序 } from '../utils/topicModeProfiles';
-import { 构建官方模式运行时配置, 规范化模式运行时配置 } from '../utils/modeRuntimeProfile';
+import { 构建官方模式运行时配置, 规范化模式运行时配置, 渲染模式运行时配置世界书内容 } from '../utils/modeRuntimeProfile';
 import { 是否自定义模式运行时配置, 解析生效题材配置 } from '../utils/effectiveTopicProfile';
 import { 获取题材界面文案, 获取题材资源文案, 获取题材档案文案 } from '../utils/resourceLabels';
 import { 格式化能力类别 } from '../utils/abilityCategoryLabels';
@@ -119,6 +119,36 @@ describe('自定义 runtime 派生换源', () => {
         expect(effective.presetItemKeywords).toEqual(['月钱袋', '名帖', '钥匙串']);
         expect(effective.promptLines.join('')).not.toContain('武侠/江湖为核心题材');
         expect(effective.usesCustomRuntime).toBe(true);
+    });
+
+    it('动态单币种接管题材提示词并压制旧三层换算', () => {
+        const dynamicRuntime = 构建红楼运行时配置({
+            economy: {
+                exchangeRules: '三层货币：制钱、银两、金锭。',
+                currencySystem: {
+                    id: 'cash',
+                    name: '现银',
+                    baseUnitId: 'cash-yuan',
+                    units: [{
+                        id: 'cash-yuan',
+                        name: '银元',
+                        symbol: '元',
+                        aliases: [],
+                        baseRate: 1,
+                        order: 0
+                    }]
+                }
+            }
+        });
+
+        const prompt = 构建题材模式提示词({ 题材模式: '武侠', modeRuntimeProfile: dynamicRuntime } as any);
+        const runtimeWorldbook = 渲染模式运行时配置世界书内容(dynamicRuntime);
+        expect(prompt).toContain('仅使用“银元”');
+        expect(prompt).not.toContain('制钱、银两、金锭');
+        expect(runtimeWorldbook).toContain('动态货币体系：现银');
+        expect(runtimeWorldbook).not.toContain('上层=');
+        expect(runtimeWorldbook).not.toContain('中层=');
+        expect(runtimeWorldbook).not.toContain('底层=');
     });
 
     it('界面文案组织段按 runtime 派生', () => {

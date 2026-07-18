@@ -73,7 +73,7 @@ const 运行时配置分区列表: 运行时配置分区[] = [
             { label: '经济说明与市场口径', path: ['economy', '__marketCurrency'], type: 'economyGroupTitle', placeholder: '下方内容不决定新版/旧版货币模式，只用于约束题材描述、市场名称、物品类型和禁用关键词。' },
             { label: '题材货币说明', path: ['economy', 'primaryCurrency'], type: 'textarea' },
             { label: '底层记账单位', path: ['economy', 'accountingUnit'] },
-            { label: '旧兼容换算说明', path: ['economy', 'exchangeRules'], type: 'textarea' },
+            { label: '旧版换算说明（仅无 currencySystem 时生效）', path: ['economy', 'exchangeRules'], type: 'textarea' },
             { label: '市场名称', path: ['economy', 'marketName'] },
             { label: '市场行情模板（可选）', path: ['economy', 'marketEventTemplates'], type: 'marketTemplates' },
             { label: '市场动词', path: ['economy', 'marketVerb'] },
