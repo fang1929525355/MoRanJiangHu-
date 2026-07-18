@@ -28,6 +28,7 @@
 
 ## Release Commit Backup Rule
 
+- Feature work may be implemented and verified on an isolated `codex/` branch or worktree, but whenever publishing a new version, integrate the complete intended release changes into `main` before the final version bump, build, upload, deploy, or release verification. The final public release must be built and published from `main`, and the release backup commit pushed to GitHub must exist on `main`; do not publish directly from an unmerged worktree branch.
 - Whenever publishing a new version, update the release version number first, then sync the release metadata before any build, upload, deploy, or verification step.
 - Whenever publishing a new version, sync the release version first, then create a git commit as a backup before ending the task.
 - Whenever publishing or updating a release version, push the release backup commit to GitHub before ending the task.
