@@ -803,6 +803,8 @@ export interface OpeningRuntimeSnapshot {
     openingExtraRequirement?: string;
     openingExtraPrompt?: string;
     activeModuleExtraRules?: string;
+    mainStoryDirection?: string;
+    hiddenPlotPolicy?: string;
     modeWorldbooks?: 世界书结构[];
     workshopSelection?: {
         selectedMode?: 题材模式类型 | '';

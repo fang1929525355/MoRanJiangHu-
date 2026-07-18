@@ -68,10 +68,10 @@ export const 构建模式包世界观叙事约束 = (
     const hiddenEntry = 选择受管条目(snapshot, '-narrative-hidden-plot', '暗线策略');
     const main = mainEntry
         ? 清理受管叙事正文(mainEntry.内容, '主线方向')
-        : 取文本((snapshot as any)?.mainStoryDirection);
+        : 取文本(snapshot?.mainStoryDirection);
     const hidden = hiddenEntry
         ? 清理受管叙事正文(hiddenEntry.内容, '暗线策略')
-        : 取文本((snapshot as any)?.hiddenPlotPolicy);
+        : 取文本(snapshot?.hiddenPlotPolicy);
     if (!main && !hidden) return '';
 
     return [

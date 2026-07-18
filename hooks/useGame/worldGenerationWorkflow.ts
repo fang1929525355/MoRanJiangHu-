@@ -261,6 +261,8 @@ export const 执行世界生成工作流 = async (
                 openingExtraPrompt: normalizedOpeningExtraPrompt,
                 openingExtraRequirement: openingConfig.runtimeSnapshot?.openingExtraRequirement,
                 activeModuleExtraRules: openingConfig.runtimeSnapshot?.activeModuleExtraRules,
+                mainStoryDirection: openingConfig.runtimeSnapshot?.mainStoryDirection,
+                hiddenPlotPolicy: openingConfig.runtimeSnapshot?.hiddenPlotPolicy,
                 modeWorldbooks: openingConfig.runtimeSnapshot?.modeWorldbooks,
                 workshopSelection: openingConfig.runtimeSnapshot?.workshopSelection,
                 modeBackgrounds: openingConfig.runtimeSnapshot?.modeBackgrounds,

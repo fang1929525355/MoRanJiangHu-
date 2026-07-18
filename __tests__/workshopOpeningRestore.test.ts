@@ -29,7 +29,9 @@ describe('workshop opening restore helpers', () => {
                     openingStreaming: false,
                     openingExtraPrompt: '来自快照的额外提示',
                     openingExtraRequirement: '来自快照的额外要求',
-                    activeModuleExtraRules: '来自快照的模块规则'
+                    activeModuleExtraRules: '来自快照的模块规则',
+                    mainStoryDirection: '现实日常主线',
+                    hiddenPlotPolicy: '低强度暗线'
                 }
             },
             openingStreaming: true,
@@ -40,6 +42,52 @@ describe('workshop opening restore helpers', () => {
         expect(restored.openingExtraPrompt).toBe('来自快照的额外提示');
         expect(restored.openingExtraRequirement).toBe('来自快照的额外要求');
         expect(restored.activeModuleExtraRules).toBe('来自快照的模块规则');
+        expect(restored.runtimeSnapshot?.mainStoryDirection).toBe('现实日常主线');
+        expect(restored.runtimeSnapshot?.hiddenPlotPolicy).toBe('低强度暗线');
+    });
+
+    it('从所选模式包 payload 保存主线和暗线兼容快照', () => {
+        const moduleId = 'test-narrative-payload-module';
+        创意工坊模块列表.push({
+            id: moduleId,
+            type: 'topic',
+            title: '叙事快照测试模块',
+            subtitle: '测试',
+            description: '测试模式包 payload 恢复',
+            tags: ['现代都市'],
+            payload: {
+                mainStoryDirection: '围绕社区日常成长',
+                hiddenPlotPolicy: '只允许轻量生活伏笔'
+            },
+            injectionPreview: [],
+            source: 'local'
+        });
+        try {
+            const restored = 获取快速重开运行时恢复参数({
+                openingConfig: {
+                    题材模式: '现代都市',
+                    初始关系模板: '随机邂逅',
+                    关系侧重: ['友情'],
+                    开局切入偏好: '市井起手',
+                    开局生成门派: true,
+                    开局生成同门: true,
+                    同人融合: { enabled: false } as any,
+                    runtimeSnapshot: {
+                        workshopSelection: {
+                            selectedMode: '现代都市',
+                            selectedModules: { topic: `local:${moduleId}` }
+                        }
+                    }
+                },
+                validModuleKeys: new Set([`local:${moduleId}`])
+            });
+
+            expect(restored.runtimeSnapshot?.mainStoryDirection).toBe('围绕社区日常成长');
+            expect(restored.runtimeSnapshot?.hiddenPlotPolicy).toBe('只允许轻量生活伏笔');
+        } finally {
+            const index = 创意工坊模块列表.findIndex((entry) => entry.id === moduleId && entry.source === 'local');
+            if (index >= 0) 创意工坊模块列表.splice(index, 1);
+        }
     });
 
     it('预设直开恢复结果会过滤失效模块并保留有效运行时字段', () => {

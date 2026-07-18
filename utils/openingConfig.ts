@@ -746,6 +746,8 @@ const 规范化开局运行时快照 = (raw?: any): OpeningRuntimeSnapshot | und
         openingExtraRequirement: 读取文本(raw?.openingExtraRequirement),
         openingExtraPrompt: 读取文本(raw?.openingExtraPrompt),
         activeModuleExtraRules: 读取文本(raw?.activeModuleExtraRules),
+        mainStoryDirection: 读取文本(raw?.mainStoryDirection),
+        hiddenPlotPolicy: 读取文本(raw?.hiddenPlotPolicy),
         ...(modeWorldbooks.length > 0 ? { modeWorldbooks } : {}),
         ...(workshopSelection ? { workshopSelection } : {}),
         ...(modeBackgrounds.length > 0 ? { modeBackgrounds } : {}),
@@ -756,6 +758,8 @@ const 规范化开局运行时快照 = (raw?: any): OpeningRuntimeSnapshot | und
         && !snapshot.openingExtraRequirement
         && !snapshot.openingExtraPrompt
         && !snapshot.activeModuleExtraRules
+        && !snapshot.mainStoryDirection
+        && !snapshot.hiddenPlotPolicy
         && modeWorldbooks.length <= 0
         && !workshopSelection?.selectedMode
         && (!workshopSelection?.selectedModules || Object.keys(workshopSelection.selectedModules).length <= 0)

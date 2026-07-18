@@ -112,6 +112,19 @@ describe('开局配置题材边界', () => {
         expect(prompt).toContain('主角性别以玩家建档为准');
     });
 
+    it('会规范化并保留主线与暗线运行时快照', () => {
+        const config = 规范化开局配置({
+            题材模式: '现代都市',
+            runtimeSnapshot: {
+                mainStoryDirection: '  现实日常主线  ',
+                hiddenPlotPolicy: '  低强度暗线  '
+            }
+        });
+
+        expect(config.runtimeSnapshot?.mainStoryDirection).toBe('现实日常主线');
+        expect(config.runtimeSnapshot?.hiddenPlotPolicy).toBe('低强度暗线');
+    });
+
     // TODO: 主控角色锚点功能尚未实现，规范化函数不处理此字段，待后续补齐实现后取消 skip
     it.skip('会保留玩家手动填写的主控角色锚点并清理空白', () => {
         const config = 规范化开局配置({

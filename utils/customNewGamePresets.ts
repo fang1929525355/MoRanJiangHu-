@@ -265,6 +265,8 @@ export const 构建开局运行时快照 = (params: {
     openingExtraRequirement?: string;
     openingExtraPrompt?: string;
     activeModuleExtraRules?: string;
+    mainStoryDirection?: string;
+    hiddenPlotPolicy?: string;
     modeWorldbooks?: any[];
     workshopSelection?: OpeningRuntimeSnapshot['workshopSelection'];
     modeBackgrounds?: 背景结构[];
@@ -277,6 +279,8 @@ export const 构建开局运行时快照 = (params: {
         openingExtraRequirement: 标准化文本(params.openingExtraRequirement),
         openingExtraPrompt: 标准化文本(params.openingExtraPrompt),
         activeModuleExtraRules: 标准化文本(params.activeModuleExtraRules),
+        mainStoryDirection: 标准化文本(params.mainStoryDirection),
+        hiddenPlotPolicy: 标准化文本(params.hiddenPlotPolicy),
         ...(Array.isArray(params.modeWorldbooks) && params.modeWorldbooks.length > 0 ? { modeWorldbooks: params.modeWorldbooks } : {}),
         ...(params.workshopSelection?.selectedMode || Object.keys(params.workshopSelection?.selectedModules || {}).length > 0
             ? {
@@ -296,6 +300,8 @@ export const 构建开局运行时快照 = (params: {
         && !snapshot.openingExtraRequirement
         && !snapshot.openingExtraPrompt
         && !snapshot.activeModuleExtraRules
+        && !snapshot.mainStoryDirection
+        && !snapshot.hiddenPlotPolicy
         && (!snapshot.modeWorldbooks || snapshot.modeWorldbooks.length <= 0)
         && !snapshot.workshopSelection?.selectedMode
         && (!snapshot.workshopSelection?.selectedModules || Object.keys(snapshot.workshopSelection.selectedModules).length <= 0)
@@ -326,6 +332,13 @@ const 校准工坊运行时恢复结果 = (params: {
     const modeBackgrounds = topicEntry ? 提取模块背景列表(topicEntry) : 合并去重背景(snapshot?.modeBackgrounds || []);
     const modeTalents = topicEntry ? 提取模块天赋列表(topicEntry) : 合并去重天赋(snapshot?.modeTalents || []);
     const modeWorldbooks = topicEntry ? 提取模块世界书列表(topicEntry) : 标准化世界书列表(snapshot?.modeWorldbooks);
+    const topicPayload = topicEntry?.payload as any;
+    const mainStoryDirection = topicEntry
+        ? 标准化文本(topicPayload?.mainStoryDirection)
+        : 标准化文本(snapshot?.mainStoryDirection);
+    const hiddenPlotPolicy = topicEntry
+        ? 标准化文本(topicPayload?.hiddenPlotPolicy)
+        : 标准化文本(snapshot?.hiddenPlotPolicy);
     const activeModuleExtraRules = topicEntry
         ? 构建模块额外规则文本(topicEntry, modeBackgrounds, modeTalents)
         : 标准化文本(snapshot?.activeModuleExtraRules ?? params.activeModuleExtraRules);
@@ -344,6 +357,8 @@ const 校准工坊运行时恢复结果 = (params: {
         openingExtraPrompt: snapshot?.openingExtraPrompt ?? params.openingExtraPrompt,
         openingExtraRequirement: snapshot?.openingExtraRequirement ?? params.openingExtraRequirement,
         activeModuleExtraRules,
+        mainStoryDirection,
+        hiddenPlotPolicy,
         modeWorldbooks,
         workshopSelection,
         modeBackgrounds,
@@ -355,6 +370,8 @@ const 校准工坊运行时恢复结果 = (params: {
         openingExtraPrompt: 标准化文本(snapshot?.openingExtraPrompt ?? params.openingExtraPrompt),
         openingExtraRequirement: 标准化文本(snapshot?.openingExtraRequirement ?? params.openingExtraRequirement),
         activeModuleExtraRules,
+        mainStoryDirection,
+        hiddenPlotPolicy,
         modeWorldbooks,
         workshopSelection,
         modeBackgrounds,
