@@ -61,7 +61,8 @@ import {
     规范化同人剧情规划状态,
     规范化同人女主剧情规划状态,
     规范化世界状态,
-    规范化战斗状态
+    规范化战斗状态,
+    是否有效地图层级节点
 } from './storyState';
 import { 构建地图空间场景 } from '../../utils/mapSpatial';
 import { 构建同人运行时提示词包, 应用境界体系区块替换 } from '../../prompts/runtime/fandom';
@@ -962,11 +963,13 @@ export const 构建系统提示词 = ({
     const 构建地图建筑状态文本 = (payload: any) => {
         const source = payload || {};
         const env = 规范化环境信息(source?.环境);
-        const layers = Array.isArray(source?.世界?.地图层级) ? source.世界.地图层级 : [];
+        const layers = Array.isArray(source?.世界?.地图层级)
+            ? source.世界.地图层级.filter(是否有效地图层级节点)
+            : [];
         // 仅输出层级链，不输出旧坐标数据
         const chain: string[] = [env.大地点, env.中地点, env.小地点, env.具体地点].filter(Boolean) as string[];
         const 层级树 = layers.length > 0
-            ? layers.map((l: any) => `[${l.层级 || '?'}] ${l.名称 || ''}`).join(' > ')
+            ? layers.map((l: any) => `[${l?.层级 || '?'}] ${l?.名称 || ''}`).join(' > ')
             : '';
         return [
             '【地图与空间锚点（新层级系统）】',

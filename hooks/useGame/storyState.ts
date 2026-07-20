@@ -1786,6 +1786,14 @@ export const 创建开场空白世界 = (): 世界数据结构 => ({
      性别比例: undefined
  });
 
+export const 是否有效地图层级节点 = (value: unknown): value is Record<string, unknown> => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const node = value as Record<string, unknown>;
+    return [node.ID, node.名称, node.层级].some(
+        (field) => typeof field === 'string' && field.trim().length > 0
+    );
+};
+
 export const 规范化世界状态 = (raw?: any): 世界数据结构 => {
     const world = raw && typeof raw === 'object' ? raw : {};
     const normalizedWorld: 世界数据结构 = {
@@ -1921,7 +1929,9 @@ export const 规范化世界状态 = (raw?: any): 世界数据结构 => {
                 }))
                 .filter((item) => item.名称 || item.描述)
             : [],
-        地图层级: Array.isArray(world?.地图层级) ? world.地图层级 : [],
+        地图层级: Array.isArray(world?.地图层级)
+            ? world.地图层级.filter(是否有效地图层级节点)
+            : [],
         地图建筑: Array.isArray(world?.地图建筑) ? world.地图建筑 : [],
         地图道路: Array.isArray(world?.地图道路) ? world.地图道路 : [],
         地图人物: Array.isArray(world?.地图人物) ? world.地图人物 : [],
