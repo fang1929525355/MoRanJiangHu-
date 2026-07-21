@@ -147,6 +147,19 @@ const triggerBrowserFileDownload = (url: string, filename: string): void => {
     }, 0);
 };
 
+const downloadBrowserFile = async (url: string, filename: string): Promise<void> => {
+    const response = await fetch(url, { method: 'GET' });
+    if (!response.ok) {
+        throw new Error(`APK 下载请求失败，HTTP ${response.status}`);
+    }
+    const objectUrl = URL.createObjectURL(await response.blob());
+    try {
+        triggerBrowserFileDownload(objectUrl, filename);
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
+};
+
 const resolveBrowserApkDownloadUrl = (rawUrl: string): string => {
     const base = typeof window !== 'undefined' ? window.location.href : 'https://msjh.bacon159.pp.ua';
     const current = new URL(base);
@@ -424,7 +437,10 @@ export const downloadLatestApkPackage = async (): Promise<void> => {
     if (!isNativeCapacitorEnvironment()) {
         const rawUrl = RELEASE_INFO.apkDownloadUrl;
         if (!rawUrl) throw new Error('缺少 APK 下载地址。');
-        triggerBrowserFileDownload(resolveBrowserApkDownloadUrl(rawUrl), `MoRanJiangHu-v${RELEASE_INFO.versionName}.apk`);
+        await downloadBrowserFile(
+            resolveBrowserApkDownloadUrl(rawUrl),
+            `MoRanJiangHu-v${RELEASE_INFO.versionName}.apk`
+        );
         return;
     }
 
@@ -479,7 +495,10 @@ export const checkForAppUpdate = async (options?: { silentNoUpdate?: boolean; au
         } else {
             const rawUrl = manifest.apkUrl || RELEASE_INFO.apkDownloadUrl;
             if (rawUrl) {
-                triggerBrowserFileDownload(resolveBrowserApkDownloadUrl(rawUrl), `MoRanJiangHu-v${manifest.versionName || RELEASE_INFO.versionName}.apk`);
+                await downloadBrowserFile(
+                    resolveBrowserApkDownloadUrl(rawUrl),
+                    `MoRanJiangHu-v${manifest.versionName || RELEASE_INFO.versionName}.apk`
+                );
             }
         }
     }
