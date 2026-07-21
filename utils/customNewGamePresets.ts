@@ -4,6 +4,7 @@ import { 创意工坊模块列表, type 创意工坊模块条目 } from '../data
 import { 读取本地创意工坊模块 } from '../services/creativeWorkshop';
 import { 获取题材预设背景, 获取题材预设天赋 } from '../data/presets';
 import { 属性最大值, 属性最小值, 规范化可选开局配置 } from './openingConfig';
+import { 过滤玩家可自选天赋 } from './backgroundTalentBinding';
 import { 规范化模式运行时配置 } from './modeRuntimeProfile';
 import { normalizeRealmDraft, normalizeWorldMapDraft } from './newGameDiy';
 import { 规范化题材模式 } from './topicModeProfiles';
@@ -95,19 +96,34 @@ export const 合并去重开局预设方案 = (rawList: 开局预设方案结构
     return Array.from(map.values());
 };
 
-const 合并去重背景 = (rawList: 背景结构[]): 背景结构[] => {
+export const 合并去重背景 = (rawList: 背景结构[]): 背景结构[] => {
     const map = new Map<string, 背景结构>();
     rawList.forEach((item) => {
         const 名称 = 标准化文本(item?.名称);
         const 描述 = 标准化文本(item?.描述);
         const 效果 = 标准化文本(item?.效果);
         if (!名称 || !描述 || !效果) return;
-        map.set(名称, { ...item, 名称, 描述, 效果 });
+        const existing = map.get(名称);
+        const prevRefs = Array.isArray(existing?.自带天赋)
+            ? existing!.自带天赋!.map((name) => 标准化文本(name)).filter(Boolean)
+            : [];
+        const nextRefs = Array.isArray(item?.自带天赋)
+            ? item.自带天赋.map((name) => 标准化文本(name)).filter(Boolean)
+            : [];
+        const 自带天赋 = Array.from(new Set([...prevRefs, ...nextRefs]));
+        map.set(名称, {
+            ...(existing || {}),
+            ...item,
+            名称,
+            描述,
+            效果,
+            ...(自带天赋.length > 0 ? { 自带天赋 } : {})
+        });
     });
     return Array.from(map.values());
 };
 
-const 合并去重天赋 = (rawList: 天赋结构[]): 天赋结构[] => {
+export const 合并去重天赋 = (rawList: 天赋结构[]): 天赋结构[] => {
     const map = new Map<string, 天赋结构>();
     rawList.forEach((item) => {
         const 名称 = 标准化文本(item?.名称);
@@ -115,7 +131,16 @@ const 合并去重天赋 = (rawList: 天赋结构[]): 天赋结构[] => {
         const 效果 = 标准化文本(item?.效果);
         const 叙事约束 = 标准化文本(item?.叙事约束);
         if (!名称 || !描述 || !效果) return;
-        map.set(名称, { 名称, 描述, 效果, 叙事约束: 叙事约束 || undefined });
+        const existing = map.get(名称);
+        // 隐藏一经成立不可被后写的可见条目降级
+        const 隐藏 = item?.隐藏 === true || existing?.隐藏 === true ? true : undefined;
+        map.set(名称, {
+            名称,
+            描述,
+            效果,
+            叙事约束: 叙事约束 || existing?.叙事约束 || undefined,
+            ...(隐藏 ? { 隐藏: true } : {})
+        });
     });
     return Array.from(map.values());
 };
@@ -184,14 +209,18 @@ const 构建模块额外规则文本 = (module: 创意工坊模块条目, backgr
                     formatItems(b.开局货币) ? `开局货币：${formatItems(b.开局货币)}` : '',
                     formatItems(b.可选初始物品) ? `可选物品：${formatItems(b.可选初始物品)}` : '',
                 ].filter(Boolean).join('；');
-                return `${i + 1}. ${b.名称}：${b.描述}${b.效果 ? `（效果：${b.效果}）` : ''}${details ? `（${details}）` : ''}`;
+                const builtin = Array.isArray(b.自带天赋) && b.自带天赋.length > 0
+                    ? `自带天赋：${b.自带天赋.join('、')}`
+                    : '';
+                const extra = [details, builtin].filter(Boolean).join('；');
+                return `${i + 1}. ${b.名称}：${b.描述}${b.效果 ? `（效果：${b.效果}）` : ''}${extra ? `（${extra}）` : ''}`;
             })
         );
     }
     if (talents.length > 0) {
         extraParts.push(
             '【本世界可用天赋池】',
-            ...talents.map((t, i) => `${i + 1}. ${t.名称}：${t.描述}${t.效果 ? `（效果：${t.效果}）` : ''}`)
+            ...talents.map((t, i) => `${i + 1}. ${t.名称}${t.隐藏 ? '（隐藏）' : ''}：${t.描述}${t.效果 ? `（效果：${t.效果}）` : ''}`)
         );
     }
     return extraParts.join('\n').trim();
@@ -432,9 +461,11 @@ export const 构建预设表单恢复结果 = (
     const selectedBackground = 全部背景选项.find((item) => item.名称 === 标准化文本(preset.character?.背景名称))
         || 全部背景选项[0]
         || options.fallbackBackgrounds[0];
-    const selectedTalents = (Array.isArray(preset.character?.天赋名称列表) ? preset.character.天赋名称列表 : [])
-        .map((name) => 全部天赋选项.find((item) => item.名称 === 标准化文本(name)))
-        .filter(Boolean) as 天赋结构[];
+    const selectedTalents = 过滤玩家可自选天赋(
+        (Array.isArray(preset.character?.天赋名称列表) ? preset.character.天赋名称列表 : [])
+            .map((name) => 全部天赋选项.find((item) => item.名称 === 标准化文本(name)))
+            .filter(Boolean) as 天赋结构[]
+    );
     return {
         ...runtimeRestore,
         模式包背景列表,
@@ -461,7 +492,7 @@ const 过滤有效工坊选择 = (
             return validModuleKeys.has(normalized);
         })
     ) as NonNullable<OpeningRuntimeSnapshot['workshopSelection']>['selectedModules'];
-    const selectedMode = 标准化文本(selection.selectedMode) as OpeningRuntimeSnapshot['workshopSelection']['selectedMode'];
+    const selectedMode = 标准化文本(selection.selectedMode) as NonNullable<OpeningRuntimeSnapshot['workshopSelection']>['selectedMode'];
     if (!selectedMode && Object.keys(selectedModules || {}).length <= 0) return undefined;
     return {
         ...(selectedMode ? { selectedMode } : {}),
@@ -525,6 +556,10 @@ export const 构建预设直开恢复结果 = (
         openingConfig,
         selectedBackground: directFormRestore.selectedBackground,
         selectedTalents: directFormRestore.selectedTalents,
+        模式包背景列表: directFormRestore.模式包背景列表,
+        模式包天赋列表: directFormRestore.模式包天赋列表,
+        全部背景选项: directFormRestore.全部背景选项,
+        全部天赋选项: directFormRestore.全部天赋选项,
         openingStreaming: runtimeRestore.openingStreaming,
         openingExtraRequirement: runtimeRestore.openingExtraRequirement,
         activeModuleExtraRules: runtimeRestore.activeModuleExtraRules,

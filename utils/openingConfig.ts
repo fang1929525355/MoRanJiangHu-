@@ -1,6 +1,7 @@
 import type {
     OpeningConfig,
     OpeningRuntimeSnapshot,
+    WorldGenConfig,
     初始伙伴配置结构,
     同人角色替换规则结构,
     游戏难度,
@@ -10,7 +11,10 @@ import type {
     开局生成性别类型,
     题材模式类型,
     同人来源类型,
-    同人融合强度类型
+    同人融合强度类型,
+    背景结构,
+    天赋结构,
+    角色数据结构
 } from '../types';
 import type { ModeRuntimeProfile } from '../models/system';
 import { 获取题材模式配置, 获取题材模式选项, 规范化题材模式 } from './topicModeProfiles';
@@ -502,11 +506,15 @@ const 规范化快照背景列表 = (value: unknown): 背景结构[] => {
                     };
                 }).filter(Boolean)
                 : undefined;
+            const 自带天赋 = Array.isArray(item?.自带天赋)
+                ? item.自带天赋.map((name: unknown) => 读取文本(name)).filter(Boolean)
+                : undefined;
             return {
                 名称,
                 描述,
                 效果,
-                ...(初始物品 && 初始物品.length > 0 ? { 初始物品 } : {})
+                ...(初始物品 && 初始物品.length > 0 ? { 初始物品 } : {}),
+                ...(自带天赋 && 自带天赋.length > 0 ? { 自带天赋 } : {})
             };
         })
         .filter(Boolean) as 背景结构[];
@@ -520,7 +528,13 @@ const 规范化快照天赋列表 = (value: unknown): 天赋结构[] => {
             const 描述 = 读取文本(item?.描述);
             const 效果 = 读取文本(item?.效果);
             if (!名称 || !描述 || !效果) return null;
-            return { 名称, 描述, 效果, 叙事约束: item?.叙事约束 };
+            return {
+                名称,
+                描述,
+                效果,
+                叙事约束: item?.叙事约束,
+                ...(item?.隐藏 === true ? { 隐藏: true as const } : {})
+            };
         })
         .filter(Boolean) as 天赋结构[];
 };
@@ -571,7 +585,7 @@ const 规范化运行时快照 = (value: unknown): OpeningConfig['runtimeSnapsho
         activeModuleExtraRules: 读取文本((value as any)?.activeModuleExtraRules),
         modeBackgrounds: 规范化快照背景列表((value as any)?.modeBackgrounds),
         modeTalents: 规范化快照天赋列表((value as any)?.modeTalents)
-    };
+    } as OpeningConfig['runtimeSnapshot'];
 };
 export const 规范化角色替换名称列表 = (value: unknown): string[] => {
     const rawList = Array.isArray(value)
@@ -693,7 +707,8 @@ const 规范化天赋列表 = (value: unknown): 初始伙伴配置结构['天赋
                 名称: 读取文本(item?.名称),
                 描述: 读取文本(item?.描述),
                 效果: 读取文本(item?.效果),
-                叙事约束: item?.叙事约束
+                叙事约束: item?.叙事约束,
+                ...(item?.隐藏 === true ? { 隐藏: true as const } : {})
             }))
             .filter((item) => item.名称 && item.描述 && item.效果)
             .slice(0, 3)
@@ -724,12 +739,18 @@ const 规范化开局运行时快照 = (raw?: any): OpeningRuntimeSnapshot | und
         : undefined;
     const modeBackgrounds = Array.isArray(raw?.modeBackgrounds)
         ? raw.modeBackgrounds
-            .map((item: any) => ({
-                名称: 读取文本(item?.名称),
-                描述: 读取文本(item?.描述),
-                效果: 读取文本(item?.效果)
-            }))
-            .filter((item) => item.名称 && item.描述 && item.效果)
+            .map((item: any) => {
+                const 自带天赋 = Array.isArray(item?.自带天赋)
+                    ? item.自带天赋.map((name: unknown) => 读取文本(name)).filter(Boolean)
+                    : undefined;
+                return {
+                    名称: 读取文本(item?.名称),
+                    描述: 读取文本(item?.描述),
+                    效果: 读取文本(item?.效果),
+                    ...(自带天赋 && 自带天赋.length > 0 ? { 自带天赋 } : {})
+                };
+            })
+            .filter((item: { 名称: string; 描述: string; 效果: string }) => item.名称 && item.描述 && item.效果)
         : [];
     const modeTalents = Array.isArray(raw?.modeTalents)
         ? raw.modeTalents
@@ -737,9 +758,10 @@ const 规范化开局运行时快照 = (raw?: any): OpeningRuntimeSnapshot | und
                 名称: 读取文本(item?.名称),
                 描述: 读取文本(item?.描述),
                 效果: 读取文本(item?.效果),
-                叙事约束: item?.叙事约束
+                叙事约束: item?.叙事约束,
+                ...(item?.隐藏 === true ? { 隐藏: true as const } : {})
             }))
-            .filter((item) => item.名称 && item.描述 && item.效果)
+            .filter((item: { 名称: string; 描述: string; 效果: string }) => item.名称 && item.描述 && item.效果)
         : [];
     const mainStoryDirection = 读取文本(raw?.mainStoryDirection);
     const hiddenPlotPolicy = 读取文本(raw?.hiddenPlotPolicy);

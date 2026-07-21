@@ -777,6 +777,8 @@ export interface ModeRuntimeProfile {
     };
     性别比例演变预设?: boolean; // 题材模式建议值，游戏设置中未显式设置时使用
     uiLabels?: 模式界面文案覆盖;
+    /** 开局向导可挂载；运行时以游戏设置为准 */
+    叙事平静值配置?: 叙事平静值配置结构;
 }
 
 export interface OpeningConfig {
@@ -817,11 +819,14 @@ export interface OpeningRuntimeSnapshot {
         初始物品?: 背景初始物品快照[];
         可选初始物品?: 背景初始物品快照[];
         开局货币?: 背景开局货币快照[];
+        自带天赋?: string[];
     }>;
     modeTalents?: Array<{
         名称: string;
         描述: string;
         效果: string;
+        叙事约束?: string;
+        隐藏?: boolean;
     }>;
 }
 
