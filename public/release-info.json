@@ -589,5 +589,5 @@
     "备用站：https://msjh.bacon.de5.net/"
   ],
   "notes": "酒馆预设模式现在会保留玩家设置的最低正文字数要求，预设继续接管文风和格式，同时减少只生成几百字的情况。\n修复文章优化在部分兼容 API 已输出完整正文但连接不结束时长时间卡住的问题；等待超时后会安全接收完整正文并继续流程。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-07-21T23:52:42+08:00"
+  "releasePublishedAt": "2026-07-21T23:54:06+08:00"
 }
