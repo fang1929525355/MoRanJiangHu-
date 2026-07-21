@@ -187,8 +187,8 @@ export const 构建主剧情请求参数 = (
     const messageEntries: 主剧情消息条目[] = [];
 
 	    if (tavernPresetModeEnabled) {
-	        // 酒馆模式：外部预设主导提示词，项目的风格/格式/字数/免责声明不应混入。
-	        // 只保留玩家主动设置的语言偏好和兼容性提示词。
+	        // 酒馆模式：外部预设主导叙事提示词；玩家设置的最低字数作为硬约束例外保留。
+	        // 其他项目风格、格式和免责声明仍不混入。
 	        const tavernMessages = 构建酒馆预设消息链({
 	            config: runtimeGameConfig,
 	            context: params.builtContext,
@@ -217,6 +217,15 @@ export const 构建主剧情请求参数 = (
                 content: trimmed
             });
         });
+        if (lengthRequirementPrompt.trim()) {
+            messageEntries.push({
+                id: 'tavern_length_requirement',
+                title: '酒馆预设字数要求',
+                category: '用户',
+                role: 'user',
+                content: lengthRequirementPrompt.trim()
+            });
+        }
     } else {
         const latestUserInputRole: 有序消息角色 = 'assistant';
         const pushEntry = (

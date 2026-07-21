@@ -22,6 +22,8 @@ import { 拆分判定日志与后续正文, 提取判定日志前缀, 是否判�
 import { 构建运行时额外提示词 } from '../../prompts/runtime/nsfw';
 import { 按功能开关过滤提示词内容 } from '../../utils/promptFeatureToggles';
 import { 是否裸标准游戏时间行, 检测裸标准游戏时间行, 是否正文段泄漏行 } from '../../utils/bodyTextSanitizer';
+import { 获取游玩请求超时毫秒 } from '../../utils/gameRequestTimeouts';
+import { 执行文章优化请求带超时 } from './polishRequestTimeout';
 
 type 正文日志结构 = Array<{ sender: string; text: string }>;
 
@@ -570,6 +572,8 @@ export const 执行正文润色 = async (
     const polishCotPseudoPrompt = '';
     const guardedOnDelta = 构建文章优化流式守卫(deps.onDelta);
     const shouldNonStream = deps.gameConfig?.启用非流式输出 || featureConfig?.文章优化非流式输出;
+    const requestTimeouts = 获取游玩请求超时毫秒(runtimeGameConfig.游玩请求超时设置);
+    const requestSignal = options?.signal ?? new AbortController().signal;
 
     const sourceLogs = Array.isArray(baseResponse.body_original_logs) && baseResponse.body_original_logs.length > 0
         ? baseResponse.body_original_logs
@@ -581,15 +585,33 @@ export const 执行正文润色 = async (
     }
 
     const 执行一次文章优化 = async (prompt: string, retryHint = '', bodyOverride?: string) => {
-        const result = await textAIService.generatePolishedBody(
-            (bodyOverride || '').trim() || sourceBody,
-            retryHint ? `${prompt}\n\n${retryHint}` : prompt,
-            polishApi,
-            options?.signal,
-            polishExtraPrompt,
-            polishCotPseudoPrompt,
-            !shouldNonStream && guardedOnDelta ? { stream: true, onDelta: guardedOnDelta } : undefined
-        );
+        const result = await 执行文章优化请求带超时({
+            parentSignal: requestSignal,
+            firstResponseTimeoutMs: requestTimeouts.firstResponseMs,
+            streamIdleTimeoutMs: requestTimeouts.idleMs,
+            task: (signal, onTimeoutDelta) => textAIService.generatePolishedBody(
+                (bodyOverride || '').trim() || sourceBody,
+                retryHint ? `${prompt}\n\n${retryHint}` : prompt,
+                polishApi,
+                signal,
+                polishExtraPrompt,
+                polishCotPseudoPrompt,
+                !shouldNonStream && guardedOnDelta ? {
+                    stream: true,
+                    onDelta: (delta, accumulated) => {
+                        onTimeoutDelta(delta, accumulated);
+                        guardedOnDelta(delta, accumulated);
+                    }
+                } : undefined
+            ),
+            resolveCompletedDraft: (accumulated) => {
+                if (!/<正文>[\s\S]*<\/正文>/.test(accumulated)) return null;
+                return {
+                    rawText: accumulated,
+                    bodyText: 提取正文标签内容(accumulated)
+                };
+            }
+        });
         const pollution = 检测文章优化协议确认污染(result.rawText || result.bodyText || '');
         if (pollution.polluted) {
             throw new Error(pollution.reason);

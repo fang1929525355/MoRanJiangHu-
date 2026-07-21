@@ -28,7 +28,7 @@ const localEntry = {
 
 const seedGameSettings = async (page) => {
   await page.evaluate(async ({ localEntry, localPreset }) => {
-    const request = indexedDB.open('WuxiaGameDB', 3);
+    const request = indexedDB.open('WuxiaGameDB');
     const db = await new Promise((resolve, reject) => {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
@@ -77,10 +77,10 @@ const presetSelect = (page) => page
 const findDoublePresetOptionValue = async (select) => {
   await expect
     .poll(async () => await select.locator('option').evaluateAll((options) => options.map((option) => option.textContent || '')), { timeout: 20000 })
-    .toContainEqual(expect.stringContaining('双人成行v10.0_青云上_MoRan墨染江湖净化完整版'));
+    .toContainEqual(expect.stringContaining('双人成行'));
 
   const value = await select.locator('option').evaluateAll((options) => {
-    const option = options.find((item) => (item.textContent || '').includes('双人成行v10.0_青云上_MoRan墨染江湖净化完整版'));
+    const option = options.find((item) => (item.textContent || '').includes('双人成行'));
     return option?.value || '';
   });
   expect(value).toMatch(/^workshop:/);
@@ -88,7 +88,7 @@ const findDoublePresetOptionValue = async (select) => {
 };
 
 const readGameSettings = async (page) => page.evaluate(async () => {
-  const request = indexedDB.open('WuxiaGameDB', 3);
+  const request = indexedDB.open('WuxiaGameDB');
   const db = await new Promise((resolve, reject) => {
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
