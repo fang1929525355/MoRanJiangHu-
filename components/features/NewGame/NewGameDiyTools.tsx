@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { 接口设置结构, OpeningConfig, RealmDiyRow, WorldGenConfig, WorldMapDiyDraft, WorldMapDiyFeature, WorldMapDiyNode, 角色数据结构 } from '../../../types';
+import type { 接口设置结构, OpeningConfig, RealmDiyDraft, RealmDiyRow, RealmDiySystem, WorldGenConfig, WorldMapDiyDraft, WorldMapDiyFeature, WorldMapDiyNode, 角色数据结构 } from '../../../types';
 import { generateFandomRealmData, generateWorldData } from '../../../services/ai/text';
 import { 获取主剧情接口配置, 接口配置是否可用 } from '../../../utils/apiConfig';
 import {
@@ -22,6 +22,38 @@ type Props = {
 };
 
 const nextId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+export const addRealmSystem = (draft: RealmDiyDraft, name = ''): RealmDiyDraft => {
+    const normalized = normalizeRealmDraft(draft);
+    return normalizeRealmDraft({
+        ...normalized,
+        systems: [...(normalized.systems || []), {
+            id: nextId('realm_system'),
+            name: name.trim() || `能力体系${(normalized.systems?.length || 0) + 1}`,
+            description: '',
+            energyType: '',
+            role: 'primary_or_secondary',
+            rows: [{ id: nextId('realm'), name: '', level: 1, power: '', breakthrough: '', parameters: '', description: '' }]
+        }]
+    });
+};
+
+export const updateRealmSystem = (draft: RealmDiyDraft, systemId: string, patch: Partial<RealmDiySystem>): RealmDiyDraft => {
+    const normalized = normalizeRealmDraft(draft);
+    return normalizeRealmDraft({
+        ...normalized,
+        systems: (normalized.systems || []).map((system) => system.id === systemId ? { ...system, ...patch, id: system.id } : system)
+    });
+};
+
+export const removeRealmSystem = (draft: RealmDiyDraft, systemId: string): RealmDiyDraft => {
+    const normalized = normalizeRealmDraft(draft);
+    if ((normalized.systems?.length || 0) <= 1) return normalized;
+    return normalizeRealmDraft({
+        ...normalized,
+        systems: (normalized.systems || []).filter((system) => system.id !== systemId)
+    });
+};
 
 const panelClass = 'rounded-2xl border border-wuxia-gold/20 bg-black/25 p-4';
 const inputClass = 'w-full rounded border border-gray-700 bg-black/50 px-2 py-2 text-xs text-white outline-none focus:border-wuxia-gold';
@@ -145,6 +177,7 @@ const patchMapFeature = (feature: WorldMapDiyFeature): WorldMapDiyFeature => ({
 const NewGameDiyTools: React.FC<Props> = ({ worldConfig, charData, openingConfig, apiConfig, onChange, compact = false }) => {
     const [realmOpen, setRealmOpen] = useState(false);
     const [mapOpen, setMapOpen] = useState(false);
+    const [selectedRealmSystemId, setSelectedRealmSystemId] = useState('');
     const [aiStatus, setAiStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ type: 'idle', message: '' });
     const realmDraft = useMemo(() => normalizeRealmDraft(worldConfig.realmDiyDraft), [worldConfig.realmDiyDraft]);
     const mapDraft = useMemo(() => normalizeWorldMapDraft(worldConfig.mapDiyDraft), [worldConfig.mapDiyDraft]);
@@ -152,8 +185,18 @@ const NewGameDiyTools: React.FC<Props> = ({ worldConfig, charData, openingConfig
     const currentApi = useMemo(() => apiConfig ? 获取主剧情接口配置(apiConfig) : null, [apiConfig]);
     const aiAvailable = 接口配置是否可用(currentApi);
 
+    const selectedRealmSystem = realmDraft.systems?.find((system) => system.id === selectedRealmSystemId) || realmDraft.systems?.[0];
+    const selectedRealmRows = selectedRealmSystem?.rows || [];
+    const isLastPrimaryEligibleRealmSystem = selectedRealmSystem?.role !== 'secondary_only'
+        && (realmDraft.systems || []).filter((system) => system.role !== 'secondary_only').length <= 1;
+
+    const updateRealmDraft = (draft: RealmDiyDraft) => {
+        onChange(prev => ({ ...prev, realmDiyDraft: normalizeRealmDraft(draft) }));
+    };
+
     const updateRealmRows = (rows: RealmDiyRow[]) => {
-        onChange(prev => ({ ...prev, realmDiyDraft: { rows, updatedAt: Date.now() } }));
+        if (!selectedRealmSystem) return;
+        updateRealmDraft(updateRealmSystem(realmDraft, selectedRealmSystem.id, { rows }));
     };
 
     const updateMapDraft = (draft: WorldMapDiyDraft) => {
@@ -384,22 +427,36 @@ const NewGameDiyTools: React.FC<Props> = ({ worldConfig, charData, openingConfig
             {realmOpen && (
                 <div className="space-y-3 rounded-xl border border-white/10 bg-black/25 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-xs font-bold text-wuxia-gold">境界 DIY 表单</div>
+                        <div>
+                            <div className="text-xs font-bold text-wuxia-gold">多能力体系 DIY</div>
+                            <div className="mt-1 text-[11px] text-gray-400">每套体系独立命名，共用战力档位；角色可选择主体系并兼修副体系。</div>
+                        </div>
                         <div className="flex flex-wrap gap-2">
                             <button
                                 type="button"
                                 className={smallButtonClass}
-                                onClick={() => updateRealmRows(realmDraft.rows.map(patchRealmRow))}
+                                onClick={() => {
+                                    const next = addRealmSystem(realmDraft);
+                                    updateRealmDraft(next);
+                                    setSelectedRealmSystemId(next.systems?.[next.systems.length - 1]?.id || '');
+                                }}
+                            >
+                                新增体系
+                            </button>
+                            <button
+                                type="button"
+                                className={smallButtonClass}
+                                onClick={() => updateRealmRows(selectedRealmRows.map(patchRealmRow))}
                             >
                                 AI 补完空项
                             </button>
                             <button
                                 type="button"
                                 className={smallButtonClass}
-                                onClick={() => updateRealmRows([...realmDraft.rows, {
+                                onClick={() => updateRealmRows([...selectedRealmRows, {
                                     id: nextId('realm'),
                                     name: '',
-                                    level: realmDraft.rows.length + 1,
+                                    level: selectedRealmRows.length + 1,
                                     power: '',
                                     breakthrough: '',
                                     parameters: '',
@@ -411,20 +468,75 @@ const NewGameDiyTools: React.FC<Props> = ({ worldConfig, charData, openingConfig
                             <button type="button" className={smallButtonClass} onClick={applyRealmPrompt}>写入境界提示词</button>
                         </div>
                     </div>
+                    <div className="flex flex-wrap gap-2">
+                        {(realmDraft.systems || []).map((system) => (
+                            <button
+                                key={system.id}
+                                type="button"
+                                className={`${smallButtonClass} ${selectedRealmSystem?.id === system.id ? 'border-wuxia-cyan/60 bg-wuxia-cyan/15 text-wuxia-cyan' : ''}`}
+                                onClick={() => setSelectedRealmSystemId(system.id)}
+                            >
+                                {system.name}
+                            </button>
+                        ))}
+                    </div>
+                    {selectedRealmSystem && (
+                        <div className="grid grid-cols-1 gap-2 rounded-xl border border-wuxia-gold/15 bg-amber-50/5 p-3 md:grid-cols-2">
+                            <input
+                                className={inputClass}
+                                value={selectedRealmSystem.name}
+                                placeholder="体系名称，如武者、道士、法师"
+                                onChange={(event) => updateRealmDraft(updateRealmSystem(realmDraft, selectedRealmSystem.id, { name: event.target.value }))}
+                            />
+                            <input
+                                className={inputClass}
+                                value={selectedRealmSystem.energyType}
+                                placeholder="能量类型，如气血、法力、神术"
+                                onChange={(event) => updateRealmDraft(updateRealmSystem(realmDraft, selectedRealmSystem.id, { energyType: event.target.value }))}
+                            />
+                            <select
+                                className={inputClass}
+                                value={selectedRealmSystem.role}
+                                onChange={(event) => updateRealmDraft(updateRealmSystem(realmDraft, selectedRealmSystem.id, { role: event.target.value as RealmDiySystem['role'] }))}
+                            >
+                                <option value="primary_or_secondary">可作为主体系或副体系</option>
+                                <option value="primary_only">仅主体系</option>
+                                <option value="secondary_only" disabled={isLastPrimaryEligibleRealmSystem}>仅副体系</option>
+                            </select>
+                            <button
+                                type="button"
+                                className={`${smallButtonClass} border-red-400/30 text-red-300`}
+                                disabled={(realmDraft.systems?.length || 0) <= 1}
+                                onClick={() => {
+                                    const next = removeRealmSystem(realmDraft, selectedRealmSystem.id);
+                                    updateRealmDraft(next);
+                                    setSelectedRealmSystemId(next.systems?.[0]?.id || '');
+                                }}
+                            >
+                                删除当前体系
+                            </button>
+                            <textarea
+                                className={`${textAreaClass} md:col-span-2`}
+                                value={selectedRealmSystem.description}
+                                placeholder="体系定位、擅长方向、资源代价与克制关系"
+                                onChange={(event) => updateRealmDraft(updateRealmSystem(realmDraft, selectedRealmSystem.id, { description: event.target.value }))}
+                            />
+                        </div>
+                    )}
                     <div className="space-y-3">
-                        {realmDraft.rows.map((row, index) => (
+                        {selectedRealmRows.map((row, index) => (
                             <div key={row.id} className="rounded-xl border border-gray-800 bg-black/30 p-3 space-y-2">
                                 <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_90px_auto]">
-                                    <input className={inputClass} value={row.name} placeholder="境界名称" onChange={e => updateRealmRows(realmDraft.rows.map(item => item.id === row.id ? { ...item, name: e.target.value } : item))} />
-                                    <input className={inputClass} type="number" min={1} value={row.level} onChange={e => updateRealmRows(realmDraft.rows.map(item => item.id === row.id ? { ...item, level: Number(e.target.value) || index + 1 } : item))} />
-                                    <button type="button" className={smallButtonClass} onClick={() => updateRealmRows(realmDraft.rows.filter(item => item.id !== row.id))} disabled={realmDraft.rows.length <= 1}>删除</button>
+                                    <input className={inputClass} value={row.name} placeholder="境界名称" onChange={e => updateRealmRows(selectedRealmRows.map(item => item.id === row.id ? { ...item, name: e.target.value } : item))} />
+                                    <input className={inputClass} type="number" min={1} value={row.level} title="共通战力档位" onChange={e => updateRealmRows(selectedRealmRows.map(item => item.id === row.id ? { ...item, level: Number(e.target.value) || index + 1 } : item))} />
+                                    <button type="button" className={smallButtonClass} onClick={() => updateRealmRows(selectedRealmRows.filter(item => item.id !== row.id))} disabled={selectedRealmRows.length <= 1}>删除</button>
                                 </div>
                                 <div className={`grid grid-cols-1 gap-2 ${compact ? '' : 'md:grid-cols-3'}`}>
-                                    <input className={inputClass} value={row.power} placeholder="战力定位" onChange={e => updateRealmRows(realmDraft.rows.map(item => item.id === row.id ? { ...item, power: e.target.value } : item))} />
-                                    <input className={inputClass} value={row.breakthrough} placeholder="突破条件" onChange={e => updateRealmRows(realmDraft.rows.map(item => item.id === row.id ? { ...item, breakthrough: e.target.value } : item))} />
-                                    <input className={inputClass} value={row.parameters} placeholder="寿元/内力/灵力等参数" onChange={e => updateRealmRows(realmDraft.rows.map(item => item.id === row.id ? { ...item, parameters: e.target.value } : item))} />
+                                    <input className={inputClass} value={row.power} placeholder="战力定位" onChange={e => updateRealmRows(selectedRealmRows.map(item => item.id === row.id ? { ...item, power: e.target.value } : item))} />
+                                    <input className={inputClass} value={row.breakthrough} placeholder="突破条件" onChange={e => updateRealmRows(selectedRealmRows.map(item => item.id === row.id ? { ...item, breakthrough: e.target.value } : item))} />
+                                    <input className={inputClass} value={row.parameters} placeholder="寿元/内力/灵力等参数" onChange={e => updateRealmRows(selectedRealmRows.map(item => item.id === row.id ? { ...item, parameters: e.target.value } : item))} />
                                 </div>
-                                <textarea className={textAreaClass} value={row.description} placeholder="可选描述；留空可点 AI 补完空项" onChange={e => updateRealmRows(realmDraft.rows.map(item => item.id === row.id ? { ...item, description: e.target.value } : item))} />
+                                <textarea className={textAreaClass} value={row.description} placeholder="可选描述；留空可点 AI 补完空项" onChange={e => updateRealmRows(selectedRealmRows.map(item => item.id === row.id ? { ...item, description: e.target.value } : item))} />
                             </div>
                         ))}
                     </div>

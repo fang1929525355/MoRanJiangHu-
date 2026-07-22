@@ -643,6 +643,7 @@ export const 构建系统提示词 = ({
         const orderedWorld = {
             活跃NPC列表: 取数组(world?.活跃NPC列表).map((npc: any, idx: number) => ({
                 索引: idx,
+                npcId: 取文本(npc?.npcId),
                 姓名: 取文本(npc?.姓名),
                 所属势力: 取文本(npc?.所属势力),
                 当前位置: 取文本(npc?.当前位置),
@@ -650,7 +651,8 @@ export const 构建系统提示词 = ({
                 当前状态: 取文本(npc?.当前状态),
                 当前行动: 取文本(npc?.当前行动),
                 行动开始时间: 取文本(npc?.行动开始时间),
-                行动结束时间: 取文本(npc?.行动结束时间)
+                行动结束时间: 取文本(npc?.行动结束时间),
+                settlement: npc?.settlement && typeof npc.settlement === 'object' ? npc.settlement : undefined
             })),
             待执行事件: 取数组(world?.待执行事件).map((event: any, idx: number) => ({
                 索引: idx,

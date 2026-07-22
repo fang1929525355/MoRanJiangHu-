@@ -101,6 +101,7 @@ export interface 地图人物结构 {
 }
 
 export interface 活跃NPC结构 {
+    npcId?: string;
     姓名: string;
     所属势力: string;
     当前位置: string;
@@ -109,6 +110,34 @@ export interface 活跃NPC结构 {
     当前行动: string;
     行动开始时间: 游戏时间格式;
     行动结束时间: 游戏时间格式;
+    settlement?: NPC后台结算结构;
+}
+
+export type NPC后台结算状态 = 'pending' | 'success' | 'failed' | 'interrupted';
+export type NPC后台装备变化动作 = 'gain' | 'equip' | 'unequip' | 'lose' | 'damage';
+
+export interface NPC后台境界变化结构 {
+    systemId?: string;
+    systemName: string;
+    fromRealm: string;
+    toRealm: string;
+    systemLevel: number;
+    powerLevel: number;
+}
+
+export interface NPC后台装备变化结构 {
+    action: NPC后台装备变化动作;
+    itemName: string;
+    source: string;
+    slot?: string;
+    description?: string;
+}
+
+export interface NPC后台结算结构 {
+    status: NPC后台结算状态;
+    reason: string;
+    realmChange?: NPC后台境界变化结构;
+    equipmentChanges?: NPC后台装备变化结构[];
 }
 
 export interface 世界待执行事件结构 {

@@ -1,5 +1,6 @@
 
 import type { NPC图片档案 } from './imageGeneration';
+import type { CharacterAbilitySystems } from './system';
 
 export type NPC性别 = '男' | '女' | '男娘' | '扶她';
 
@@ -166,6 +167,7 @@ export interface NPC结构 {
     年龄: number;
     生日?: string;
     境界: string;
+    能力体系?: CharacterAbilitySystems;
     灵根?: string;
     灵根资质?: string;
     当前灵力?: number;

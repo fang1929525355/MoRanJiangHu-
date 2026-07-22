@@ -1,6 +1,8 @@
 import type {
     RealmDiyDraft,
     RealmDiyRow,
+    RealmDiySystem,
+    RealmDiySystemRole,
     WorldGenConfig,
     WorldMapDiyDraft,
     WorldMapDiyFeature,
@@ -85,8 +87,8 @@ const normalizeTags = (tags: unknown): string[] => (
         : []
 );
 
-export const createEmptyRealmDraft = (): RealmDiyDraft => ({
-    rows: [
+export const createEmptyRealmDraft = (): RealmDiyDraft => {
+    const rows: RealmDiyRow[] = [
         {
             id: createDiyId('realm'),
             name: '开脉',
@@ -96,9 +98,20 @@ export const createEmptyRealmDraft = (): RealmDiyDraft => ({
             parameters: '寿元、内力、灵力、神识可由 AI 补完',
             description: 'AI 补完描述'
         }
-    ],
-    updatedAt: Date.now()
-});
+    ];
+    return {
+        systems: [{
+            id: createDiyId('realm_system'),
+            name: '默认体系',
+            description: '',
+            energyType: '',
+            role: 'primary_or_secondary',
+            rows
+        }],
+        rows,
+        updatedAt: Date.now()
+    };
+};
 
 export const createEmptyWorldMapDraft = (): WorldMapDiyDraft => ({
     enabled: false,
@@ -122,12 +135,47 @@ export const createEmptyWorldMapDraft = (): WorldMapDiyDraft => ({
     updatedAt: Date.now()
 });
 
-export const normalizeRealmDraft = (draft?: RealmDiyDraft | null): RealmDiyDraft => ({
-    rows: Array.isArray(draft?.rows) && draft.rows.length > 0
+const realmSystemRoles = new Set<RealmDiySystemRole>(['primary_or_secondary', 'primary_only', 'secondary_only']);
+
+export const normalizeRealmSystem = (system: Partial<RealmDiySystem> | undefined, index: number): RealmDiySystem => {
+    const fallbackRows = createEmptyRealmDraft().rows || [];
+    return {
+        id: text(system?.id) || createDiyId(`realm_system_${index}`),
+        name: text(system?.name) || `能力体系${index + 1}`,
+        description: text(system?.description),
+        energyType: text(system?.energyType),
+        role: realmSystemRoles.has(system?.role as RealmDiySystemRole) ? system!.role! : 'primary_or_secondary',
+        rows: Array.isArray(system?.rows) && system.rows.length > 0
+            ? system.rows.map((row, rowIndex) => normalizeRealmRow(row, rowIndex))
+            : fallbackRows.map((row, rowIndex) => normalizeRealmRow(row, rowIndex))
+    };
+};
+
+export const normalizeRealmDraft = (draft?: RealmDiyDraft | null): RealmDiyDraft => {
+    const emptyRows = createEmptyRealmDraft().rows || [];
+    const legacyRows = Array.isArray(draft?.rows) && draft.rows.length > 0
         ? draft.rows.map((row, index) => normalizeRealmRow(row, index))
-        : createEmptyRealmDraft().rows,
-    updatedAt: Date.now()
-});
+        : emptyRows;
+    const systems = Array.isArray(draft?.systems) && draft.systems.length > 0
+        ? draft.systems.map((system, index) => normalizeRealmSystem(system, index))
+        : [{
+            id: createDiyId('realm_system_default'),
+            name: '默认体系',
+            description: '',
+            energyType: '',
+            role: 'primary_or_secondary' as const,
+            rows: legacyRows
+        }];
+    if (!systems.some((system) => system.role !== 'secondary_only')) {
+        systems[0] = { ...systems[0], role: 'primary_or_secondary' };
+    }
+    const compatibilitySystem = systems.find((system) => system.role !== 'secondary_only')!;
+    return {
+        systems,
+        rows: compatibilitySystem.rows,
+        updatedAt: Date.now()
+    };
+};
 
 export const normalizeWorldMapDraft = (draft?: WorldMapDiyDraft | null): WorldMapDiyDraft => {
     const empty = createEmptyWorldMapDraft();
@@ -216,10 +264,12 @@ export const normalizeWorldMapFeature = (feature: Partial<WorldMapDiyFeature> | 
 
 export const buildRealmPromptFromDraft = (draft: RealmDiyDraft): string => {
     const normalized = normalizeRealmDraft(draft);
-    const rows = [...normalized.rows]
+    const systems = normalized.systems || [];
+    const compatibilitySystem = systems.find((system) => system.role !== 'secondary_only') || systems[0];
+    const rows = [...(compatibilitySystem?.rows || normalized.rows || [])]
         .filter((row) => row.name.trim())
         .sort((a, b) => a.level - b.level);
-    const fallbackRows = rows.length > 0 ? rows : createEmptyRealmDraft().rows;
+    const fallbackRows = rows.length > 0 ? rows : (createEmptyRealmDraft().rows || []);
     const requiredLevels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 27, 33, 43];
     const majorBreaks = [1, 5, 9, 13, 17, 21, 27, 33, 43];
     const pickRealmForLevel = (level: number): RealmDiyRow => (
@@ -244,11 +294,30 @@ export const buildRealmPromptFromDraft = (draft: RealmDiyDraft): string => {
     ));
     const stageJumps = ['1→2', '2→3', '3→4', '5→6', '6→7', '7→8', '9→10', '10→11', '11→12', '13→14', '14→15', '15→16', '17→18', '18→19', '19→20', '21→22', '22→24'];
     const breakthroughJumps = ['4→5', '8→9', '12→13', '16→17', '20→21', '24→27', '27→33', '33→43'];
+    const systemSections = systems.flatMap((system) => {
+        const systemRows = [...system.rows].filter((row) => row.name.trim()).sort((a, b) => a.level - b.level);
+        return [
+            `【能力体系：${system.name}】`,
+            `- 体系用途：${system.role === 'primary_only' ? '仅主体系' : system.role === 'secondary_only' ? '仅副体系' : '可作为主体系或副体系'}`,
+            `- 能量类型：${system.energyType || '按世界观定义'}`,
+            `- 体系定位：${system.description || '按本体系境界能力边界执行'}`,
+            ...systemRows.map((row) => `${row.level} => ${row.name}`),
+            ...systemRows.map((row) => `  - ${row.name}：${row.power || row.description || '按当前共通战力档位约束能力上限。'}`),
+            ''
+        ];
+    });
     return [
         '<境界体系>',
         '【境界映射母板】',
         ...requiredLevels.map((level) => `${level} => ${labelForLevel(level)}`),
         '',
+        '【多体系共通档位规则】',
+        '- 每个角色选择一个主体系，并可拥有零个或多个副体系。',
+        '- `境界层级` 表示综合战力档位；各体系自身的境界名称与进度写入 `能力体系.primary/secondary`。',
+        '- 相同共通档位表示总体威胁大致可比，同档不等于能力相同；近战、术法、治疗、感知、克制和资源消耗仍按各自体系执行。',
+        '- 副体系只提供有限协同与横向能力，不允许把多个体系的档位直接相加。',
+        '',
+        ...systemSections,
         '【九阶命名与能力边界】',
         `- 九阶命名顺序固定：${majorBreaks.map(labelForLevel).join(' → ')}`,
         '- 境界能力边界：',
