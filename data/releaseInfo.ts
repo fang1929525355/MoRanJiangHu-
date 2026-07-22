@@ -590,7 +590,7 @@ export const RELEASE_INFO = {
         "备用站：https://msjh.bacon.de5.net/"
     ],
     "notes": "修复生图服务临时返回 5xx、上游错误或限流时可能导致游戏被错误中断的问题；短暂网络故障现在会安全记录并继续运行。\n认证失败、参数错误等明确的 4xx 问题仍会正常显示诊断提示，不会被当成可恢复网络波动而隐藏。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-    "releasePublishedAt": "2026-07-22T19:11:00+08:00"
+    "releasePublishedAt": "2026-07-22T19:12:28+08:00"
 } as const;
 
 export type ReleaseInfo = typeof RELEASE_INFO;
