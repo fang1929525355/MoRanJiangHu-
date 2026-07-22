@@ -77,7 +77,8 @@
       }
 
       function isRecoverableNetworkRejection(reason) {
-        if (isRecoverableHttpStatus(readStructuredHttpStatus(reason))) return true;
+        var status = readStructuredHttpStatus(reason);
+        if (status != null) return isRecoverableHttpStatus(status);
         var text = stringify(reason);
         if (/NetworkError when attempting to fetch resource|Failed to fetch|Load failed|The Internet connection appears to be offline|Network request failed/i.test(text)) {
           return true;

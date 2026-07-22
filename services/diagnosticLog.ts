@@ -86,7 +86,8 @@ const isRecoverableHttpStatus = (status: number | null): boolean => {
 };
 
 const isRecoverableNetworkRejection = (reason: unknown): boolean => {
-    if (isRecoverableHttpStatus(readStructuredHttpStatus(reason))) return true;
+    const status = readStructuredHttpStatus(reason);
+    if (status != null) return isRecoverableHttpStatus(status);
     const text = stringifyValue(reason);
     if (/NetworkError when attempting to fetch resource|Failed to fetch|Load failed|The Internet connection appears to be offline|Network request failed/i.test(text)) {
         return true;

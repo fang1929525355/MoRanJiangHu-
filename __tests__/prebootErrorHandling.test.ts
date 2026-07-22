@@ -88,6 +88,19 @@ describe('preboot error handling', () => {
         expect(appended).toHaveLength(1);
     });
 
+    it('does not hide a structured HTTP 401 rejection containing API Error text', () => {
+        const { listeners, appended } = loadPrebootListeners();
+        const preventDefault = vi.fn();
+
+        listeners.unhandledrejection({
+            reason: { message: 'API Error: Unauthorized', status: 401 },
+            preventDefault
+        });
+
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(appended).toHaveLength(1);
+    });
+
     it('still shows the startup failure overlay for non-recoverable promise rejections', () => {
         const { listeners, appended } = loadPrebootListeners();
 
