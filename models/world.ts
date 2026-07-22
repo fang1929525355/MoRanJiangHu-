@@ -117,6 +117,7 @@ export type NPC后台结算状态 = 'pending' | 'success' | 'failed' | 'interrup
 export type NPC后台装备变化动作 = 'gain' | 'equip' | 'unequip' | 'lose' | 'damage';
 
 export interface NPC后台境界变化结构 {
+    systemId?: string;
     systemName: string;
     fromRealm: string;
     toRealm: string;

@@ -18,4 +18,11 @@ describe('realm DIY system editor helpers', () => {
         const initial = normalizeRealmDraft({ rows: [row] });
         expect(removeRealmSystem(initial, initial.systems?.[0].id || '').systems).toHaveLength(1);
     });
+
+    it('does not turn the final primary-eligible system into a secondary-only system', () => {
+        const initial = normalizeRealmDraft({ rows: [row] });
+        const systemId = initial.systems?.[0].id || '';
+        const updated = updateRealmSystem(initial, systemId, { role: 'secondary_only' });
+        expect(updated.systems?.[0].role).toBe('primary_or_secondary');
+    });
 });

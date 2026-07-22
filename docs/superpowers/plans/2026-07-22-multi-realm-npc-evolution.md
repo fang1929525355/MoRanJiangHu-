@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Multi-system realm types and legacy migration
+## Task 1: Multi-system realm types and legacy migration
 
 **Files:**
 - Modify: `models/system.ts`
@@ -92,7 +92,7 @@ const normalizedSystems = sourceSystems.length > 0
 
 return {
     systems: normalizedSystems,
-    rows: normalizedSystems[0].rows,
+    rows: normalizedSystems.find((system) => system.role !== 'secondary_only')!.rows,
     updatedAt: Date.now()
 };
 ```

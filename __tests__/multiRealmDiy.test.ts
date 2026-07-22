@@ -32,6 +32,17 @@ describe('multi-system realm DIY', () => {
         expect(draft.systems?.[1].rows[0].name).toBe('炼气');
     });
 
+    it('promotes one system when a draft marks every system as secondary-only', () => {
+        const draft = normalizeRealmDraft({
+            systems: [
+                { id: 'martial', name: '武者', description: '', energyType: '气血', role: 'secondary_only', rows: [realmRow('锻骨', 3)] },
+                { id: 'dao', name: '道士', description: '', energyType: '法力', role: 'secondary_only', rows: [realmRow('炼气', 3)] }
+            ]
+        });
+        expect(draft.systems?.some((system) => system.role !== 'secondary_only')).toBe(true);
+        expect(draft.rows?.[0].name).toBe('锻骨');
+    });
+
     it('uses bounded secondary-system synergy instead of adding all levels', () => {
         expect(calculateEffectivePowerLevel({ powerLevel: 6 }, [])).toBe(6);
         expect(calculateEffectivePowerLevel({ powerLevel: 6 }, [{ powerLevel: 2 }])).toBe(6);

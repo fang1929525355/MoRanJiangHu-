@@ -187,6 +187,8 @@ const NewGameDiyTools: React.FC<Props> = ({ worldConfig, charData, openingConfig
 
     const selectedRealmSystem = realmDraft.systems?.find((system) => system.id === selectedRealmSystemId) || realmDraft.systems?.[0];
     const selectedRealmRows = selectedRealmSystem?.rows || [];
+    const isLastPrimaryEligibleRealmSystem = selectedRealmSystem?.role !== 'secondary_only'
+        && (realmDraft.systems || []).filter((system) => system.role !== 'secondary_only').length <= 1;
 
     const updateRealmDraft = (draft: RealmDiyDraft) => {
         onChange(prev => ({ ...prev, realmDiyDraft: normalizeRealmDraft(draft) }));
@@ -499,7 +501,7 @@ const NewGameDiyTools: React.FC<Props> = ({ worldConfig, charData, openingConfig
                             >
                                 <option value="primary_or_secondary">可作为主体系或副体系</option>
                                 <option value="primary_only">仅主体系</option>
-                                <option value="secondary_only">仅副体系</option>
+                                <option value="secondary_only" disabled={isLastPrimaryEligibleRealmSystem}>仅副体系</option>
                             </select>
                             <button
                                 type="button"

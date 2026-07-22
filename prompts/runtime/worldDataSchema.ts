@@ -60,7 +60,7 @@ export const 世界变量结构参考提示词 = `
   settlement?:{
     status:"pending"|"success"|"failed"|"interrupted",
     reason:string,
-    realmChange?:{systemName:string,fromRealm:string,toRealm:string,systemLevel:number,powerLevel:number},
+    realmChange?:{systemId?:string,systemName:string,fromRealm:string,toRealm:string,systemLevel:number,powerLevel:number},
     equipmentChanges?:Array<{action:"gain"|"equip"|"unequip"|"lose"|"damage",itemName:string,source:string,slot?:string,description?:string}>
   }
 }

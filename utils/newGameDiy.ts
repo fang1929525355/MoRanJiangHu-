@@ -166,7 +166,10 @@ export const normalizeRealmDraft = (draft?: RealmDiyDraft | null): RealmDiyDraft
             role: 'primary_or_secondary' as const,
             rows: legacyRows
         }];
-    const compatibilitySystem = systems.find((system) => system.role !== 'secondary_only') || systems[0];
+    if (!systems.some((system) => system.role !== 'secondary_only')) {
+        systems[0] = { ...systems[0], role: 'primary_or_secondary' };
+    }
+    const compatibilitySystem = systems.find((system) => system.role !== 'secondary_only')!;
     return {
         systems,
         rows: compatibilitySystem.rows,

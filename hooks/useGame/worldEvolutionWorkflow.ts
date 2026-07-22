@@ -20,7 +20,7 @@ import { 提取响应规划文本 } from './thinkingContext';
 import { 创建工作流性能诊断 } from '../../utils/performanceDebug';
 import { 后台分段执行, 后台让出主线程 } from '../../utils/backgroundScheduling';
 import { 执行游戏后台重计算 } from '../../utils/gameHeavyWorkerClient';
-import { buildNpcSettlementCommands, mergeNpcSettlementCandidates } from './npcEvolutionSettlement';
+import { buildNpcSettlementCommands, findNpcIndex, mergeNpcSettlementCandidates } from './npcEvolutionSettlement';
 
 export type 世界演变触发参数 = {
     来源?: 'manual' | 'auto_due' | 'story_dynamic' | 'story_dynamic_and_due';
@@ -341,7 +341,8 @@ export const 执行世界演变更新工作流 = async (
                 return active.map((item: any) => {
                     const npcId = typeof item?.npcId === 'string' ? item.npcId.trim() : '';
                     const name = typeof item?.姓名 === 'string' ? item.姓名.replace(/^\[女主\]/, '').trim() : '';
-                    const npc = social.find((candidate: any) => (npcId && candidate?.id === npcId) || (!npcId && candidate?.姓名 === name));
+                    const match = findNpcIndex(social, { npcId, 姓名: name });
+                    const npc = match.index >= 0 ? social[match.index] : undefined;
                     if (!npc) return { npcId, 姓名: name, 档案状态: '未唯一匹配' };
                     return {
                         npcId: npc?.id || npcId,
