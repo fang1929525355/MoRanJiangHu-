@@ -18,7 +18,7 @@ type PrebootLogEntry = {
 };
 
 const isRecoverableNetworkRejection = (reason: unknown): boolean => (
-    /NetworkError when attempting to fetch resource|Failed to fetch|Load failed|The Internet connection appears to be offline|Network request failed/i.test(stringifyValue(reason))
+    /NetworkError when attempting to fetch resource|Failed to fetch|Load failed|The Internet connection appears to be offline|Network request failed|API Error|upstream_error|upstream_status|5\d{2}|rate_limit|bad_response_status_code/i.test(stringifyValue(reason))
 );
 
 declare global {
