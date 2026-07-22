@@ -20,7 +20,7 @@ import { 提取响应规划文本 } from './thinkingContext';
 import { 创建工作流性能诊断 } from '../../utils/performanceDebug';
 import { 后台分段执行, 后台让出主线程 } from '../../utils/backgroundScheduling';
 import { 执行游戏后台重计算 } from '../../utils/gameHeavyWorkerClient';
-import { buildNpcSettlementCommands } from './npcEvolutionSettlement';
+import { buildNpcSettlementCommands, mergeNpcSettlementCandidates } from './npcEvolutionSettlement';
 
 export type 世界演变触发参数 = {
     来源?: 'manual' | 'auto_due' | 'story_dynamic' | 'story_dynamic_and_due';
@@ -473,14 +473,25 @@ export const 执行世界演变更新工作流 = async (
             世界: worldState,
             剧情: worldStory
         };
+        const activeNpcDeletePattern = /^世界\.活跃NPC列表(?:\[\d+\]|\.)/;
+        const commandsBeforeActiveNpcPruning = normalizedCommands.filter((command) => !(
+            command.action === 'delete' && activeNpcDeletePattern.test(command.key)
+        ));
+        const stateBeforeActiveNpcPruning = commandsBeforeActiveNpcPruning.length > 0
+            ? deps.processResponseCommands({ logs: [], tavern_commands: commandsBeforeActiveNpcPruning }, commandBaseState, { applyState: false })
+            : commandBaseState;
         const simulatedWorldState = normalizedCommands.length > 0
             ? deps.processResponseCommands({ logs: [], tavern_commands: normalizedCommands }, commandBaseState, { applyState: false })
             : commandBaseState;
+        const activeNpcsBeforePruning = Array.isArray((stateBeforeActiveNpcPruning as any)?.世界?.活跃NPC列表)
+            ? (stateBeforeActiveNpcPruning as any).世界.活跃NPC列表
+            : worldState.活跃NPC列表;
+        const finalActiveNpcs = Array.isArray((simulatedWorldState as any)?.世界?.活跃NPC列表)
+            ? (simulatedWorldState as any).世界.活跃NPC列表
+            : worldState.活跃NPC列表;
         const settlementResult = buildNpcSettlementCommands({
             social: Array.isArray((simulatedWorldState as any)?.社交) ? (simulatedWorldState as any).社交 : deps.社交,
-            activeNpcs: Array.isArray((simulatedWorldState as any)?.世界?.活跃NPC列表)
-                ? (simulatedWorldState as any).世界.活跃NPC列表
-                : worldState.活跃NPC列表
+            activeNpcs: mergeNpcSettlementCandidates(activeNpcsBeforePruning, finalActiveNpcs)
         });
         const executableCommands = [...normalizedCommands, ...settlementResult.commands];
         if (settlementResult.rejections.length > 0) {

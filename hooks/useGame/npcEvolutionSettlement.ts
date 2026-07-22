@@ -14,6 +14,20 @@ export type NpcSettlementResult = {
 const equipmentSlots = new Set(['主武器', '副武器', '服装', '饰品', '内衣', '内裤', '袜饰', '鞋履']);
 const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 const normalizedName = (value: unknown): string => text(value).replace(/\s+/g, '').replace(/^\[女主\]/, '');
+const activeNpcKey = (npc: any): string => text(npc?.npcId) || normalizedName(npc?.姓名);
+
+export const mergeNpcSettlementCandidates = (beforePruning: any[], finalActiveNpcs: any[]): any[] => {
+    const merged = Array.isArray(finalActiveNpcs) ? [...finalActiveNpcs] : [];
+    const retainedKeys = new Set(merged.map(activeNpcKey).filter(Boolean));
+    for (const npc of Array.isArray(beforePruning) ? beforePruning : []) {
+        if (npc?.settlement?.status !== 'success') continue;
+        const key = activeNpcKey(npc);
+        if (key && retainedKeys.has(key)) continue;
+        merged.push(npc);
+        if (key) retainedKeys.add(key);
+    }
+    return merged;
+};
 
 const findNpcIndex = (social: any[], activeNpc: any): { index: number; error?: string } => {
     const npcId = text(activeNpc?.npcId);

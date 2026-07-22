@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildNpcSettlementCommands } from '../hooks/useGame/npcEvolutionSettlement';
+import { buildNpcSettlementCommands, mergeNpcSettlementCandidates } from '../hooks/useGame/npcEvolutionSettlement';
 
 const npc = (name = '沈青萝') => ({
     id: `npc-${name}`,
@@ -19,6 +19,11 @@ const activeNpc = (settlement: any, extra: any = {}) => ({
 });
 
 describe('NPC background settlement bridge', () => {
+    it('preserves a successful settlement that was pruned from the final active list', () => {
+        const settled = activeNpc({ status: 'success', reason: '闭关完成' });
+        expect(mergeNpcSettlementCandidates([settled], [])).toEqual([settled]);
+    });
+
     it('persists a successful realm settlement by npc id', () => {
         const result = buildNpcSettlementCommands({
             social: [npc()],
