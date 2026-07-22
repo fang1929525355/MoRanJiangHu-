@@ -20,6 +20,7 @@ import { 提取响应规划文本 } from './thinkingContext';
 import { 创建工作流性能诊断 } from '../../utils/performanceDebug';
 import { 后台分段执行, 后台让出主线程 } from '../../utils/backgroundScheduling';
 import { 执行游戏后台重计算 } from '../../utils/gameHeavyWorkerClient';
+import { buildNpcSettlementCommands } from './npcEvolutionSettlement';
 
 export type 世界演变触发参数 = {
     来源?: 'manual' | 'auto_due' | 'story_dynamic' | 'story_dynamic_and_due';
@@ -49,6 +50,7 @@ type 世界演变依赖 = {
     角色: any;
     环境: 环境信息结构;
     世界: 世界数据结构;
+    社交: any[];
     剧情: 剧情系统结构;
     记忆系统: 记忆系统结构;
     历史记录: 聊天记录结构[];
@@ -333,6 +335,25 @@ export const 执行世界演变更新工作流 = async (
             worldEvolutionPrompt,
             envData: worldEnv,
             worldData: worldState,
+            npcData: (() => {
+                const active = Array.isArray(worldState?.活跃NPC列表) ? worldState.活跃NPC列表 : [];
+                const social = Array.isArray(worldStateBase?.社交) ? worldStateBase.社交 : deps.社交;
+                return active.map((item: any) => {
+                    const npcId = typeof item?.npcId === 'string' ? item.npcId.trim() : '';
+                    const name = typeof item?.姓名 === 'string' ? item.姓名.replace(/^\[女主\]/, '').trim() : '';
+                    const npc = social.find((candidate: any) => (npcId && candidate?.id === npcId) || (!npcId && candidate?.姓名 === name));
+                    if (!npc) return { npcId, 姓名: name, 档案状态: '未唯一匹配' };
+                    return {
+                        npcId: npc?.id || npcId,
+                        姓名: npc?.姓名 || name,
+                        境界: npc?.境界,
+                        境界层级: npc?.境界层级,
+                        能力体系: npc?.能力体系,
+                        当前装备: npc?.当前装备,
+                        背包: npc?.背包
+                    };
+                });
+            })(),
             storyData: worldStory,
             shortMemoryTexts: worldShortMemoryTexts,
             scriptText: worldScriptText,
@@ -445,18 +466,42 @@ export const 执行世界演变更新工作流 = async (
         const rawCommandCount = Array.isArray(result.commands) ? result.commands.length : 0;
         const rawText = typeof result.rawText === 'string' ? result.rawText.trim() : '';
 
-        if (normalizedCommands.length > 0) {
+        const commandBaseState = params?.stateBase || {
+            角色: deps.角色,
+            环境: worldEnv,
+            社交: deps.社交,
+            世界: worldState,
+            剧情: worldStory
+        };
+        const simulatedWorldState = normalizedCommands.length > 0
+            ? deps.processResponseCommands({ logs: [], tavern_commands: normalizedCommands }, commandBaseState, { applyState: false })
+            : commandBaseState;
+        const settlementResult = buildNpcSettlementCommands({
+            social: Array.isArray((simulatedWorldState as any)?.社交) ? (simulatedWorldState as any).社交 : deps.社交,
+            activeNpcs: Array.isArray((simulatedWorldState as any)?.世界?.活跃NPC列表)
+                ? (simulatedWorldState as any).世界.活跃NPC列表
+                : worldState.活跃NPC列表
+        });
+        const executableCommands = [...normalizedCommands, ...settlementResult.commands];
+        if (settlementResult.rejections.length > 0) {
+            probe.mark('NPC后台结算被拒绝', {
+                count: settlementResult.rejections.length,
+                reasons: settlementResult.rejections.slice(0, 6)
+            });
+        }
+
+        if (executableCommands.length > 0) {
             await 后台让出主线程();
             检查世界演变中断(params?.signal);
             await 后台分段执行(() => probe.time('应用世界演变命令', () => deps.processResponseCommands(
                 {
                     logs: [],
-                    tavern_commands: normalizedCommands
+                    tavern_commands: executableCommands
                 },
-                params?.stateBase,
+                commandBaseState,
                 { applyState: params?.applyCommands !== false }
             ), {
-                commandCount: normalizedCommands.length,
+                commandCount: executableCommands.length,
                 applyState: params?.applyCommands !== false
             }));
         }
@@ -479,10 +524,10 @@ export const 执行世界演变更新工作流 = async (
             ? `世界演变完成：${updates[0]}`
             : rawCommandCount > 0 && normalizedCommands.length === 0
                 ? `世界演变完成：命令路径无效（0/${rawCommandCount}）`
-                : normalizedCommands.length > 0
+                : executableCommands.length > 0
                     ? (params?.applyCommands === false
-                        ? `世界演变完成：已生成${normalizedCommands.length}条命令`
-                        : `世界演变完成：已应用${normalizedCommands.length}条命令`)
+                        ? `世界演变完成：已生成${executableCommands.length}条命令`
+                        : `世界演变完成：已应用${executableCommands.length}条命令`)
                     : '世界演变检查完成：本回合无需更新';
 
         // 记录“游戏内时间”，而不是现实时间。
@@ -500,18 +545,18 @@ export const 执行世界演变更新工作流 = async (
         if (
             params?.applyCommands !== false
             && (triggerSource === 'manual' || triggerSource === 'auto_due' || triggerSource === 'story_dynamic' || triggerSource === 'story_dynamic_and_due')
-            && (normalizedCommands.length > 0 || updates.length > 0)
+            && (executableCommands.length > 0 || updates.length > 0)
         ) {
             // 插入到对应回合下方（最近一个 assistant structuredResponse 之后）。
             probe.time('追加世界演变系统消息', () => deps.追加系统消息(`[世界演变] ${updateSummary}`, { position: 'after_last_turn' }));
         }
         probe.mark('世界演变更新完成', {
-            phase: normalizedCommands.length > 0 || updates.length > 0 ? 'done' : 'skipped'
+            phase: executableCommands.length > 0 || updates.length > 0 ? 'done' : 'skipped'
         });
         return {
             ok: true,
-            phase: normalizedCommands.length > 0 || updates.length > 0 ? 'done' : 'skipped',
-            commands: normalizedCommands,
+            phase: executableCommands.length > 0 || updates.length > 0 ? 'done' : 'skipped',
+            commands: executableCommands,
             updates,
             rawText,
             statusText: updateSummary

@@ -418,6 +418,7 @@ const 取证据片段 = (text: string, start: number, length: number): string =>
 export const 提取正文势力补录线索 = (params: {
     text?: string;
     worldData?: unknown;
+    npcData?: unknown;
 }): string[] => {
     const text = (params.text || '').trim();
     if (!text) return [];
@@ -527,6 +528,9 @@ export const 构建世界演变上下文文本 = (params: {
         '',
         '【当前世界】',
         序列化世界演变展示上下文(params.worldData ?? {}),
+        '',
+        '【后台活跃 NPC 正式档案摘要】',
+        序列化世界演变展示上下文(params.npcData ?? []),
         '',
         '【当前剧情锚点】',
         序列化世界演变展示上下文(提炼世界演变剧情锚点(params.storyData)),

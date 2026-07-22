@@ -48,6 +48,7 @@ export const 世界变量结构参考提示词 = `
 
 ### 2.1 【类型别名】世界.活跃NPC列表[i]
 世界.活跃NPC列表[i] = {
+  npcId?:string,
   姓名:string,
   所属势力:string,
   当前位置:string,
@@ -55,7 +56,13 @@ export const 世界变量结构参考提示词 = `
   当前状态:string,
   当前行动:string,
   行动开始时间:string(YYYY:MM:DD:HH:MM),
-  行动结束时间:string(YYYY:MM:DD:HH:MM)
+  行动结束时间:string(YYYY:MM:DD:HH:MM),
+  settlement?:{
+    status:"pending"|"success"|"failed"|"interrupted",
+    reason:string,
+    realmChange?:{systemName:string,fromRealm:string,toRealm:string,systemLevel:number,powerLevel:number},
+    equipmentChanges?:Array<{action:"gain"|"equip"|"unequip"|"lose"|"damage",itemName:string,source:string,slot?:string,description?:string}>
+  }
 }
 
 ### 2.2 【类型别名】世界.待执行事件[i]
