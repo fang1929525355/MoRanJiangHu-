@@ -17,10 +17,6 @@ type PrebootLogEntry = {
     values?: unknown[];
 };
 
-const isRecoverableNetworkRejection = (reason: unknown): boolean => (
-    /NetworkError when attempting to fetch resource|Failed to fetch|Load failed|The Internet connection appears to be offline|Network request failed|API Error|upstream_error|upstream_status|5\d{2}|rate_limit|bad_response_status_code/i.test(stringifyValue(reason))
-);
-
 declare global {
     interface Window {
         __MORAN_PREBOOT_LOGS__?: PrebootLogEntry[];
@@ -62,6 +58,51 @@ const stringifyValue = (value: unknown): string => {
         return truncateString(String(value), MAX_RENDERED_VALUE_CHARS);
     }
 };
+
+const readStructuredHttpStatus = (reason: unknown): number | null => {
+    if (!reason || typeof reason !== 'object') return null;
+    const asStatus = (value: unknown): number | null => {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return null;
+        const status = Math.floor(n);
+        if (status >= 100 && status <= 599) return status;
+        return null;
+    };
+    const record = reason as Record<string, unknown>;
+    const direct = asStatus(record.status) ?? asStatus(record.statusCode);
+    if (direct != null) return direct;
+    const response = record.response;
+    if (response && typeof response === 'object') {
+        const nested = asStatus((response as Record<string, unknown>).status);
+        if (nested != null) return nested;
+    }
+    return null;
+};
+
+const isRecoverableHttpStatus = (status: number | null): boolean => {
+    if (status == null) return false;
+    // 408/429/5xx 视为可恢复网络侧失败，不吞掉非网络异常
+    return status === 408 || status === 429 || (status >= 500 && status <= 599);
+};
+
+const isRecoverableNetworkRejection = (reason: unknown): boolean => {
+    if (isRecoverableHttpStatus(readStructuredHttpStatus(reason))) return true;
+    const text = stringifyValue(reason);
+    if (/NetworkError when attempting to fetch resource|Failed to fetch|Load failed|The Internet connection appears to be offline|Network request failed/i.test(text)) {
+        return true;
+    }
+    // 明确的 API/上游错误类型关键字（非裸数字）
+    if (/\b(?:API Error|upstream_error|rate_limit|bad_response_status_code)\b/i.test(text)) {
+        return true;
+    }
+    // 文本 fallback 必须带 HTTP 状态上下文，避免 stack/行号/业务数字误伤
+    if (/(?:\bHTTP\b|\bstatus(?:Code)?\b|\bupstream_status\b)[^0-9]{0,12}\b(?:408|429|5\d{2})\b/i.test(text)) {
+        return true;
+    }
+    return false;
+};
+
+
 
 const emit = () => {
     listeners.forEach(listener => {
