@@ -4,6 +4,7 @@ import { 功法结构 } from './kungfu';
 import type { NPC图片档案 } from './imageGeneration';
 import { 天赋结构, 背景结构 } from '../types';
 import type { 子宫档案, 首次亲密记录, 名器档案条目 } from './social';
+import type { CharacterAbilitySystems } from './system';
 
 // 角色相关定义 - 解耦自 types.ts
 
@@ -77,6 +78,7 @@ export interface 角色数据结构 {
     称号: string;
     境界: string;
     境界层级: number;
+    能力体系?: CharacterAbilitySystems;
     灵根?: string;
     灵根资质?: string;
     当前灵力?: number;

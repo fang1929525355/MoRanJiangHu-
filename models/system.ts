@@ -857,9 +857,34 @@ export interface RealmDiyRow {
     description: string;
 }
 
-export interface RealmDiyDraft {
+export type RealmDiySystemRole = 'primary_or_secondary' | 'primary_only' | 'secondary_only';
+
+export interface RealmDiySystem {
+    id: string;
+    name: string;
+    description: string;
+    energyType: string;
+    role: RealmDiySystemRole;
     rows: RealmDiyRow[];
+}
+
+export interface RealmDiyDraft {
+    systems?: RealmDiySystem[];
+    rows?: RealmDiyRow[];
     updatedAt?: number;
+}
+
+export interface AbilitySystemProgress {
+    systemId?: string;
+    systemName: string;
+    realmName: string;
+    systemLevel: number;
+    powerLevel: number;
+}
+
+export interface CharacterAbilitySystems {
+    primary: AbilitySystemProgress;
+    secondary: AbilitySystemProgress[];
 }
 
 export type WorldMapDiyLayerType = '寰宇' | '大地点' | '中地点' | '小地点' | '区地点' | '子地点';
