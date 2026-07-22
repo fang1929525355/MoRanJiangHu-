@@ -95,7 +95,7 @@ const injectSaveAndReload = async (page) => {
     await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
     await closeReleaseNotesIfOpen(page);
     await page.evaluate(async (payload) => {
-        const req = indexedDB.open('WuxiaGameDB', 3);
+        const req = indexedDB.open('WuxiaGameDB');
         const db = await new Promise((resolve, reject) => {
             req.onerror = () => reject(req.error);
             req.onsuccess = () => resolve(req.result);

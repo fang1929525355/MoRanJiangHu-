@@ -35,7 +35,7 @@ const injectSaveAndReload = async (page) => {
     await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
     await closeReleaseNotesIfOpen(page);
     await page.evaluate(async (payload) => {
-        const req = indexedDB.open('WuxiaGameDB', 3);
+        const req = indexedDB.open('WuxiaGameDB');
         const db = await new Promise((resolve, reject) => {
             req.onerror = () => reject(req.error);
             req.onsuccess = () => resolve(req.result);
@@ -76,7 +76,7 @@ test('B11 主题修改后刷新仍然保留，不会被 day 覆盖', async ({ pa
     await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
     await closeReleaseNotesIfOpen(page);
     await page.evaluate(async () => {
-        const req = indexedDB.open('WuxiaGameDB', 3);
+        const req = indexedDB.open('WuxiaGameDB');
         const db = await new Promise((resolve, reject) => {
             req.onerror = () => reject(req.error);
             req.onsuccess = () => resolve(req.result);
@@ -99,7 +99,7 @@ test('B11 主题修改后刷新仍然保留，不会被 day 覆盖', async ({ pa
     // 再读 IDB，确认 app_theme 仍然是 'ink'（修复前会被 'day' 覆盖）
     const persistedTheme = await page.evaluate(() => {
         return new Promise((resolve, reject) => {
-            const req = indexedDB.open('WuxiaGameDB', 3);
+            const req = indexedDB.open('WuxiaGameDB');
             req.onerror = () => reject(req.error);
             req.onsuccess = () => {
                 const db = req.result;

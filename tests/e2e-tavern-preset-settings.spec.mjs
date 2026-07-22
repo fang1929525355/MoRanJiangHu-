@@ -26,6 +26,22 @@ const localEntry = {
   来源: '玩家自行上传'
 };
 
+const cloudPresetEntry = {
+  id: 'CWM-TAVERN_PRESET-E2E-DOUBLE',
+  type: 'tavern_preset',
+  title: '双人成行 E2E',
+  subtitle: '社区酒馆预设',
+  description: '端到端测试使用的固定社区预设。',
+  tags: ['酒馆预设'],
+  payload: {
+    tavernPreset: {
+      prompts: [{ identifier: 'main', role: 'system', content: '社区预设提示词' }],
+      prompt_order: [{ character_id: 100001, order: [{ identifier: 'main', enabled: true }] }]
+    }
+  },
+  injectionPreview: ['提示词：1 条']
+};
+
 const seedGameSettings = async (page) => {
   await page.evaluate(async ({ localEntry, localPreset }) => {
     const request = indexedDB.open('WuxiaGameDB');
@@ -105,8 +121,16 @@ const readGameSettings = async (page) => page.evaluate(async () => {
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route('**/api/workshop/modules', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, entries: [cloudPresetEntry] })
+    });
+  });
   await page.addInitScript(() => {
     localStorage.setItem('moranjianghu.releaseNotesSuppressDate', new Date().toISOString().slice(0, 10));
+    localStorage.removeItem('creative_workshop_cloud_modules_cache_v1');
     document.documentElement.dataset.theme = 'day';
   });
   await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });

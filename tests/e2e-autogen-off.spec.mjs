@@ -105,7 +105,7 @@ const buildSaveWithNpcAvatarMissing = () => {
 
 const seedSaveAndSettings = async (page, save) => {
   await page.evaluate(async ({ save, blockedImageEndpoint }) => {
-    const req = indexedDB.open('WuxiaGameDB', 3);
+    const req = indexedDB.open('WuxiaGameDB');
     const db = await new Promise((resolve, reject) => {
       req.onerror = () => reject(req.error);
       req.onsuccess = () => resolve(req.result);
@@ -155,7 +155,7 @@ const openSeededSave = async (page) => {
 };
 
 const readLatestSaveState = async (page) => page.evaluate(async () => {
-  const req = indexedDB.open('WuxiaGameDB', 3);
+  const req = indexedDB.open('WuxiaGameDB');
   const db = await new Promise((resolve, reject) => {
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
