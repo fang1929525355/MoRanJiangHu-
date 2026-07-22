@@ -50,9 +50,48 @@
         return false;
       }
 
+      function readStructuredHttpStatus(reason) {
+        if (!reason || typeof reason !== 'object') return null;
+        function asStatus(value) {
+          var n = Number(value);
+          if (!isFinite(n)) return null;
+          n = Math.floor(n);
+          if (n >= 100 && n <= 599) return n;
+          return null;
+        }
+        var status = asStatus(reason.status);
+        if (status != null) return status;
+        status = asStatus(reason.statusCode);
+        if (status != null) return status;
+        if (reason.response && typeof reason.response === 'object') {
+          status = asStatus(reason.response.status);
+          if (status != null) return status;
+        }
+        return null;
+      }
+
+      function isRecoverableHttpStatus(status) {
+        if (status == null) return false;
+        // 408/429/5xx 视为可恢复网络侧失败，不挡启动
+        return status === 408 || status === 429 || (status >= 500 && status <= 599);
+      }
+
       function isRecoverableNetworkRejection(reason) {
+        var status = readStructuredHttpStatus(reason);
+        if (status != null) return isRecoverableHttpStatus(status);
         var text = stringify(reason);
-        return /NetworkError when attempting to fetch resource|Failed to fetch|Load failed|The Internet connection appears to be offline|Network request failed/i.test(text);
+        if (/NetworkError when attempting to fetch resource|Failed to fetch|Load failed|The Internet connection appears to be offline|Network request failed/i.test(text)) {
+          return true;
+        }
+        // 明确的 API/上游错误类型关键字（非裸数字）
+        if (/\b(?:API Error|upstream_error|rate_limit|bad_response_status_code)\b/i.test(text)) {
+          return true;
+        }
+        // 文本 fallback 必须带 HTTP 状态上下文，避免 stack/行号/业务数字误伤
+        if (/(?:\bHTTP\b|\bstatus(?:Code)?\b|\bupstream_status\b)[^0-9]{0,12}\b(?:408|429|5\d{2})\b/i.test(text)) {
+          return true;
+        }
+        return false;
       }
 
       function showOverlay() {

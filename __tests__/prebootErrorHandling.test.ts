@@ -49,6 +49,58 @@ describe('preboot error handling', () => {
         expect(windowMock.__MORAN_PREBOOT_LOGS__[0].level).toBe('warn');
     });
 
+    it('treats structured HTTP 5xx status as recoverable', () => {
+        const { listeners, appended } = loadPrebootListeners();
+        const preventDefault = vi.fn();
+
+        listeners.unhandledrejection({
+            reason: { message: 'upstream failed', status: 503 },
+            preventDefault
+        });
+
+        expect(preventDefault).toHaveBeenCalled();
+        expect(appended).toHaveLength(0);
+    });
+
+    it('treats contextual HTTP 502 text as recoverable', () => {
+        const { listeners, appended } = loadPrebootListeners();
+        const preventDefault = vi.fn();
+
+        listeners.unhandledrejection({
+            reason: new Error('API proxy returned HTTP 502 Bad Gateway'),
+            preventDefault
+        });
+
+        expect(preventDefault).toHaveBeenCalled();
+        expect(appended).toHaveLength(0);
+    });
+
+    it('does not treat bare 5xx-looking business numbers as recoverable', () => {
+        const { listeners, appended } = loadPrebootListeners();
+        const preventDefault = vi.fn();
+
+        listeners.unhandledrejection({
+            reason: new Error('inventory item 512 failed validation at line 550'),
+            preventDefault
+        });
+
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(appended).toHaveLength(1);
+    });
+
+    it('does not hide a structured HTTP 401 rejection containing API Error text', () => {
+        const { listeners, appended } = loadPrebootListeners();
+        const preventDefault = vi.fn();
+
+        listeners.unhandledrejection({
+            reason: { message: 'API Error: Unauthorized', status: 401 },
+            preventDefault
+        });
+
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(appended).toHaveLength(1);
+    });
+
     it('still shows the startup failure overlay for non-recoverable promise rejections', () => {
         const { listeners, appended } = loadPrebootListeners();
 
