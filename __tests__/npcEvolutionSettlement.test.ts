@@ -63,6 +63,58 @@ describe('NPC background settlement bridge', () => {
         expect(result.rejections[0]).toContain('旧境界不匹配');
     });
 
+    it('updates secondary progress without replacing the primary legacy realm', () => {
+        const result = buildNpcSettlementCommands({
+            social: [{
+                ...npc(),
+                境界: '武道宗师',
+                境界层级: 12,
+                能力体系: {
+                    primary: { systemName: '武者', realmName: '武道宗师', systemLevel: 12, powerLevel: 12 },
+                    secondary: [{ systemName: '道士', realmName: '炼气圆满', systemLevel: 4, powerLevel: 4 }]
+                }
+            }],
+            activeNpcs: [activeNpc({
+                status: 'success',
+                reason: '完成闭关后道法突破',
+                realmChange: { systemName: '道士', fromRealm: '炼气圆满', toRealm: '筑基初期', systemLevel: 5, powerLevel: 5 }
+            })]
+        });
+
+        expect(result.rejections).toEqual([]);
+        expect(result.commands).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                key: '社交[0].能力体系',
+                value: expect.objectContaining({
+                    primary: expect.objectContaining({ realmName: '武道宗师' }),
+                    secondary: [expect.objectContaining({ systemName: '道士', realmName: '筑基初期', powerLevel: 5 })]
+                })
+            }),
+            expect.objectContaining({ key: '社交[0].境界层级', value: 12 })
+        ]));
+        expect(result.commands.some((command) => command.key === '社交[0].境界')).toBe(false);
+    });
+
+    it('rejects an unknown system when the npc already has structured systems', () => {
+        const result = buildNpcSettlementCommands({
+            social: [{
+                ...npc(),
+                能力体系: {
+                    primary: { systemName: '武者', realmName: '炼气圆满', systemLevel: 4, powerLevel: 4 },
+                    secondary: []
+                }
+            }],
+            activeNpcs: [activeNpc({
+                status: 'success',
+                reason: '后台声称发生突破',
+                realmChange: { systemName: '不存在的体系', fromRealm: '炼气圆满', toRealm: '筑基初期', systemLevel: 5, powerLevel: 5 }
+            })]
+        });
+
+        expect(result.commands).toEqual([]);
+        expect(result.rejections[0]).toContain('能力体系不存在');
+    });
+
     it('allows gain then equip of the same sourced item', () => {
         const result = buildNpcSettlementCommands({ social: [npc()], activeNpcs: [activeNpc({
             status: 'success', reason: '在宗门库房完成兑换', equipmentChanges: [

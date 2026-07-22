@@ -38,8 +38,14 @@ const realmCommands = (npc: any, index: number, settlement: NPC后台结算结�
     const systemLevel = Math.round(Number(change.systemLevel));
     const systems = normalizeAbilitySystems(npc);
     const matchingProgress = [systems.primary, ...systems.secondary].find((item) => item.systemName === systemName);
+    const hasStructuredSystems = npc?.能力体系 && typeof npc.能力体系 === 'object';
+    if (hasStructuredSystems && !matchingProgress) {
+        rejections.push(`${text(npc?.姓名)}：能力体系不存在（${systemName || '未填写'}）`);
+        return [];
+    }
+    const isPrimary = !matchingProgress || matchingProgress === systems.primary;
     const currentRealm = matchingProgress?.realmName || text(npc?.境界);
-    const currentPower = Number(npc?.境界层级) || systems.primary.powerLevel;
+    const currentPower = matchingProgress?.powerLevel || Number(npc?.境界层级) || systems.primary.powerLevel;
     if (!systemName || !fromRealm || !toRealm || !Number.isFinite(powerLevel) || !Number.isFinite(systemLevel)) {
         rejections.push(`${text(npc?.姓名)}：境界结算字段不完整`);
         return [];
@@ -53,13 +59,13 @@ const realmCommands = (npc: any, index: number, settlement: NPC后台结算结�
         return [];
     }
     const progress = { systemId: matchingProgress?.systemId, systemName, realmName: toRealm, systemLevel, powerLevel };
-    const nextSystems = matchingProgress && matchingProgress !== systems.primary
+    const nextSystems = !isPrimary
         ? { ...systems, secondary: systems.secondary.map((item) => item.systemName === systemName ? progress : item) }
         : { ...systems, primary: progress };
     const effectiveLevel = calculateEffectivePowerLevel(nextSystems.primary, nextSystems.secondary);
     return [
         { action: 'set', key: `社交[${index}].能力体系`, value: nextSystems },
-        { action: 'set', key: `社交[${index}].境界`, value: toRealm },
+        ...(isPrimary ? [{ action: 'set' as const, key: `社交[${index}].境界`, value: toRealm }] : []),
         { action: 'set', key: `社交[${index}].境界层级`, value: effectiveLevel }
     ];
 };
