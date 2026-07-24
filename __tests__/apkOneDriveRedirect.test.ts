@@ -136,18 +136,29 @@ describe('APK OneDrive redirect', () => {
         expect(response.headers.get('X-Moran-Apk-Source')).toBe('onedrive-direct-proxy');
     });
 
-    it('uses GitHub Raw as the default APK provider when the manifest has no preferred provider', async () => {
-        const fetchMock = vi.fn();
+    it('keeps OneDrive available as an explicit APK provider', async () => {
+        const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+            code: 200,
+            data: {
+                content: [
+                    { name: 'latest.apk', is_dir: false, sign: 'default-sign' }
+                ]
+            }
+        }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        }));
         vi.stubGlobal('fetch', fetchMock);
 
         const response = await onRequestGet({
-            request: new Request('https://msjh.bacon159.pp.ua/api/apk/latest.apk'),
+            request: new Request('https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=onedrive'),
             env: {
                 RELEASE_MANIFEST: {
                     get: async () => ({
                         latest: {
                             versionName: '1.0.560',
-                            versionCode: 560
+                            versionCode: 560,
+                            preferredApkProvider: 'quark-tv'
                         }
                     })
                 },
@@ -157,8 +168,8 @@ describe('APK OneDrive redirect', () => {
         } as any);
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('Location')).toBe('https://cloudflare-proxy-6rw.pages.dev/https://raw.githubusercontent.com/ypq123456789/MoRanJiangHu/apk-dist/releases/MoRanJiangHu-v1.0.560.apk');
-        expect(response.headers.get('X-Moran-Apk-Source')).toBe('github-raw-accelerated');
-        expect(fetchMock).not.toHaveBeenCalled();
+        expect(response.headers.get('Location')).toBe('https://openlist.bacon.de5.net/d/Onedrive/MoRanJiangHu/releases/latest.apk?sign=default-sign');
+        expect(response.headers.get('X-Moran-Apk-Source')).toBe('onedrive-proxy');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 });

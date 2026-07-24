@@ -333,6 +333,7 @@ export const buildB2ApkRedirect = async (
 
 const ONEDRIVE_APK_DIR = '/Onedrive/MoRanJiangHu/releases';
 const ONEDRIVE_APK_FILE = 'latest.apk';
+const QUARK_TV_APK_DIR = '/夸克TV/MoRanJiangHu/releases';
 const ONEDRIVE_SIGN_CACHE_CONTROL = 'public, max-age=3600';
 const DEFAULT_OPENLIST_PUBLIC_BASE_URL = 'https://openlist.bacon.de5.net';
 const DEFAULT_OPENLIST_DIRECT_BASE_URL = 'http://159.138.7.126:5244';
@@ -364,7 +365,11 @@ const readOpenListApiBaseUrlCandidates = (env: any): string[] => {
     return Array.from(new Set(candidates));
 };
 
-const fetchOneDriveApkSign = async (env: any): Promise<string | null> => {
+const fetchOpenListFileSign = async (
+    env: any,
+    directory: string,
+    storageFileName: string
+): Promise<string | null> => {
     const authToken = env?.MORAN_OPENLIST_AUTH_TOKEN;
     if (!authToken) return null;
     for (const baseUrl of readOpenListApiBaseUrlCandidates(env)) {
@@ -372,13 +377,13 @@ const fetchOneDriveApkSign = async (env: any): Promise<string | null> => {
             const response = await fetch(`${baseUrl}/api/fs/list`, {
                 method: 'POST',
                 headers: { 'Authorization': authToken, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: ONEDRIVE_APK_DIR, password: '', page: 1, per_page: 100, refresh: false }),
+                body: JSON.stringify({ path: directory, password: '', page: 1, per_page: 100, refresh: false }),
             });
             if (!response.ok) continue;
             const json = await response.json() as any;
             if (json?.code !== 200 || !Array.isArray(json?.data?.content)) continue;
             const apkItem = json.data.content.find(
-                (item: any) => item?.name === ONEDRIVE_APK_FILE && !item?.is_dir && item?.sign
+                (item: any) => item?.name === storageFileName && !item?.is_dir && item?.sign
             );
             if (apkItem?.sign) return apkItem.sign;
         } catch {
@@ -386,6 +391,37 @@ const fetchOneDriveApkSign = async (env: any): Promise<string | null> => {
         }
     }
     return null;
+};
+
+const fetchOneDriveApkSign = async (env: any): Promise<string | null> => (
+    fetchOpenListFileSign(env, ONEDRIVE_APK_DIR, ONEDRIVE_APK_FILE)
+);
+
+export const buildQuarkTvApkRedirect = async (
+    env: any,
+    storageFileName: string,
+    downloadFileName: string,
+    cacheControl = APK_LATEST_CACHE_CONTROL
+): Promise<Response | null> => {
+    const sign = await fetchOpenListFileSign(env, QUARK_TV_APK_DIR, storageFileName);
+    if (!sign) return null;
+    const encodedPath = QUARK_TV_APK_DIR
+        .split('/')
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join('/');
+    const baseUrl = readOpenListPublicBaseUrl(env);
+    return new Response(null, {
+        status: 302,
+        headers: {
+            Location: `${baseUrl}/d/${encodedPath}/${encodeURIComponent(storageFileName)}?sign=${encodeURIComponent(sign)}`,
+            'Content-Type': 'application/vnd.android.package-archive',
+            'Cache-Control': cacheControl,
+            'Content-Disposition': `attachment; filename="${downloadFileName}"`,
+            'X-Moran-Apk-Source': 'quark-tv',
+            ...APK_CORS_HEADERS
+        }
+    });
 };
 
 export const buildOneDriveApkRedirect = async (
