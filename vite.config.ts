@@ -548,6 +548,7 @@ export default defineConfig(({ mode }) => {
       exclude: [
         'node_modules/**',
         'dist/**',
+        '.worktrees/**',
         '.tmp*/**',
         'test-results/**',
         'tests/e2e-*.spec.mjs',
