@@ -13,7 +13,7 @@ export const readEnvString = (env: any, name: string, fallback = ''): string => 
     typeof env?.[name] === 'string' && env[name].trim() ? env[name].trim() : fallback
 );
 
-export type ApkProvider = 'r2' | 'hi168' | 'b2' | 'github' | 'github-raw' | 'onedrive' | 'onedrive-direct' | 'onedrive-origin';
+export type ApkProvider = 'quark-tv' | 'r2' | 'hi168' | 'b2' | 'github' | 'github-raw' | 'onedrive' | 'onedrive-direct' | 'onedrive-origin';
 
 export const readReleaseBaseUrl = (request: Request, env: any): string => {
     const configured = readEnvString(env, 'MORAN_RELEASE_BASE_URL');
@@ -141,9 +141,9 @@ export const buildVersionedApkFileName = (versionName: unknown): string => {
 
 export const readManifestPreferredApkProvider = (payload: any): ApkProvider => {
     const provider = payload?.latest?.preferredApkProvider || payload?.preferredApkProvider;
-    return provider === 'github' || provider === 'github-raw' || provider === 'onedrive' || provider === 'onedrive-direct' || provider === 'onedrive-origin'
+    return provider === 'quark-tv' || provider === 'github' || provider === 'github-raw' || provider === 'onedrive' || provider === 'onedrive-direct' || provider === 'onedrive-origin'
         ? provider
-        : 'github-raw';
+        : 'quark-tv';
 };
 
 export const isOneDriveDirectProvider = (provider: unknown): boolean => (
@@ -156,7 +156,7 @@ export const isOneDriveProvider = (provider: unknown): boolean => (
 
 export const pickApkProvider = (_request: Request, _manifestPayload: any): ApkProvider => {
     // hi168 S3, R2, and B2 are retired for release distribution.
-    return 'github-raw';
+    return 'onedrive';
 };
 
 export const buildVersionedApkHeaders = (
