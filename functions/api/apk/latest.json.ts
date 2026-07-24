@@ -63,6 +63,7 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
             : `${baseUrl}/api/apk/latest.apk`;
         const stableManifestUrl = `${baseUrl}/api/apk/latest.json`;
         const latestApkUrl = `${baseUrl}/api/apk/latest.apk`;
+        const quarkTvApkUrl = `${baseUrl}/api/apk/latest.apk?provider=quark-tv`;
         const oneDriveApkUrl = `${baseUrl}/api/apk/latest.apk?provider=onedrive`;
         const oneDriveDirectApkUrl = `${baseUrl}/api/apk/latest.apk?provider=onedrive-direct`;
         const githubApkUrl = versionedFileName
@@ -76,18 +77,20 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
         const githubRawDirectApkUrl = versionedFileName ? buildGitHubRawDownloadUrl(versionedFileName) : '';
         const githubRawAcceleratedApkUrl = githubRawDirectApkUrl ? `${DEFAULT_GITHUB_RAW_ACCELERATOR}/${githubRawDirectApkUrl}` : '';
         const preferredApkProvider = readManifestPreferredApkProvider(payload);
-        // 按 preferredApkProvider 排序候选源：B2 渠道已废弃，只保留 GitHub 加速和 OneDrive。
+        // 按 preferredApkProvider 排序候选源：B2 渠道已废弃，默认优先夸克 TV。
+        const quarkGroup = [quarkTvApkUrl];
         const githubGroup = [...githubAcceleratedApkUrls, githubApkUrl, githubDirectApkUrl];
         const githubRawGroup = [githubRawAcceleratedApkUrl, githubRawApkUrl, githubRawDirectApkUrl];
         const oneDriveGroup = [oneDriveApkUrl, oneDriveDirectApkUrl];
         let providerOrderedUrls: string[];
-        if (preferredApkProvider === 'onedrive' || preferredApkProvider === 'onedrive-direct') {
-            providerOrderedUrls = [...oneDriveGroup, ...githubRawGroup, ...githubGroup];
+        if (preferredApkProvider === 'quark-tv') {
+            providerOrderedUrls = [...quarkGroup, ...oneDriveGroup, ...githubGroup, ...githubRawGroup];
+        } else if (preferredApkProvider === 'onedrive' || preferredApkProvider === 'onedrive-direct') {
+            providerOrderedUrls = [...oneDriveGroup, ...quarkGroup, ...githubRawGroup, ...githubGroup];
         } else if (preferredApkProvider === 'github') {
-            providerOrderedUrls = [...githubGroup, ...githubRawGroup, ...oneDriveGroup];
+            providerOrderedUrls = [...githubGroup, ...githubRawGroup, ...quarkGroup, ...oneDriveGroup];
         } else {
-            // 默认 github-raw：Cloudflare Raw 代理优先，GitHub Release 加速与 OneDrive 兜底。
-            providerOrderedUrls = [...githubRawGroup, ...githubGroup, ...oneDriveGroup];
+            providerOrderedUrls = [...githubRawGroup, ...quarkGroup, ...githubGroup, ...oneDriveGroup];
         }
         const orderedApkUrls = [
             latestApkUrl,
@@ -106,6 +109,7 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
                 r2ApkUrl: '',
                 hi168ApkUrl: '',
                 b2ApkUrl: '',
+                quarkTvApkUrl,
                 githubApkUrl,
                 githubDirectApkUrl,
                 githubAcceleratedApkUrls,

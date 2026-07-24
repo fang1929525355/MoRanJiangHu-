@@ -146,6 +146,38 @@ describe('appUpdate native APK download', () => {
         expect(downloadAndInstallMock.mock.calls[0][0].url).toBe(oneDriveDirectUrl);
     });
 
+    it('labels a Quark TV APK source in update progress', async () => {
+        const quarkTvUrl = 'https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=quark-tv';
+        vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            if (init?.method === 'HEAD') return new Response(null, { status: 200 });
+            return new Response(JSON.stringify({
+                latest: {
+                    versionCode: 290,
+                    versionName: '1.0.289',
+                    apkSha256: 'new-sha',
+                    apkSize: 123456,
+                    apkUrls: [quarkTvUrl],
+                    changes: ['测试更新']
+                }
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }));
+        downloadAndInstallMock.mockResolvedValueOnce({ filePath: '/tmp/quark.apk', versionName: '1.0.289' });
+
+        const { checkForAppUpdate, subscribeAppUpdateProgress } = await import('../services/appUpdate');
+        const messages: string[] = [];
+        const unsubscribe = subscribeAppUpdateProgress((progress) => {
+            if (progress?.message) messages.push(progress.message);
+        });
+
+        try {
+            await checkForAppUpdate();
+        } finally {
+            unsubscribe();
+        }
+
+        expect(messages).toContain('正在准备下载更新包（渠道：夸克TV）...');
+    });
+
     it('falls back to bundled release info when the App plugin is unavailable in native webview mode', async () => {
         nativeRuntimeMock.appPluginAvailable = false;
         vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({

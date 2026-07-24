@@ -370,6 +370,7 @@ const installUpdateInNativeApp = async (manifest: UpdateManifest) => {
     // 从 URL 提取渠道名称
     const getChannelLabel = (url: string): string => {
         const lower = url.toLowerCase();
+        if (lower.includes('provider=quark-tv') || lower.includes('/d/%e5%a4%b8%e5%85%8btv/')) return '夸克TV';
         if (lower.includes('provider=github-raw') || lower.includes('cloudflare-proxy-6rw.pages.dev/https://raw.githubusercontent.com') || lower.includes('raw.githubusercontent.com/ypq123456789/moranjianghu/apk-dist')) return 'GitHub Raw加速';
         if (lower.includes('provider=github') || lower.includes('objects.githubusercontent.com') || lower.includes('github.com/ypq123456789/moranjianghu/releases')) return 'GitHub';
         if (lower.includes('provider=b2') || lower.includes('backblazeb2.com') || lower.includes('obs.bacon159.pp.ua')) return 'B2';

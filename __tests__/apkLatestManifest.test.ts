@@ -15,7 +15,7 @@ const buildEnv = (payload: unknown) => ({
 });
 
 describe('APK latest manifest proxy', () => {
-    it('normalizes a flat KV manifest and adds GitHub and OneDrive APK URLs without B2', async () => {
+    it('normalizes a flat KV manifest and puts Quark TV first without B2', async () => {
         const response = await onRequestGet({
             request: buildRequest(),
             env: buildEnv({
@@ -32,6 +32,7 @@ describe('APK latest manifest proxy', () => {
         expect(payload.latest.versionName).toBe('1.0.528');
         expect(payload.latest.versionCode).toBe(528);
         expect(payload.latest.b2ApkUrl).toBe('');
+        expect(payload.latest.quarkTvApkUrl).toBe('https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=quark-tv');
         expect(payload.latest.githubApkUrl).toBe('https://msjh.bacon159.pp.ua/api/apk/version/MoRanJiangHu-v1.0.528.apk?provider=github');
         expect(payload.latest.githubAcceleratedApkUrls).toEqual([
             'https://gh.ddlc.top/https://github.com/ypq123456789/MoRanJiangHu/releases/download/v1.0.528/MoRanJiangHu-v1.0.528.apk',
@@ -41,18 +42,26 @@ describe('APK latest manifest proxy', () => {
         ]);
         expect(payload.latest.oneDriveApkUrl).toBe('https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=onedrive');
         expect(payload.latest.oneDriveDirectApkUrl).toBe('https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=onedrive-direct');
-        expect(payload.latest.preferredApkProvider).toBe('github-raw');
+        expect(payload.latest.preferredApkProvider).toBe('quark-tv');
         expect(payload.latest.githubRawApkUrl).toBe('https://msjh.bacon159.pp.ua/api/apk/version/MoRanJiangHu-v1.0.528.apk?provider=github-raw');
         expect(payload.latest.githubRawDirectApkUrl).toBe('https://raw.githubusercontent.com/ypq123456789/MoRanJiangHu/apk-dist/releases/MoRanJiangHu-v1.0.528.apk');
         expect(payload.latest.githubRawAcceleratedApkUrl).toBe('https://cloudflare-proxy-6rw.pages.dev/https://raw.githubusercontent.com/ypq123456789/MoRanJiangHu/apk-dist/releases/MoRanJiangHu-v1.0.528.apk');
         expect(payload.latest.r2ApkUrl).toBe('');
         expect(payload.latest.hi168ApkUrl).toBe('');
         expect(payload.latest.apkUrls).not.toContain('https://msjh.bacon159.pp.ua/api/apk/version/MoRanJiangHu-v1.0.528.apk?provider=b2');
-        expect(payload.latest.apkUrls.indexOf(payload.latest.githubAcceleratedApkUrls[0])).toBeLessThan(
+        expect(payload.latest.apkUrls[0]).toBe(payload.latest.latestApkUrl);
+        expect(payload.latest.apkUrls[1]).toBe(payload.latest.quarkTvApkUrl);
+        expect(payload.latest.apkUrls.indexOf(payload.latest.quarkTvApkUrl)).toBeLessThan(
             payload.latest.apkUrls.indexOf(payload.latest.oneDriveApkUrl)
         );
         expect(payload.latest.apkUrls.indexOf(payload.latest.oneDriveApkUrl)).toBeLessThan(
             payload.latest.apkUrls.indexOf(payload.latest.oneDriveDirectApkUrl)
+        );
+        expect(payload.latest.apkUrls.indexOf(payload.latest.oneDriveDirectApkUrl)).toBeLessThan(
+            payload.latest.apkUrls.indexOf(payload.latest.githubAcceleratedApkUrls[0])
+        );
+        expect(payload.latest.apkUrls.indexOf(payload.latest.githubAcceleratedApkUrls[0])).toBeLessThan(
+            payload.latest.apkUrls.indexOf(payload.latest.githubRawAcceleratedApkUrl)
         );
         expect(payload.latest.apkUrls).toContain(payload.latest.githubApkUrl);
         expect(payload.latest.apkUrls).toContain(payload.latest.githubAcceleratedApkUrls[0]);
