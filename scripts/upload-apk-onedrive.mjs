@@ -149,13 +149,14 @@ export const verifyOpenListApkFiles = async ({
   return { ok: true, root: normalizedRoot, files };
 };
 
-const uploadApkToOpenListWithCurl = ({
+export const uploadApkFileToOpenListWithCurl = ({
   apkPath,
   versionName,
   baseUrl,
   authToken,
   targetRoot = '/Onedrive/MoRanJiangHu/releases',
-  timeoutMs
+  timeoutMs,
+  spawnImpl = spawnSync
 }) => {
   if (!authToken) throw new Error('Missing MORAN_OPENLIST_AUTH_TOKEN.');
   if (!versionName) throw new Error('release.config.json versionName is empty.');
@@ -168,7 +169,7 @@ const uploadApkToOpenListWithCurl = ({
 
   for (const target of targets) {
     console.log(`[OpenList] uploading ${target.filePath}...`);
-    const result = spawnSync(curl, [
+    const result = spawnImpl(curl, [
       '--fail',
       '--silent',
       '--show-error',
@@ -179,7 +180,7 @@ const uploadApkToOpenListWithCurl = ({
       '--max-time', maxTimeSeconds,
       '-X', 'PUT',
       '-H', `Authorization: ${authToken}`,
-      '-H', `File-Path: ${target.filePath}`,
+      '-H', `File-Path: ${encodeURI(target.filePath)}`,
       '-H', 'Content-Type: application/vnd.android.package-archive',
       '-H', `Cache-Control: ${target.cacheControl}`,
       '--data-binary', `@${apkPath}`,
@@ -221,7 +222,7 @@ if (isMain) {
   const timeoutMs = Math.max(1000, Number(process.env.MORAN_OPENLIST_UPLOAD_TIMEOUT_MS || 10 * 60 * 1000));
 
   if (!fs.existsSync(apkPath)) throw new Error(`APK not found: ${apkPath}`);
-  const result = uploadApkToOpenListWithCurl({
+  const result = uploadApkFileToOpenListWithCurl({
     apkPath,
     versionName,
     baseUrl,

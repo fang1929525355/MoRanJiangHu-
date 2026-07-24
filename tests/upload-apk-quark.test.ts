@@ -1,11 +1,37 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+    uploadApkFileToOpenListWithCurl,
     uploadApkToOpenList,
     verifyOpenListApkFiles
 } from '../scripts/upload-apk-onedrive.mjs';
 
 describe('Quark APK upload', () => {
+    it('uploads a local APK file to encoded Quark paths with curl', () => {
+        const calls: string[][] = [];
+        const spawnImpl = vi.fn((_command, args: string[]) => {
+            calls.push(args);
+            return { status: 0, stdout: JSON.stringify({ code: 200 }), stderr: '' };
+        });
+
+        uploadApkFileToOpenListWithCurl({
+            apkPath: 'android/app/build/outputs/apk/release/app-release.apk',
+            versionName: '1.0.627',
+            targetRoot: '/夸克/MoRanJiangHu/releases',
+            baseUrl: 'https://openlist.example',
+            authToken: 'token',
+            timeoutMs: 1000,
+            spawnImpl
+        });
+
+        expect(calls).toHaveLength(2);
+        const filePathHeaders = calls.map((args) => String(args.find((arg) => arg.startsWith('File-Path: '))));
+        expect(filePathHeaders.map((header) => decodeURI(header.replace('File-Path: ', '')))).toEqual([
+            '/夸克/MoRanJiangHu/releases/latest.apk',
+            '/夸克/MoRanJiangHu/releases/MoRanJiangHu-v1.0.627.apk'
+        ]);
+    });
+
     it('uploads latest and versioned APKs to the writable Quark mount', async () => {
         const calls: string[] = [];
         const fetchImpl = vi.fn(async (_url, init) => {
