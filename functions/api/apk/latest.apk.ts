@@ -8,8 +8,10 @@ import {
     readManifestVersionName,
 } from './_shared';
 import { resolveApkDownload } from './_providerRouter';
+import { scheduleApkDownloadCount } from './_downloadStats';
 
-const handleLatestApkRequest = async ({ request, env }: any): Promise<Response> => {
+const handleLatestApkRequest = async (context: any, method: 'GET' | 'HEAD'): Promise<Response> => {
+    const { request, env } = context;
     try {
         const manifest = await readManifestPayload(env);
         const versionName = readManifestVersionName(manifest?.payload);
@@ -28,7 +30,16 @@ const handleLatestApkRequest = async ({ request, env }: any): Promise<Response> 
             downloadFileName: fileName,
             cacheControl: APK_LATEST_CACHE_CONTROL
         });
-        if (resolved) return resolved.response;
+        if (resolved) {
+            scheduleApkDownloadCount({
+                env,
+                waitUntil: context.waitUntil,
+                method,
+                versionName,
+                provider: resolved.provider
+            });
+            return resolved.response;
+        }
         return buildTextResponse('APK download providers are unavailable', 503);
     } catch (error: any) {
         return buildTextResponse(error?.message || 'APK redirect failed', 502);
@@ -39,5 +50,5 @@ export function onRequestOptions(): Response {
     return new Response(null, { status: 204, headers: APK_CORS_HEADERS });
 }
 
-export const onRequestGet = handleLatestApkRequest;
-export const onRequestHead = handleLatestApkRequest;
+export const onRequestGet = (context: any): Promise<Response> => handleLatestApkRequest(context, 'GET');
+export const onRequestHead = (context: any): Promise<Response> => handleLatestApkRequest(context, 'HEAD');

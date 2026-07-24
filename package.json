@@ -21,6 +21,8 @@
     "release:github": "node scripts/publish-release-github.mjs",
     "release:github-raw": "node scripts/publish-apk-github-raw.mjs",
     "release:benchmark-apk": "node scripts/benchmark-apk-providers.mjs",
+    "db:migrate:apk-downloads": "wrangler d1 execute moranjianghu-db --remote --file migrations/2026-07-24-apk-download-daily.sql",
+    "apk:downloads": "node scripts/report-apk-downloads.mjs",
     "signing:upload": "node scripts/sync-android-signing-bundle.mjs upload",
     "signing:restore": "node scripts/sync-android-signing-bundle.mjs restore",
     "dev": "npm run release:sync && vite",

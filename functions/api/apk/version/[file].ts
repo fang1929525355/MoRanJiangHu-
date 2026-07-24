@@ -7,6 +7,7 @@ import {
     readManifestVersionName,
 } from '../_shared';
 import { resolveApkDownload } from '../_providerRouter';
+import { scheduleApkDownloadCount } from '../_downloadStats';
 
 export function onRequestOptions(): Response {
     return new Response(null, { status: 204, headers: APK_CORS_HEADERS });
@@ -46,7 +47,16 @@ const handleVersionedApkRequest = async (context: any, _method: 'GET' | 'HEAD'):
             storageFileName: fileName,
             downloadFileName: fileName
         });
-        if (resolved) return resolved.response;
+        if (resolved) {
+            scheduleApkDownloadCount({
+                env,
+                waitUntil: context.waitUntil,
+                method: _method,
+                versionName,
+                provider: resolved.provider
+            });
+            return resolved.response;
+        }
         return buildTextResponse('APK download providers are unavailable', 503);
     } catch (error: any) {
         return buildTextResponse(error?.message || 'Versioned APK download failed', 502);
