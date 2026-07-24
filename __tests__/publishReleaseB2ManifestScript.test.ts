@@ -5,11 +5,18 @@ import { describe, expect, it } from 'vitest';
 const scriptPath = path.join(process.cwd(), 'scripts', 'publish-release-b2.mjs');
 
 describe('release publish manifest script', () => {
-    it('defaults the APK manifest to GitHub with accelerators and OneDrive fallbacks, without B2 distribution', () => {
+    it('uploads and verifies Quark before publishing a Quark-first manifest', () => {
         const source = readFileSync(scriptPath, 'utf8');
 
         expect(source).not.toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'hi168')");
-        expect(source).toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'github-raw')");
+        expect(source).toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'quark-tv')");
+        expect(source).toContain("targetRoot: '/夸克/MoRanJiangHu/releases'");
+        expect(source).toContain("downloadRoot: '/夸克TV/MoRanJiangHu/releases'");
+        expect(source).toContain('providerApkUrls.quarkTv');
+        expect(source).toContain("import { resolvePreferredApkProvider } from './apk-provider-selection.mjs'");
+        expect(source).toContain('await resolvePreferredApkProvider({');
+        expect(source).toContain('githubRawUrl: githubRawAcceleratedApkUrl || providerApkUrls.githubRawDirect');
+        expect(source).toContain("readEnv('MORAN_APK_PROVIDER_VERIFY_TIMEOUT_MS', '120000')");
         expect(source).toContain('githubRawAcceleratedApkUrl');
         expect(source).toContain('githubRawDirectApkUrl: providerApkUrls.githubRawDirect');
         expect(source).toContain('providerApkUrls.onedrive');

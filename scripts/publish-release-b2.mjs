@@ -4,6 +4,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { resolvePreferredApkProvider } from './apk-provider-selection.mjs';
+import { uploadApkToOpenList, verifyOpenListApkFiles } from './upload-apk-onedrive.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -169,6 +171,26 @@ const currentVersionedFileName = `MoRanJiangHu-v${currentVersionName}.apk`;
 const currentApkBuffer = fs.readFileSync(apkPath);
 const apkSha256 = sha256Hex(currentApkBuffer);
 const apkSize = currentApkBuffer.byteLength;
+const openListBaseUrl = readEnv('MORAN_OPENLIST_BASE_URL', 'https://openlist.bacon.de5.net').replace(/\/+$/, '');
+const openListAuthToken = readEnv('MORAN_OPENLIST_AUTH_TOKEN');
+const openListUploadTimeoutMs = Math.max(1000, Number(readEnv('MORAN_OPENLIST_UPLOAD_TIMEOUT_MS', '600000')));
+
+await uploadApkToOpenList({
+  apkBytes: currentApkBuffer,
+  versionName: currentVersionName,
+  targetRoot: '/夸克/MoRanJiangHu/releases',
+  baseUrl: openListBaseUrl,
+  authToken: openListAuthToken,
+  timeoutMs: openListUploadTimeoutMs
+});
+await verifyOpenListApkFiles({
+  versionName: currentVersionName,
+  expectedSize: apkSize,
+  downloadRoot: '/夸克TV/MoRanJiangHu/releases',
+  baseUrl: openListBaseUrl,
+  authToken: openListAuthToken
+});
+
 const websiteBaseUrl = String(releaseInfo.websiteUrl || '').replace(/\/+$/, '');
 const githubReleaseAccelerators = readEnv('GITHUB_RELEASE_ACCELERATORS', 'https://gh.ddlc.top,https://gh-proxy.com,https://gh-proxy.ygxz.in,https://ghfast.top')
   .split(',')
@@ -176,6 +198,7 @@ const githubReleaseAccelerators = readEnv('GITHUB_RELEASE_ACCELERATORS', 'https:
   .filter((item) => /^https:\/\/[^/]+$/i.test(item));
 const githubRawAccelerator = readEnv('GITHUB_RAW_ACCELERATOR', 'https://cloudflare-proxy-6rw.pages.dev').replace(/\/+$/, '');
 const githubRawBranch = readEnv('GITHUB_RAW_APK_BRANCH', 'apk-dist');
+const providerVerifyTimeoutMs = Math.max(1000, Number(readEnv('MORAN_APK_PROVIDER_VERIFY_TIMEOUT_MS', '120000')));
 
 const releaseRecords = [
   { versionName: currentVersionName, versionCode: releaseInfo.versionCode },
@@ -203,6 +226,7 @@ const b2ManifestKey = normalizeKey(`${prefix}/latest.json`);
 const hi168VersionedKey = (versionName) => normalizeKey(`${s3Prefix}/${versionedFileName(versionName)}`);
 
 const providerApkUrls = {
+  quarkTv: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=quark-tv` : '',
   onedrive: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=onedrive` : '',
   onedriveDirect: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=onedrive-direct` : '',
   github: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/version/${encodeURIComponent(currentVersionedFileName)}?provider=github` : '',
@@ -214,19 +238,25 @@ const githubAcceleratedApkUrls = githubReleaseAccelerators.map((baseUrl) => `${b
 const githubRawAcceleratedApkUrl = githubRawAccelerator && /^https:\/\/[^/]+$/i.test(githubRawAccelerator)
   ? `${githubRawAccelerator}/${providerApkUrls.githubRawDirect}`
   : '';
-// 默认优先 GitHub Raw：APK 存放在 apk-dist 分支，通过 Cloudflare Raw 代理下载。
-// 如需强制其他通道，用环境变量 MORAN_RELEASE_PREFERRED_APK_PROVIDER 覆盖（github-raw/onedrive/onedrive-direct/github）。
-const requestedPreferredApkProvider = readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'github-raw');
-const preferredApkProvider = ['github-raw', 'onedrive', 'onedrive-direct', 'github'].includes(requestedPreferredApkProvider)
-  ? requestedPreferredApkProvider
-  : 'github-raw';
+// 默认优先夸克 TV；只有显式选择且通过远端校验后才允许切到 GitHub Raw。
+// 如需强制其他通道，用环境变量 MORAN_RELEASE_PREFERRED_APK_PROVIDER 覆盖。
+const requestedPreferredApkProvider = readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'quark-tv');
+const preferredApkProvider = await resolvePreferredApkProvider({
+  requestedProvider: requestedPreferredApkProvider,
+  githubRawUrl: githubRawAcceleratedApkUrl || providerApkUrls.githubRawDirect,
+  apkSize,
+  apkSha256,
+  timeoutMs: providerVerifyTimeoutMs
+});
 const orderedProviderUrls = preferredApkProvider === 'github'
-  ? [...githubAcceleratedApkUrls, providerApkUrls.github, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.githubDirect].filter(Boolean)
+  ? [...githubAcceleratedApkUrls, providerApkUrls.github, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.quarkTv, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.githubDirect].filter(Boolean)
   : preferredApkProvider === 'onedrive-direct'
-    ? [providerApkUrls.onedriveDirect, providerApkUrls.onedrive, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.githubDirect].filter(Boolean)
+    ? [providerApkUrls.onedriveDirect, providerApkUrls.onedrive, providerApkUrls.quarkTv, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.githubDirect].filter(Boolean)
     : preferredApkProvider === 'onedrive'
-      ? [providerApkUrls.onedrive, providerApkUrls.onedriveDirect, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.githubDirect].filter(Boolean)
-      : [githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.githubRawDirect, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.githubDirect].filter(Boolean);
+      ? [providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.quarkTv, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.githubDirect].filter(Boolean)
+      : preferredApkProvider === 'quark-tv'
+        ? [providerApkUrls.quarkTv, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, ...githubAcceleratedApkUrls, providerApkUrls.github, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.githubRawDirect, providerApkUrls.githubDirect].filter(Boolean)
+        : [githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.githubRawDirect, providerApkUrls.quarkTv, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.githubDirect].filter(Boolean);
 
 const manifest = {
   latest: {
@@ -244,8 +274,9 @@ const manifest = {
     preferredApkProvider,
     r2ApkUrl: '',
     hi168ApkUrl: '',
-    b2ApkUrl: '',
-    oneDriveApkUrl: providerApkUrls.onedrive,
+     b2ApkUrl: '',
+     quarkTvApkUrl: providerApkUrls.quarkTv,
+     oneDriveApkUrl: providerApkUrls.onedrive,
     oneDriveDirectApkUrl: providerApkUrls.onedriveDirect,
     githubApkUrl: providerApkUrls.github,
     githubDirectApkUrl: providerApkUrls.githubDirect,
