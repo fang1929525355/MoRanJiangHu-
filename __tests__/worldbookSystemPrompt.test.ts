@@ -165,6 +165,35 @@ describe('主剧情世界书历史匹配', () => {
         expect(systemPrompt).not.toContain('NPC变量关键词命中成功。');
     });
 
+    it('会把真实年龄与视觉年龄约束一起注入 NPC 上下文', () => {
+        const systemPrompt = 构建系统提示词({
+            promptPool: [],
+            memoryData: 创建空记忆系统(),
+            socialData: [{
+                id: 'npc-qingshuang',
+                姓名: '清霜',
+                性别: '女',
+                年龄: 85,
+                境界: '金丹四层',
+                境界层级: 17,
+                身份: '玉仙宗巡查使',
+                是否在场: true,
+                是否主要角色: true,
+                外貌描写: '容貌清寒，神情沉静。'
+            }],
+            statePayload: { 环境: {}, 世界: {}, 角色: {} },
+            gameConfig: {} as any,
+            memoryConfig: {} as any,
+            worldbooks: [],
+            worldEvolutionEnabled: false,
+            options: { 世界书作用域: ['main'], openingConfig: { 题材模式: '仙侠' } as any }
+        }).systemPrompt;
+
+        expect(systemPrompt).toContain('真实年龄');
+        expect(systemPrompt).toContain('视觉年龄约束');
+        expect(systemPrompt).toContain('不得仅因真实年龄称为老妇、老妪或老太婆');
+    });
+
     it('当前剧情、地点、NPC 或历史均可独立命中 match_any', () => {
         const sources = [
             { extraTexts: ['当前剧情出现四源锚点。'] },

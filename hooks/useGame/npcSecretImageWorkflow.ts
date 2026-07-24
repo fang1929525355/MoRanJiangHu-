@@ -8,6 +8,7 @@ import type {
 import { 获取词组转化器预设上下文, type 当前可用接口结构 } from '../../utils/apiConfig';
 import { 生图最大自动重试次数, 执行生图模型调用带重试 } from '../../utils/imageGenerationRetry';
 import type { PNG解析参数结构, 角色锚点结构 } from '../../models/system';
+import { 解析视觉年龄 } from '../../utils/visualAge';
 
 const NPC生图运行中计数 = { current: 0 };
 import { recordDiagnosticLog } from '../../services/diagnosticLog';
@@ -188,6 +189,24 @@ export const 执行NPC香闺秘档部位生图工作流 = async (
         }
 
         baseData = deps.提取NPC香闺秘档部位生图数据(npc, part);
+        const 视觉年龄 = 解析视觉年龄({
+            actualAge: baseData?.真实年龄 ?? baseData?.年龄 ?? npc?.年龄,
+            explicitVisualAge: baseData?.外观年龄 ?? npc?.外观年龄,
+            topicMode: baseData?.题材模式,
+            realmLevel: baseData?.境界层级 ?? npc?.境界层级,
+            realmText: baseData?.境界 ?? npc?.境界,
+            identity: baseData?.身份 ?? npc?.身份,
+            appearance: baseData?.外貌 ?? npc?.外貌描写 ?? npc?.外貌,
+            body: baseData?.身材 ?? npc?.身材描写 ?? npc?.身材,
+            clothing: baseData?.衣着 ?? npc?.衣着风格 ?? npc?.衣着,
+            bio: [baseData?.简介, baseData?.核心性格特征, baseData?.性格, baseData?.视觉年龄约束].filter(Boolean).join('；'),
+            race: npc?.种族,
+            species: npc?.血统,
+            additionalTexts: [npc?.灵根, npc?.灵根资质, npc?.男娘设定, npc?.扶她设定, npc?.性转记录]
+        });
+        if (!视觉年龄.isAdultSafetyApproved) {
+            throw new Error('角色真实年龄或明确视觉年龄不满足成人私密生图要求。');
+        }
         const partDescriptionField = part === '胸部' ? '胸部描述' : part === '小穴' ? '小穴描述' : part === '肉棒' ? '肉棒描述' : '屁穴描述';
         partDescription = typeof baseData?.[partDescriptionField] === 'string' ? baseData[partDescriptionField].trim() : '';
         if (!partDescription && deps.补齐NPC香闺秘档部位描述) {

@@ -126,6 +126,7 @@ import {
 } from '../prompts/runtime/defaults';
 import { 构建文生图运行时额外提示词 } from '../prompts/runtime/nsfw';
 import { 构建题材生图额外要求 } from '../utils/topicImageGuidance';
+import { 自动角色锚点视觉年龄是否过期, 解析视觉年龄 } from '../utils/visualAge';
 import { 构建AI角色声明提示词 } from '../prompts/runtime/roleIdentity';
 import {
     构建字数要求提示词,
@@ -1953,7 +1954,8 @@ export const useGame = () => {
         构建完整地点文本,
         修炼体系已启用: 读取修炼体系开关,
         提取NPC生图基础数据: (npc) => 提取NPC生图基础数据(npc, {
-            cultivationSystemEnabled: 读取修炼体系开关()
+            cultivationSystemEnabled: 读取修炼体系开关(),
+            openingConfig: 开局配置
         }),
         读取文生图功能配置,
         场景模式已开启,
@@ -2093,10 +2095,37 @@ export const useGame = () => {
         规范化接口设置(apiConfigRef.current).功能模型占位.自动角色锚点启用 !== false
     );
 
+    const 解析NPC当前视觉年龄 = (npc: any) => {
+        const baseData = 提取NPC生图基础数据附带私密描述(npc, {
+            cultivationSystemEnabled: 读取修炼体系开关(),
+            openingConfig: 开局配置
+        });
+        return 解析视觉年龄({
+            openingConfig: 开局配置,
+            actualAge: npc?.年龄,
+            explicitVisualAge: baseData?.外观年龄,
+            topicMode: baseData?.题材模式,
+            realmLevel: baseData?.境界层级 ?? npc?.境界层级,
+            realmText: baseData?.境界 ?? npc?.境界,
+            identity: baseData?.身份 ?? npc?.身份,
+            appearance: baseData?.外貌 ?? npc?.外貌描写 ?? npc?.外貌,
+            body: baseData?.身材 ?? npc?.身材描写 ?? npc?.身材,
+            clothing: baseData?.衣着 ?? npc?.衣着风格 ?? npc?.衣着,
+            bio: [baseData?.简介, baseData?.核心性格特征, baseData?.性格, baseData?.视觉年龄约束].filter(Boolean).join('；'),
+            race: (npc as any)?.种族,
+            species: (npc as any)?.血统,
+            additionalTexts: [npc?.灵根, npc?.灵根资质, npc?.男娘设定, npc?.扶她设定, npc?.性转记录]
+        });
+    };
+
     const 确保NPC生图前角色锚点 = async (npc: any) => {
         if (!自动角色锚点已启用()) return;
         const npcId = typeof npc?.id === 'string' ? npc.id.trim() : '';
-        if (!npcId || 按NPC读取角色锚点(npcId) || 角色锚点补全进行中Ref.current.has(npcId)) return;
+        const existingAnchor = npcId ? 按NPC读取角色锚点(npcId) : null;
+        const 需要刷新锚点 = existingAnchor
+            ? 自动角色锚点视觉年龄是否过期(existingAnchor, 解析NPC当前视觉年龄(npc))
+            : true;
+        if (!npcId || (!需要刷新锚点 && existingAnchor) || 角色锚点补全进行中Ref.current.has(npcId)) return;
         角色锚点补全进行中Ref.current.add(npcId);
         try {
             const 锚点等待上限 = 20_000;
@@ -2140,7 +2169,8 @@ export const useGame = () => {
             NPC符合自动生图条件,
             NPC生图进行中集合: NPC生图进行中Ref.current,
             提取NPC生图基础数据: (targetNpc) => 提取NPC生图基础数据附带私密描述(targetNpc, {
-                cultivationSystemEnabled: 读取修炼体系开关()
+                cultivationSystemEnabled: 读取修炼体系开关(),
+                openingConfig: 开局配置
             }),
             创建NPC生图任务,
             生成NPC生图记录ID,
@@ -2177,7 +2207,8 @@ export const useGame = () => {
             读取文生图功能配置,
             NPC私密部位生图进行中集合: NPC香闺秘档生图进行中Ref.current,
             提取NPC香闺秘档部位生图数据: (targetNpc, targetPart) => 提取NPC香闺秘档部位生图数据(targetNpc, targetPart, {
-                cultivationSystemEnabled: 读取修炼体系开关()
+                cultivationSystemEnabled: 读取修炼体系开关(),
+                openingConfig: 开局配置
             }),
             补齐NPC香闺秘档部位描述,
             创建NPC生图任务,
@@ -3628,6 +3659,7 @@ export const useGame = () => {
         保存图片资源: dbService.保存图片资源,
         获取社交列表: () => 社交Ref.current,
         获取角色: () => 角色,
+        获取开局配置: () => 开局配置,
         isCultivationSystemEnabled: 读取修炼体系开关
     });
 
@@ -4035,6 +4067,7 @@ export const useGame = () => {
         retryNpcImageGeneration
     } = 创建手动图片动作工作流({
         获取社交列表: () => 社交Ref.current,
+        获取开局配置: () => 开局配置,
         NSFW模式已启用: () => gameConfig?.启用NSFW模式 === true,
         男娘NSFW内容已启用,
         记录后台手动生图监控: (payload) => {
@@ -4083,7 +4116,8 @@ export const useGame = () => {
         读取文生图功能配置,
         主角生图进行中集合: 主角生图进行中Ref.current,
         提取主角生图基础数据: (character) => 提取主角生图基础数据(character, {
-            cultivationSystemEnabled: 读取修炼体系开关()
+            cultivationSystemEnabled: 读取修炼体系开关(),
+            openingConfig: 开局配置
         }),
         创建NPC生图任务,
         生成NPC生图记录ID,

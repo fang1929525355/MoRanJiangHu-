@@ -120,6 +120,7 @@ export interface 角色锚点结构 {
     负面提示词: string;
     结构化特征?: 角色锚点特征结构;
     来源: 角色锚点来源类型;
+    视觉年龄签名?: string;
     原始提取文本?: string;
     提取模型信息?: string;
     createdAt: number;

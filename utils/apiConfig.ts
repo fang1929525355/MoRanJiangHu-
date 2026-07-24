@@ -1204,6 +1204,7 @@ const 标准化角色锚点列表 = (raw: unknown): 角色锚点结构[] => {
                 负面提示词,
                 结构化特征: 标准化角色锚点特征(source?.结构化特征 ?? source?.features),
                 来源: source?.来源 === 'manual' || source?.来源 === 'imported' ? source.来源 : 'ai_extract',
+                视觉年龄签名: 读取字符串(source?.视觉年龄签名 ?? source?.visualAgeSignature).trim() || undefined,
                 原始提取文本: 读取字符串(source?.原始提取文本 ?? source?.rawExtractedText).trim() || undefined,
                 提取模型信息: 读取字符串(source?.提取模型信息 ?? source?.extractModelInfo).trim() || undefined,
                 createdAt,

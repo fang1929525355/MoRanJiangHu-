@@ -1,5 +1,6 @@
-import type { PNG画风预设结构, 接口设置结构, 角色锚点结构 } from '../../types';
+import type { OpeningConfig, PNG画风预设结构, 接口设置结构, 角色锚点结构 } from '../../types';
 import { 获取主剧情接口配置, 获取生图词组转化器接口配置, 接口配置是否可用, 规范化接口设置 } from '../../utils/apiConfig';
+import { 自动角色锚点视觉年龄是否过期, 构建视觉年龄签名, 解析视觉年龄 } from '../../utils/visualAge';
 import { 提取NPC生图基础数据, 提取主角生图基础数据 } from './npcContext';
 
 type 右下角提示参数 = {
@@ -16,6 +17,7 @@ type 图片预设工作流依赖 = {
     保存图片资源: (dataUrl: string) => Promise<string>;
     获取社交列表: () => any[];
     获取角色?: () => any;
+    获取开局配置?: () => OpeningConfig | undefined;
     isCultivationSystemEnabled?: () => boolean;
 };
 
@@ -70,7 +72,7 @@ const 打开JSON文件 = async (): Promise<string> => {
 
 export const 提取NPC生图基础数据附带私密描述 = (
     npc: any,
-    options?: { cultivationSystemEnabled?: boolean }
+    options?: { cultivationSystemEnabled?: boolean; openingConfig?: OpeningConfig | null }
 ) => {
     const baseData = 提取NPC生图基础数据(npc, options);
     const gender = typeof npc?.性别 === 'string' ? npc.性别.trim() : '';
@@ -400,6 +402,23 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
         规范化接口设置(deps.获取接口配置()).功能模型占位.自动角色锚点启用 !== false
     );
 
+    const 解析角色当前视觉年龄 = (baseData: any, fallbackSource?: any) => 解析视觉年龄({
+        openingConfig: deps.获取开局配置?.(),
+        actualAge: baseData?.真实年龄 ?? baseData?.年龄 ?? fallbackSource?.年龄,
+        explicitVisualAge: baseData?.外观年龄 ?? fallbackSource?.外观年龄,
+        topicMode: baseData?.题材模式,
+        realmLevel: baseData?.境界层级 ?? fallbackSource?.境界层级,
+        realmText: baseData?.境界 ?? fallbackSource?.境界,
+        identity: baseData?.身份 ?? fallbackSource?.身份,
+        appearance: baseData?.外貌 ?? fallbackSource?.外貌描写 ?? fallbackSource?.外貌,
+        body: baseData?.身材 ?? fallbackSource?.身材描写 ?? fallbackSource?.身材,
+        clothing: baseData?.衣着 ?? fallbackSource?.衣着风格 ?? fallbackSource?.衣着,
+        bio: [baseData?.简介, baseData?.核心性格特征, baseData?.性格, baseData?.视觉年龄约束].filter(Boolean).join('；'),
+        race: baseData?.种族 ?? fallbackSource?.种族,
+        species: baseData?.血统 ?? fallbackSource?.血统,
+        additionalTexts: [baseData?.灵根, baseData?.灵根资质, fallbackSource?.男娘设定, fallbackSource?.扶她设定, fallbackSource?.性转记录]
+    });
+
     const 压缩场景锚点提示词 = (text: string, maxTokens: number, maxChars: number): string => {
         const deny = /(portrait|close-?up|upper body|waist-?up|full body|cowboy shot|wide shot|mid shot|low angle|high angle|standing|sitting|kneeling|running|jumping|walking|looking at viewer|looking away|from side|from behind|facing viewer|dynamic pose|action pose|background|scenery|environment|landscape|indoors|outdoors|rim light|lighting|sunlight|moonlight|fog|mist|rain|snow|depth of field|composition|framing|rule of thirds|atmospheric haze)/i;
         const tokens = (text || '')
@@ -479,6 +498,7 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
             负面提示词: (anchor.负面提示词 || '').trim(),
             结构化特征: anchor.结构化特征,
             来源: anchor.来源 || 'manual',
+            视觉年龄签名: (anchor.视觉年龄签名 || '').trim() || undefined,
             原始提取文本: (anchor.原始提取文本 || '').trim() || undefined,
             提取模型信息: (anchor.提取模型信息 || '').trim() || undefined,
             createdAt: Number.isFinite(anchor.createdAt) ? anchor.createdAt : now,
@@ -567,6 +587,14 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
             if (!npcId) return;
             const anchor = 按NPC读取角色锚点(npcId);
             if (!anchor || seen.has(anchor.id) || anchor.场景生图自动注入 !== true) return;
+            const currentNpc = (Array.isArray(deps.获取社交列表()) ? deps.获取社交列表() : []).find((npc: any) => npc && npc.id === npcId);
+            if (currentNpc) {
+                const baseData = 提取NPC生图基础数据附带私密描述(currentNpc, {
+                    cultivationSystemEnabled: deps.isCultivationSystemEnabled?.() !== false,
+                    openingConfig: deps.获取开局配置?.()
+                });
+                if (自动角色锚点视觉年龄是否过期(anchor, 解析角色当前视觉年龄(baseData, currentNpc))) return;
+            }
             const lightAnchor = 构建轻量场景角色锚点(anchor, anchors.length);
             if (!lightAnchor) return;
             seen.add(anchor.id);
@@ -590,8 +618,10 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
             throw new Error('未配置可用的接口模型，无法提取角色锚点。');
         }
         const baseData = 提取NPC生图基础数据附带私密描述(targetNpc, {
-            cultivationSystemEnabled: deps.isCultivationSystemEnabled?.() !== false
+            cultivationSystemEnabled: deps.isCultivationSystemEnabled?.() !== false,
+            openingConfig: deps.获取开局配置?.()
         });
+        const visualAge = 解析角色当前视觉年龄(baseData, targetNpc);
         const imageAIService = await deps.加载图片AI服务();
         const extracted = await imageAIService.提取角色锚点提示词(baseData, anchorApi, {
             名称: options?.名称 || (typeof targetNpc?.姓名 === 'string' ? targetNpc.姓名.trim() : '角色锚点'),
@@ -612,6 +642,9 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
             throw new Error((extracted?.说明 || '').trim() || '角色锚点提取结果为空，未保存任何内容。');
         }
         const existing = 按NPC读取角色锚点(npcId);
+        if (existing && !自动角色锚点视觉年龄是否过期(existing, visualAge)) {
+            return existing;
+        }
         return 保存角色锚点({
             id: existing?.id || '',
             npcId,
@@ -623,6 +656,7 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
             负面提示词: extracted.负面提示词,
             结构化特征: extracted.结构化特征,
             来源: 'ai_extract',
+            视觉年龄签名: 构建视觉年龄签名(visualAge),
             原始提取文本: JSON.stringify(baseData ?? {}, null, 2),
             提取模型信息: anchorApi.model || '',
             createdAt: existing?.createdAt || Date.now(),
@@ -643,8 +677,10 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
             throw new Error('未配置可用的接口模型，无法提取角色锚点。');
         }
         const baseData = 提取主角生图基础数据(targetCharacter, {
-            cultivationSystemEnabled: deps.isCultivationSystemEnabled?.() !== false
+            cultivationSystemEnabled: deps.isCultivationSystemEnabled?.() !== false,
+            openingConfig: deps.获取开局配置?.()
         });
+        const visualAge = 解析角色当前视觉年龄(baseData, targetCharacter);
         const imageAIService = await deps.加载图片AI服务();
         const extracted = await imageAIService.提取角色锚点提示词(baseData, anchorApi, {
             名称: options?.名称 || (typeof targetCharacter?.姓名 === 'string' ? targetCharacter.姓名.trim() : '主角角色锚点'),
@@ -665,6 +701,9 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
             throw new Error((extracted?.说明 || '').trim() || '主角角色锚点提取结果为空，未保存任何内容。');
         }
         const existing = 读取主角角色锚点();
+        if (existing && !自动角色锚点视觉年龄是否过期(existing, visualAge)) {
+            return existing;
+        }
         return 保存角色锚点({
             id: existing?.id || '',
             npcId: 主角角色锚点标识,
@@ -676,6 +715,7 @@ export const 创建图片预设工作流 = (deps: 图片预设工作流依赖) =
             负面提示词: extracted.负面提示词,
             结构化特征: extracted.结构化特征,
             来源: 'ai_extract',
+            视觉年龄签名: 构建视觉年龄签名(visualAge),
             原始提取文本: JSON.stringify(baseData ?? {}, null, 2),
             提取模型信息: anchorApi.model || '',
             createdAt: existing?.createdAt || Date.now(),

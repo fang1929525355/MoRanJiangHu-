@@ -90,16 +90,17 @@ describe('npc image workflow age constraints', () => {
         const constraint = 构建词组转化性别硬约束('女', 1000, {
             性别: '女',
             年龄: 1000,
+            题材模式: '仙侠',
+            境界层级: 24,
             身份: '元婴女修',
             境界: '元婴境',
             简介: '修行多年，驻颜有术，看起来依旧年轻。',
             外貌: '容貌清艳，神情沉静。'
         });
 
-        expect(constraint).toContain('不要机械按真实岁数画成老人');
-        expect(constraint).toContain('若正文或设定明确驻颜过头、幼态外观，也允许保留这种表现');
-        expect(constraint).not.toContain('不得幼化');
-        expect(constraint).not.toContain('禁止画成明显更老的成年人');
+        expect(constraint).toContain('真实年龄只代表经历；外貌按成熟成年人描写');
+        expect(constraint).toContain('不得仅因真实年龄称为老妇、老妪或老太婆');
+        expect(constraint).not.toContain('85 years old');
     });
 
     it('uses four-base-gender constraints for femboy characters', async () => {

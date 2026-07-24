@@ -1,6 +1,7 @@
 import type { 香闺秘档部位类型 } from '../../../types';
 import { recordDiagnosticLog } from '../../../services/diagnosticLog';
 import { NPC是否扶她, NPC是否男性或男娘, NPC是否女性 } from '../../../utils/npcGenderFlags';
+import { 解析视觉年龄 } from '../../../utils/visualAge';
 
 type 右下角提示参数 = {
     title: string;
@@ -10,6 +11,7 @@ type 右下角提示参数 = {
 
 type 手动图片动作工作流依赖 = {
     获取社交列表: () => any[];
+    获取开局配置?: () => any;
     NSFW模式已启用?: () => boolean;
     男娘NSFW内容已启用?: () => boolean;
     记录后台手动生图监控: (payload: { npcId: string; since: number; npcName: string; 构图: '头像' | '半身' | '立绘' }) => void;
@@ -73,6 +75,22 @@ const NPC是否允许私密部位生图 = (
     || (options?.femboyNsfwEnabled === true && NPC是否男性或男娘(npc))
 );
 
+const NPC满足私密生图年龄安全 = (npc: any, openingConfig?: any): boolean => 解析视觉年龄({
+    openingConfig,
+    actualAge: npc?.年龄,
+    explicitVisualAge: npc?.外观年龄,
+    realmLevel: npc?.境界层级,
+    realmText: npc?.境界,
+    identity: npc?.身份,
+    appearance: npc?.外貌描写 || npc?.外貌,
+    body: npc?.身材描写 || npc?.身材,
+    clothing: npc?.衣着风格 || npc?.衣着,
+    bio: [npc?.简介, npc?.核心性格特征, npc?.性格].filter(Boolean).join('；'),
+    race: npc?.种族,
+    species: npc?.血统,
+    additionalTexts: [npc?.灵根, npc?.灵根资质, npc?.男娘设定, npc?.扶她设定, npc?.性转记录]
+}).isAdultSafetyApproved;
+
 const 格式化香闺秘档部位数量 = (parts: 香闺秘档部位类型[]): string => {
     const count = Array.isArray(parts) ? parts.length : 0;
     if (count === 2) return '两处';
@@ -113,11 +131,12 @@ const 收集香闺秘档生成任务 = (
     npcList: any[],
     targetNpc: any,
     requestedParts: 香闺秘档部位类型[],
-    options?: { femboyNsfwEnabled?: boolean }
+    options?: { femboyNsfwEnabled?: boolean; openingConfig?: any }
 ): 香闺秘档生成任务[] => {
     const taskMap = new Map<string, 香闺秘档生成任务>();
     const addTask = (npc: any, parts: 香闺秘档部位类型[]) => {
         if (!NPC是否允许私密部位生图(npc, options)) return;
+        if (!NPC满足私密生图年龄安全(npc, options?.openingConfig)) return;
         const npcId = typeof npc?.id === 'string' ? npc.id.trim() : '';
         const validParts = parts.filter((part) => 香闺秘档部位描述可用于生图(npc, part));
         if (!npcId || validParts.length <= 0) return;
@@ -240,9 +259,18 @@ export const 创建手动图片动作工作流 = (deps: 手动图片动作工作
             });
             return;
         }
+        const openingConfig = deps.获取开局配置?.();
+        if (!NPC满足私密生图年龄安全(targetNpc, openingConfig)) {
+            deps.推送右下角提示({
+                title: '私密特写未启用',
+                message: '角色真实年龄或明确视觉年龄不满足成人私密生图要求。',
+                tone: 'info'
+            });
+            return;
+        }
 
         const targetParts: 香闺秘档部位类型[] = part === '全部' ? 读取NPC香闺秘档部位列表(targetNpc) : [part];
-        const taskQueue = 收集香闺秘档生成任务(socialList, targetNpc, targetParts, { femboyNsfwEnabled });
+        const taskQueue = 收集香闺秘档生成任务(socialList, targetNpc, targetParts, { femboyNsfwEnabled, openingConfig });
         const npcName = 获取NPC名称(targetNpc);
         if (taskQueue.length <= 0) {
             deps.推送右下角提示({

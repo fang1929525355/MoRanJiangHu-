@@ -30,6 +30,7 @@ import { parseJsonWithRepair } from '../../utils/jsonRepair';
 import { RELEASE_INFO } from '../../data/releaseInfo';
 import { buildSyncApiUrl, isNativeCapacitorEnvironment, requiresRemoteSyncApi } from '../../utils/nativeRuntime';
 import { recordDiagnosticLog } from '../diagnosticLog';
+import { 解析视觉年龄 } from '../../utils/visualAge';
 import {
     判断疑似网络或跨域错误,
     构建ComfyUI精确连接失败提示,
@@ -3112,6 +3113,15 @@ const 强化香闺秘档特写词组 = (
     );
 };
 
+const visualAgeToPrompt = (visualAge: { positiveTags?: string[] } | null | undefined): string => (
+    Array.isArray(visualAge?.positiveTags)
+        ? visualAge.positiveTags
+            .map((item) => String(item || '').trim())
+            .filter(Boolean)
+            .join(', ')
+        : ''
+);
+
 export const buildNpcDirectImagePrompt = (
     npcData: unknown,
     options?: NPC提示词选项
@@ -3129,10 +3139,29 @@ export const buildNpcDirectImagePrompt = (
         if (v === '扶她') return 'futanari';
         return '';
     };
-    const 年龄文本 = 读取NPC字段文本(source, '年龄');
+    const 视觉年龄 = 解析视觉年龄({
+        actualAge: 读取NPC字段文本(source, '真实年龄') || 读取NPC字段文本(source, '年龄'),
+        explicitVisualAge: 读取NPC字段文本(source, '外观年龄'),
+        topicMode: 读取NPC字段文本(source, '题材模式'),
+        realmLevel: 读取NPC字段文本(source, '境界层级'),
+        realmText: 读取NPC字段文本(source, '境界'),
+        identity: 读取NPC字段文本(source, '身份'),
+        appearance: 读取NPC字段文本(source, '外貌'),
+        body: 读取NPC字段文本(source, '身材'),
+        clothing: 读取NPC字段文本(source, '衣着'),
+        bio: [读取NPC字段文本(source, '简介'), 读取NPC字段文本(source, '核心性格特征'), 读取NPC字段文本(source, '性格'), 读取NPC字段文本(source, '视觉年龄约束')].filter(Boolean).join('；'),
+        race: 读取NPC字段文本(source, '种族'),
+        species: 读取NPC字段文本(source, '血统'),
+        additionalTexts: [读取NPC字段文本(source, '灵根'), 读取NPC字段文本(source, '灵根资质')]
+    });
+    const 年龄提示词 = (() => {
+        const fromField = 读取NPC字段文本(source, '视觉年龄正向提示词');
+        if (fromField) return fromField;
+        return visualAgeToPrompt(视觉年龄);
+    })();
     const fragments = [
         翻译性别(读取NPC字段文本(source, '性别')),
-        年龄文本 && /^\d+$/.test(年龄文本) ? `${年龄文本} years old` : '',
+        年龄提示词,
         规范化NPC直接视觉字段(读取NPC字段文本(source, '外貌')),
         规范化NPC直接视觉字段(读取NPC字段文本(source, '身材')),
         规范化NPC直接视觉字段(读取NPC字段文本(source, '衣着'))

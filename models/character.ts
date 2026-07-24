@@ -71,6 +71,7 @@ export interface 角色数据结构 {
     最近生图结果?: NPC图片档案['最近生图结果'];
     性别: string;
     年龄: number;
+    外观年龄?: number | string;
     出生日期: string;  // 格式: N月N日
     外貌: string;      // 角色外貌描述
     性格: string;

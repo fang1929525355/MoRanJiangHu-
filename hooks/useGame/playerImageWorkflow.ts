@@ -2,6 +2,7 @@ import type { 生图任务来源类型, 角色数据结构 } from '../../types';
 import type { 当前可用接口结构 } from '../../utils/apiConfig';
 import type { 图片记录来源类型 } from '../../models/imageGeneration';
 import { 获取图片展示地址, 图片资源记录含可恢复地址 } from '../../utils/imageAssets';
+import { 自动角色锚点视觉年龄是否过期, 解析视觉年龄 } from '../../utils/visualAge';
 import { 主角角色锚点标识 } from './imagePresetWorkflow';
 import { 合并NPC图片档案, 标准化香闺秘档部位档案, 标准化香闺秘档部位结果, 生成NPC生图记录ID } from './npcImageStateWorkflow';
 
@@ -61,6 +62,24 @@ export const 创建主角图片工作流 = (deps: 主角图片工作流依赖) =
         } catch {
             return true;
         }
+    };
+
+    const 解析主角视觉年龄 = (playerSnapshot: 角色数据结构) => {
+        const baseData = deps.提取主角生图基础数据(playerSnapshot);
+        return 解析视觉年龄({
+            actualAge: playerSnapshot?.年龄,
+            explicitVisualAge: playerSnapshot?.外观年龄 ?? baseData?.外观年龄,
+            topicMode: baseData?.题材模式,
+            realmLevel: playerSnapshot?.境界层级 ?? baseData?.境界层级,
+            realmText: playerSnapshot?.境界 ?? baseData?.境界,
+            identity: playerSnapshot?.称号 || playerSnapshot?.出身背景?.名称 || baseData?.身份,
+            appearance: playerSnapshot?.外貌 || baseData?.外貌,
+            clothing: baseData?.衣着,
+            bio: [playerSnapshot?.性格, playerSnapshot?.出身背景?.描述, baseData?.视觉年龄约束].filter(Boolean).join('；'),
+            race: (playerSnapshot as any)?.种族,
+            species: (playerSnapshot as any)?.血统,
+            additionalTexts: [playerSnapshot?.灵根, playerSnapshot?.灵根资质, playerSnapshot?.性转记录]
+        });
     };
 
     const 更新角色并自动存档 = (updater: (prev: 角色数据结构) => 角色数据结构) => {
@@ -383,7 +402,11 @@ export const 创建主角图片工作流 = (deps: 主角图片工作流依赖) =
         const playerSnapshot = meta?.playerSnapshot || deps.获取角色();
         const playerName = typeof playerSnapshot?.姓名 === 'string' && playerSnapshot.姓名.trim() ? playerSnapshot.姓名.trim() : '主角';
         const existingAnchor = deps.读取主角角色锚点();
-        if (deps.自动角色锚点已启用?.() !== false && (!existingAnchor || !主角锚点是否匹配当前角色(existingAnchor, playerSnapshot))) {
+        const 主角视觉年龄 = 解析主角视觉年龄(playerSnapshot);
+        const 锚点需要刷新 = existingAnchor
+            ? 自动角色锚点视觉年龄是否过期(existingAnchor, 主角视觉年龄)
+            : true;
+        if (deps.自动角色锚点已启用?.() !== false && (!existingAnchor || !主角锚点是否匹配当前角色(existingAnchor, playerSnapshot) || 锚点需要刷新)) {
             try {
                 await deps.提取主角角色锚点({
                     名称: `${playerName} 角色锚点`
@@ -406,8 +429,10 @@ export const 创建主角图片工作流 = (deps: 主角图片工作流依赖) =
                 姓名: playerName,
                 性别: playerSnapshot?.性别,
                 年龄: playerSnapshot?.年龄,
+                外观年龄: (playerSnapshot as any)?.外观年龄,
                 身份: playerSnapshot?.称号 || playerSnapshot?.出身背景?.名称,
                 境界: playerSnapshot?.境界,
+                境界层级: playerSnapshot?.境界层级,
                 简介: playerSnapshot?.出身背景?.描述,
                 外貌: playerSnapshot?.外貌,
                 性格: playerSnapshot?.性格
@@ -538,6 +563,15 @@ export const 创建主角图片工作流 = (deps: 主角图片工作流依赖) =
 
     const generatePlayerSecretPartImage = async (part: string) => {
         const player = deps.获取角色();
+        const 主角视觉年龄 = 解析主角视觉年龄(player);
+        if (!主角视觉年龄.isAdultSafetyApproved) {
+            deps.推送右下角提示({
+                title: `主角${part}图片生成失败`,
+                message: '角色真实年龄或明确视觉年龄不满足成人私密生图要求。',
+                tone: 'error'
+            });
+            return;
+        }
         const secretKey = `player_secret_${part}`;
         if (deps.主角生图进行中集合.has(secretKey)) return;
         deps.主角生图进行中集合.add(secretKey);

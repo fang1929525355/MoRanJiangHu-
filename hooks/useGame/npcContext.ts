@@ -3,9 +3,11 @@ import { 规范化记忆配置 } from './memoryUtils';
 import { 构建NPC记忆展示结果 } from './npcMemorySummary';
 import { normalizeCanonicalGameTime, 结构化时间转标准串 } from './timeUtils';
 import { 解析境界映射值 } from '../../prompts/runtime/fandom';
+import { 解析视觉年龄 } from '../../utils/visualAge';
 
 type 生图基础数据选项 = {
     cultivationSystemEnabled?: boolean;
+    openingConfig?: OpeningConfig | null;
 };
 
 export const 提取NPC生图基础数据 = (npc: any, options?: 生图基础数据选项) => {
@@ -62,20 +64,48 @@ export const 提取NPC生图基础数据 = (npc: any, options?: 生图基础数�
     const 装备衣着 = 读取装备衣着(npc);
     const 衣着 = [衣着文本, 装备衣着].filter(Boolean).join('；') || undefined;
     const 核心性格特征 = 读取首个文本字段(npc, ['核心性格特征', '性格', '性格特征']);
+    const 外观年龄原始 = npc?.外观年龄 ?? 读取档案对象(npc)?.外观年龄;
+    const 视觉年龄 = 解析视觉年龄({
+        openingConfig: options?.openingConfig,
+        actualAge: npc?.年龄,
+        explicitVisualAge: 外观年龄原始,
+        realmLevel: npc?.境界层级,
+        realmText: npc?.境界,
+        identity: npc?.身份,
+        appearance: 外貌,
+        body: 身材,
+        clothing: 衣着,
+        bio: [读取首个文本字段(npc, ['简介']), 核心性格特征, npc?.出身背景?.描述].filter(Boolean).join('；'),
+        race: 取首个非空文本(npc?.种族, (读取档案对象(npc) as any)?.种族),
+        species: 取首个非空文本(npc?.血统, (读取档案对象(npc) as any)?.血统),
+        additionalTexts: [npc?.灵根, npc?.灵根资质, npc?.来源, npc?.性转记录]
+    });
 
     return 清理空字段({
         姓名: typeof npc?.姓名 === 'string' ? npc.姓名.trim() : undefined,
         性别: typeof npc?.性别 === 'string' ? npc.性别.trim() : undefined,
         年龄: typeof npc?.年龄 === 'number' ? npc.年龄 : undefined,
+        真实年龄: typeof npc?.年龄 === 'number' ? npc.年龄 : undefined,
+        外观年龄: typeof 外观年龄原始 === 'number'
+            ? 外观年龄原始
+            : (typeof 外观年龄原始 === 'string' ? 外观年龄原始.trim() || undefined : undefined),
         身份: 读取首个文本字段(npc, ['身份']) || undefined,
         境界: 启用修炼体系 ? (读取首个文本字段(npc, ['境界']) || undefined) : undefined,
+        境界层级: typeof npc?.境界层级 === 'number' ? npc.境界层级 : undefined,
         简介: 读取首个文本字段(npc, ['简介']) || undefined,
         核心性格特征: 核心性格特征 || undefined,
         性格: 核心性格特征 || undefined,
         关系状态: 读取首个文本字段(npc, ['关系状态']) || undefined,
         外貌: 外貌 || undefined,
         身材: 身材 || undefined,
-        衣着: 衣着 || undefined
+        衣着: 衣着 || undefined,
+        题材模式: options?.openingConfig?.题材模式,
+        视觉年龄分段: 视觉年龄.visualAgeBand,
+        视觉年龄标签: 视觉年龄.visualAgeLabel,
+        视觉年龄约束: 视觉年龄.narrativeConstraints.join('；') || undefined,
+        视觉年龄正向提示词: 视觉年龄.positiveTags.join(', ') || undefined,
+        视觉年龄负向提示词: 视觉年龄.negativeTags.join(', ') || undefined,
+        视觉年龄建议岁数: typeof 视觉年龄.suggestedVisualAge === 'number' ? 视觉年龄.suggestedVisualAge : undefined
     });
 };
 
@@ -96,26 +126,55 @@ export const 提取主角生图基础数据 = (character: any, options?: 生图�
     const 取文本 = (value: unknown): string => (
         typeof value === 'string' ? value.trim() : ''
     );
+    const 外观年龄原始 = character?.外观年龄;
+    const 身份文本 = [取文本(character?.称号), 取文本(character?.出身背景?.名称)].filter(Boolean).join(' / ') || undefined;
+    const 衣着 = (() => {
+        const equippedNames = ['头部', '胸部', '盔甲', '内衬', '腿部', '手部', '足部', '背部', '腰部']
+            .map((slot) => {
+                const name = typeof character?.装备?.[slot] === 'string' ? character.装备[slot].trim() : '';
+                return !name || name === '无' ? '' : name;
+            })
+            .filter(Boolean);
+        return equippedNames.join('，') || undefined;
+    })();
+    const 视觉年龄 = 解析视觉年龄({
+        openingConfig: options?.openingConfig,
+        actualAge: character?.年龄,
+        explicitVisualAge: 外观年龄原始,
+        realmLevel: character?.境界层级,
+        realmText: character?.境界,
+        identity: 身份文本,
+        appearance: character?.外貌,
+        clothing: 衣着,
+        bio: [character?.性格, character?.出身背景?.描述].map(取文本).filter(Boolean).join('；'),
+        race: character?.种族,
+        species: character?.血统,
+        additionalTexts: [character?.灵根, character?.灵根资质, character?.性转记录]
+    });
 
     return 清理空字段({
         姓名: 取文本(character?.姓名) || '主角',
         性别: 取文本(character?.性别) || undefined,
         年龄: typeof character?.年龄 === 'number' ? character.年龄 : undefined,
-        身份: [取文本(character?.称号), 取文本(character?.出身背景?.名称)].filter(Boolean).join(' / ') || undefined,
+        真实年龄: typeof character?.年龄 === 'number' ? character.年龄 : undefined,
+        外观年龄: typeof 外观年龄原始 === 'number'
+            ? 外观年龄原始
+            : (typeof 外观年龄原始 === 'string' ? 外观年龄原始.trim() || undefined : undefined),
+        身份: 身份文本,
         境界: 启用修炼体系 ? (取文本(character?.境界) || undefined) : undefined,
+        境界层级: typeof character?.境界层级 === 'number' ? character.境界层级 : undefined,
         简介: 取文本(character?.出身背景?.描述) || undefined,
         核心性格特征: 取文本(character?.性格) || undefined,
         性格: 取文本(character?.性格) || undefined,
         外貌: 取文本(character?.外貌) || undefined,
-        衣着: (() => {
-            const equippedNames = ['头部', '胸部', '盔甲', '内衬', '腿部', '手部', '足部', '背部', '腰部']
-                .map((slot) => {
-                    const name = typeof character?.装备?.[slot] === 'string' ? character.装备[slot].trim() : '';
-                    return !name || name === '无' ? '' : name;
-                })
-                .filter(Boolean);
-            return equippedNames.join('，') || undefined;
-        })()
+        衣着,
+        题材模式: options?.openingConfig?.题材模式,
+        视觉年龄分段: 视觉年龄.visualAgeBand,
+        视觉年龄标签: 视觉年龄.visualAgeLabel,
+        视觉年龄约束: 视觉年龄.narrativeConstraints.join('；') || undefined,
+        视觉年龄正向提示词: 视觉年龄.positiveTags.join(', ') || undefined,
+        视觉年龄负向提示词: 视觉年龄.negativeTags.join(', ') || undefined,
+        视觉年龄建议岁数: typeof 视觉年龄.suggestedVisualAge === 'number' ? 视觉年龄.suggestedVisualAge : undefined
     });
 };
 
@@ -426,6 +485,10 @@ export const 构建NPC上下文 = (
         typeof obj?.[key] === 'string' ? obj[key].trim() : ''
     );
 
+    const 读取纯文本值 = (value: any): string => (
+        typeof value === 'string' ? value.trim() : ''
+    );
+
     const 读取胸部描述 = (npc: any): string => {
         return 读取文本(npc, '胸部描述');
     };
@@ -458,23 +521,39 @@ export const 构建NPC上下文 = (
         return 读取文本(npc, '敏感点');
     };
 
+    const 解析NPC视觉年龄 = (npc: any) => 解析视觉年龄({
+        openingConfig: options?.openingConfig,
+        actualAge: npc?.年龄,
+        explicitVisualAge: npc?.外观年龄,
+        realmLevel: npc?.境界层级,
+        realmText: npc?.境界,
+        identity: npc?.身份,
+        appearance: npc?.外貌描写 || npc?.外貌,
+        body: npc?.身材描写 || npc?.身材,
+        clothing: npc?.衣着风格 || npc?.衣着,
+        bio: [npc?.简介, npc?.核心性格特征, npc?.性格, npc?.出身背景?.描述].map((item) => 读取文本({ value: item }, 'value')).filter(Boolean).join('；'),
+        race: npc?.种族,
+        species: npc?.血统,
+        additionalTexts: [npc?.灵根, npc?.灵根资质, npc?.来源, npc?.性转记录]
+    });
+
     const 标准化名器档案 = (npc: any) => {
         const source = Array.isArray(npc?.名器档案) ? npc.名器档案 : [];
         const normalized = source
             .map((entry: any) => 清理空字段({
-                部位: 读取文本(entry?.部位) || undefined,
-                名称: 读取文本(entry?.名称) || undefined,
-                品质: 读取文本(entry?.品质) || undefined,
-                来源世界书: 读取文本(entry?.来源世界书) || undefined,
-                稳定描述: 读取文本(entry?.稳定描述) || undefined,
+                部位: 读取纯文本值(entry?.部位) || undefined,
+                名称: 读取纯文本值(entry?.名称) || undefined,
+                品质: 读取纯文本值(entry?.品质) || undefined,
+                来源世界书: 读取纯文本值(entry?.来源世界书) || undefined,
+                稳定描述: 读取纯文本值(entry?.稳定描述) || undefined,
                 效果: entry?.效果 && typeof entry.效果 === 'object' ? 清理空字段({
                     判定修正: typeof entry.效果?.判定修正 === 'number' ? entry.效果.判定修正 : undefined,
                     魅力修正: typeof entry.效果?.魅力修正 === 'number' ? entry.效果.魅力修正 : undefined,
                     亲密推进修正: typeof entry.效果?.亲密推进修正 === 'number' ? entry.效果.亲密推进修正 : undefined,
                     双修收益修正: typeof entry.效果?.双修收益修正 === 'number' ? entry.效果.双修收益修正 : undefined,
                     风险修正: typeof entry.效果?.风险修正 === 'number' ? entry.效果.风险修正 : undefined,
-                    标签: Array.isArray(entry.效果?.标签) ? entry.效果.标签.map(读取文本).filter(Boolean).slice(0, 8) : undefined,
-                    说明: 读取文本(entry.效果?.说明) || undefined
+                    标签: Array.isArray(entry.效果?.标签) ? entry.效果.标签.map(读取纯文本值).filter(Boolean).slice(0, 8) : undefined,
+                    说明: 读取纯文本值(entry.效果?.说明) || undefined
                 }) : undefined
             }))
             .filter((entry: any) => entry?.部位 && entry?.名称);
@@ -486,6 +565,7 @@ export const 构建NPC上下文 = (
         const 好感度突破条件 = typeof npc?.好感度突破条件 === 'string' ? npc.好感度突破条件.trim() : '';
         const 关系突破条件 = typeof npc?.关系突破条件 === 'string' ? npc.关系突破条件.trim() : '';
         const 关系网变量 = 标准化关系网变量(npc);
+        const 视觉年龄 = 解析NPC视觉年龄(npc);
         return {
             索引: index,
             id: typeof npc?.id === 'string' ? npc.id : `npc_${index}`,
@@ -503,6 +583,12 @@ export const 构建NPC上下文 = (
             是否队友,
             关系状态: typeof npc?.关系状态 === 'string' ? npc.关系状态 : '未知',
             好感度: typeof npc?.好感度 === 'number' ? npc.好感度 : 0,
+            真实年龄: typeof npc?.年龄 === 'number' ? npc.年龄 : undefined,
+            外观年龄: typeof npc?.外观年龄 === 'number'
+                ? npc.外观年龄
+                : (typeof npc?.外观年龄 === 'string' ? npc.外观年龄.trim() || undefined : undefined),
+            视觉年龄: 视觉年龄.visualAgeLabel,
+            视觉年龄约束: 视觉年龄.narrativeConstraints.join('；') || undefined,
             简介: typeof npc?.简介 === 'string' ? npc.简介 : '暂无简介',
             ...(核心性格特征 ? { 核心性格特征 } : {}),
             ...(好感度突破条件 ? { 好感度突破条件 } : {}),

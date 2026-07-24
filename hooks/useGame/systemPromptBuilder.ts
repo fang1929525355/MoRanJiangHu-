@@ -75,6 +75,7 @@ import { 构建模板姓名黑名单提示词 } from '../../utils/templateNameBl
 import { 构建角色金钱显示快照 } from '../../utils/currencyDisplay';
 import { 构建货币快照, 构建货币参考注入, 构建当前地点汇率快照 } from '../../prompts/runtime/currencyReference';
 import { 获取展开货币系统 } from '../../utils/apiConfig';
+import { 解析视觉年龄 } from '../../utils/visualAge';
 
 export type 运行时提示词状态 = {
     当前启用: boolean;
@@ -84,6 +85,7 @@ export type 运行时提示词状态 = {
 };
 
 export type 系统提示词上下文片段 = {
+    叙事约束提示词: string;
     AI角色声明: string;
     worldPrompt: string;
     地图建筑状态: string;
@@ -475,6 +477,20 @@ export const 构建系统提示词 = ({
             腰部: 取文本(装备原始?.腰部),
             坐骑: 取文本(装备原始?.坐骑)
         };
+        const 主角视觉年龄 = 解析视觉年龄({
+            openingConfig,
+            actualAge: role?.年龄,
+            explicitVisualAge: role?.外观年龄,
+            realmLevel: role?.境界层级,
+            realmText: role?.境界,
+            identity: [role?.称号, role?.出身背景?.名称].filter(Boolean).join(' / '),
+            appearance: role?.外貌,
+            clothing: Object.values(装备).filter(Boolean).join('，'),
+            bio: [role?.性格, role?.出身背景?.描述].filter(Boolean).join('；'),
+            race: role?.种族,
+            species: role?.血统,
+            additionalTexts: [role?.灵根, role?.灵根资质, role?.性转记录]
+        });
         const 玩家BUFF列表 = 取数组(role?.玩家BUFF).map((item: any) => {
             const raw = item && typeof item === 'object' ? item : {};
             return {
@@ -562,6 +578,9 @@ export const 构建系统提示词 = ({
             姓名: 取文本(role?.姓名),
             性别: 取文本(role?.性别),
             年龄: 取数值(role?.年龄),
+            外观年龄: typeof role?.外观年龄 === 'number' ? role.外观年龄 : 取文本(role?.外观年龄),
+            视觉年龄: 主角视觉年龄.visualAgeLabel,
+            视觉年龄约束: 主角视觉年龄.narrativeConstraints.join('；'),
             出生日期: 取文本(role?.出生日期),
             外貌: 取文本(role?.外貌),
             性格: 取文本(role?.性格),

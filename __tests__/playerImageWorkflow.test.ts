@@ -5,7 +5,7 @@ const 创建依赖 = (
     执行生图: ReturnType<typeof vi.fn>,
     featureOverride?: Record<string, unknown>,
     anchorOverride: any = null
-) => ({
+): any => ({
     获取角色: () => ({ 姓名: '刀哥', 头像图片URL: '' }),
     设置角色: vi.fn(),
     规范化角色物品容器映射: (value: any) => value,
@@ -104,6 +104,29 @@ describe('playerImageWorkflow', () => {
         expect(执行生图).toHaveBeenCalledTimes(1);
     });
 
+    it('passes explicit visual age and realm level into the shared npc workflow', async () => {
+        const 执行生图 = vi.fn(async () => undefined);
+        const deps = 创建依赖(执行生图);
+        deps.获取角色 = () => ({
+            姓名: '刀哥',
+            性别: '男',
+            年龄: 120,
+            外观年龄: 30,
+            境界: '金丹境',
+            境界层级: 17,
+            出身背景: { 名称: '散修', 描述: '久历风霜。' }
+        } as any);
+        const workflow = 创建主角图片工作流(deps as any);
+
+        await workflow.generatePlayerImageManually({ 构图: '头像' });
+
+        expect(执行生图).toHaveBeenCalledWith(
+            expect.objectContaining({ 外观年龄: 30, 境界层级: 17, 年龄: 120 }),
+            expect.anything(),
+            expect.anything()
+        );
+    });
+
     it('binds a successful generated player avatar so it remains visible after refresh/load', async () => {
         const avatarRecord = {
             id: 'player-avatar-1',
@@ -161,7 +184,8 @@ describe('playerImageWorkflow', () => {
         } as any);
 
         expect(执行生图).toHaveBeenCalledTimes(1);
-        expect(执行生图.mock.calls[0][1]).toEqual(expect.objectContaining({ 构图: '立绘' }));
+        const [, optionsArg] = 执行生图.mock.calls[0] as any[];
+        expect(optionsArg).toEqual(expect.objectContaining({ 构图: '立绘' }));
     });
 
     it('does not resubmit a player avatar when the current role already has a pending avatar from an earlier opening trigger', async () => {
@@ -194,6 +218,7 @@ describe('playerImageWorkflow', () => {
         let role: any = {
             姓名: '前月荷',
             性别: '女',
+            年龄: 22,
             胸部描述: '胸部描述',
             小穴描述: '小穴描述',
             屁穴描述: '屁穴描述',
@@ -252,6 +277,49 @@ describe('playerImageWorkflow', () => {
                 })
             }),
             force: true
+        }));
+    });
+
+    it('blocks player secret part generation for real minors even at high realm', async () => {
+        const deps = 创建依赖(vi.fn());
+        deps.获取角色 = () => ({
+            姓名: '未成年的主角',
+            性别: '女',
+            年龄: 16,
+            境界: '元婴境',
+            境界层级: 24,
+            胸部描述: '已有描述。'
+        } as any);
+        const workflow = 创建主角图片工作流(deps as any);
+
+        await workflow.generatePlayerSecretPartImage('胸部');
+
+        expect(deps.加载NPC生图工作流).not.toHaveBeenCalled();
+        expect(deps.推送右下角提示).toHaveBeenCalledWith(expect.objectContaining({
+            title: '主角胸部图片生成失败',
+            message: '角色真实年龄或明确视觉年龄不满足成人私密生图要求。'
+        }));
+    });
+
+    it('blocks player secret part generation for explicit childlike appearance', async () => {
+        const deps = 创建依赖(vi.fn());
+        deps.获取角色 = () => ({
+            姓名: '返老者',
+            性别: '女',
+            年龄: 200,
+            外观年龄: '幼童外貌',
+            境界: '化神境',
+            境界层级: 40,
+            胸部描述: '已有描述。'
+        } as any);
+        const workflow = 创建主角图片工作流(deps as any);
+
+        await workflow.generatePlayerSecretPartImage('胸部');
+
+        expect(deps.加载NPC生图工作流).not.toHaveBeenCalled();
+        expect(deps.推送右下角提示).toHaveBeenCalledWith(expect.objectContaining({
+            title: '主角胸部图片生成失败',
+            message: '角色真实年龄或明确视觉年龄不满足成人私密生图要求。'
         }));
     });
 });

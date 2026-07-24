@@ -165,6 +165,7 @@ export interface NPC结构 {
     曾用名?: string[];
     性别: NPC性别;
     年龄: number;
+    外观年龄?: number | string;
     生日?: string;
     境界: string;
     能力体系?: CharacterAbilitySystems;

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { 创建手动图片动作工作流 } from '../hooks/useGame/image/manualImageActionsWorkflow';
 
-const 创建依赖 = (socialList: any[]) => ({
+const 创建依赖 = (socialList: any[]): any => ({
     获取社交列表: () => socialList,
+    获取开局配置: undefined,
     NSFW模式已启用: () => true,
     记录后台手动生图监控: vi.fn(),
     记录后台私密生图监控: vi.fn(),
@@ -197,6 +198,55 @@ describe('manualImageActionsWorkflow', () => {
         expect(deps.推送右下角提示).toHaveBeenCalledWith(expect.objectContaining({
             title: '私密特写未启用',
             message: '当前已关闭男娘 / 扶她相关 NSFW 内容，男性/男娘/扶她角色不会生成私密部位特写。'
+        }));
+    });
+
+    it('未成年高境界角色不会进入私密特写生成', async () => {
+        const deps = 创建依赖([{
+            id: 'npc_minor',
+            姓名: '青禾',
+            性别: '女',
+            年龄: 16,
+            境界: '元婴境',
+            境界层级: 24,
+            是否主要角色: true,
+            胸部描述: '已有档案。',
+            图片档案: {}
+        }]);
+        deps.获取开局配置 = () => ({ 题材模式: '仙侠' } as any);
+        const workflow = 创建手动图片动作工作流(deps);
+
+        await workflow.generateNpcSecretPartImage('npc_minor', '胸部');
+
+        expect(deps.执行NPC香闺秘档部位生图).not.toHaveBeenCalled();
+        expect(deps.推送右下角提示).toHaveBeenCalledWith(expect.objectContaining({
+            title: '私密特写未启用',
+            message: '角色真实年龄或明确视觉年龄不满足成人私密生图要求。'
+        }));
+    });
+
+    it('明确幼态外观的成年角色不会进入私密特写生成', async () => {
+        const deps = 创建依赖([{
+            id: 'npc_childlike',
+            姓名: '白露',
+            性别: '女',
+            年龄: 200,
+            外观年龄: '幼童外貌',
+            境界: '化神境',
+            境界层级: 32,
+            是否主要角色: true,
+            胸部描述: '已有档案。',
+            图片档案: {}
+        }]);
+        deps.获取开局配置 = () => ({ 题材模式: '仙侠' } as any);
+        const workflow = 创建手动图片动作工作流(deps);
+
+        await workflow.generateNpcSecretPartImage('npc_childlike', '胸部');
+
+        expect(deps.执行NPC香闺秘档部位生图).not.toHaveBeenCalled();
+        expect(deps.推送右下角提示).toHaveBeenCalledWith(expect.objectContaining({
+            title: '私密特写未启用',
+            message: '角色真实年龄或明确视觉年龄不满足成人私密生图要求。'
         }));
     });
 });
