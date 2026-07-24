@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,21 +11,28 @@ import {
 
 describe('Quark APK upload', () => {
     it('uploads a local APK file to encoded Quark paths with curl', () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'moran-quark-upload-test-'));
+        const apkPath = path.join(tempDir, 'fixture.apk');
+        fs.writeFileSync(apkPath, 'apk');
         const calls: string[][] = [];
         const spawnImpl = vi.fn((_command, args: string[]) => {
             calls.push(args);
             return { status: 0, stdout: JSON.stringify({ code: 200 }), stderr: '' };
         });
 
-        uploadApkFileToOpenListWithCurl({
-            apkPath: 'android/app/build/outputs/apk/release/app-release.apk',
-            versionName: '1.0.627',
-            targetRoot: '/夸克/MoRanJiangHu/releases',
-            baseUrl: 'https://openlist.example',
-            authToken: 'token',
-            timeoutMs: 1000,
-            spawnImpl
-        });
+        try {
+            uploadApkFileToOpenListWithCurl({
+                apkPath,
+                versionName: '1.0.627',
+                targetRoot: '/夸克/MoRanJiangHu/releases',
+                baseUrl: 'https://openlist.example',
+                authToken: 'token',
+                timeoutMs: 1000,
+                spawnImpl
+            });
+        } finally {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        }
 
         expect(calls).toHaveLength(2);
         const filePathHeaders = calls.map((args) => String(args.find((arg) => arg.startsWith('File-Path: '))));
