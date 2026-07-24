@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildQuarkTvApkRedirect } from '../functions/api/apk/_shared';
+import { onRequestGet as onLatestApkRequestGet } from '../functions/api/apk/latest.apk';
+import { onRequestGet as onVersionedApkRequestGet } from '../functions/api/apk/version/[file]';
 
 describe('Quark TV APK redirect', () => {
     afterEach(() => {
@@ -96,5 +98,102 @@ describe('Quark TV APK redirect', () => {
 
         expect(fetchMock).toHaveBeenCalledTimes(2);
         expect(response?.headers.get('Location')).toContain('?sign=fallback-sign');
+    });
+
+    it('uses Quark TV by default for latest APK requests', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            code: 200,
+            data: { content: [{ name: 'latest.apk', is_dir: false, sign: 'latest-sign' }] }
+        }), { status: 200 })));
+
+        const response = await onLatestApkRequestGet({
+            request: new Request('https://msjh.bacon159.pp.ua/api/apk/latest.apk'),
+            env: {
+                MORAN_OPENLIST_AUTH_TOKEN: 'token',
+                RELEASE_MANIFEST: {
+                    get: async () => ({ latest: { versionName: '1.0.627', versionCode: 627 } })
+                }
+            }
+        } as any);
+
+        expect(response.status).toBe(302);
+        expect(response.headers.get('X-Moran-Apk-Source')).toBe('quark-tv');
+    });
+
+    it('falls back to OneDrive when Quark TV is unavailable', async () => {
+        const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+            const path = JSON.parse(String(init?.body || '{}')).path;
+            const content = path === '/Onedrive/MoRanJiangHu/releases'
+                ? [{ name: 'latest.apk', is_dir: false, sign: 'onedrive-sign' }]
+                : [];
+            return new Response(JSON.stringify({ code: 200, data: { content } }), { status: 200 });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await onLatestApkRequestGet({
+            request: new Request('https://msjh.bacon159.pp.ua/api/apk/latest.apk'),
+            env: {
+                MORAN_OPENLIST_AUTH_TOKEN: 'token',
+                RELEASE_MANIFEST: {
+                    get: async () => ({
+                        latest: {
+                            versionName: '1.0.627',
+                            versionCode: 627,
+                            preferredApkProvider: 'quark-tv'
+                        }
+                    })
+                }
+            }
+        } as any);
+
+        expect(response.status).toBe(302);
+        expect(response.headers.get('X-Moran-Apk-Source')).toBe('onedrive-proxy');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns 503 when no default APK provider can build a response', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            code: 200,
+            data: { content: [] }
+        }), { status: 200 })));
+
+        const response = await onLatestApkRequestGet({
+            request: new Request('https://msjh.bacon159.pp.ua/api/apk/latest.apk'),
+            env: {
+                MORAN_OPENLIST_AUTH_TOKEN: 'token',
+                RELEASE_MANIFEST: { get: async () => ({ latest: {} }) }
+            }
+        } as any);
+
+        expect(response.status).toBe(503);
+        expect(await response.text()).toContain('providers are unavailable');
+    });
+
+    it('uses Quark TV for a versioned APK request', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            code: 200,
+            data: {
+                content: [{
+                    name: 'MoRanJiangHu-v1.0.627.apk',
+                    is_dir: false,
+                    sign: 'versioned-sign'
+                }]
+            }
+        }), { status: 200 })));
+
+        const response = await onVersionedApkRequestGet({
+            request: new Request('https://msjh.bacon159.pp.ua/api/apk/version/MoRanJiangHu-v1.0.627.apk'),
+            params: { file: 'MoRanJiangHu-v1.0.627.apk' },
+            env: {
+                MORAN_OPENLIST_AUTH_TOKEN: 'token',
+                RELEASE_MANIFEST: {
+                    get: async () => ({ latest: { versionName: '1.0.627', versionCode: 627 } })
+                }
+            }
+        } as any);
+
+        expect(response.status).toBe(302);
+        expect(response.headers.get('X-Moran-Apk-Source')).toBe('quark-tv');
+        expect(response.headers.get('Location')).toContain('MoRanJiangHu-v1.0.627.apk?sign=versioned-sign');
     });
 });

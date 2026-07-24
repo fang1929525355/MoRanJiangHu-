@@ -1,16 +1,12 @@
 import {
     APK_CORS_HEADERS,
-    buildGitHubApkRedirect,
-    buildGitHubRawApkRedirect,
     buildVersionedApkFileName,
-    buildOneDriveApkRedirect,
     buildTextResponse,
-    isOneDriveDirectProvider,
-    isOneDriveProvider,
     readManifestPayload,
     readManifestPreferredApkProvider,
     readManifestVersionName,
 } from '../_shared';
+import { resolveApkDownload } from '../_providerRouter';
 
 export function onRequestOptions(): Response {
     return new Response(null, { status: 204, headers: APK_CORS_HEADERS });
@@ -39,39 +35,19 @@ const handleVersionedApkRequest = async (context: any, _method: 'GET' | 'HEAD'):
         }
 
         const requestedProvider = new URL(request.url).searchParams.get('provider');
-        const provider = requestedProvider || readManifestPreferredApkProvider(manifest?.payload);
-        if (provider === 'b2') {
+        if (requestedProvider === 'b2') {
             return buildTextResponse('B2 APK provider is decommissioned', 410);
         }
-        if (isOneDriveProvider(provider)) {
-            const oneDriveResponse = await buildOneDriveApkRedirect(
-                env,
-                fileName,
-                undefined,
-                isOneDriveDirectProvider(provider) ? 'direct' : 'public'
-            );
-            if (oneDriveResponse) return oneDriveResponse;
-            return buildTextResponse('OneDrive APK not available', 502);
-        }
-        if (provider === 'github') {
-            const accelerator = typeof env?.MORAN_GITHUB_RELEASE_ACCELERATOR === 'string'
-                ? env.MORAN_GITHUB_RELEASE_ACCELERATOR
-                : undefined;
-            const githubResponse = buildGitHubApkRedirect(versionName, fileName, undefined, accelerator);
-            if (githubResponse) return githubResponse;
-            return buildTextResponse('GitHub Release APK not available', 502);
-        }
-        if (provider === 'github-raw') {
-            const accelerator = typeof env?.MORAN_GITHUB_RAW_ACCELERATOR === 'string'
-                ? env.MORAN_GITHUB_RAW_ACCELERATOR
-                : undefined;
-            const githubRawResponse = buildGitHubRawApkRedirect(fileName, undefined, accelerator);
-            if (githubRawResponse) return githubRawResponse;
-            return buildTextResponse('GitHub Raw APK not available', 502);
-        }
-        const githubRawResponse = buildGitHubRawApkRedirect(fileName);
-        if (githubRawResponse) return githubRawResponse;
-        return buildTextResponse('GitHub Raw APK not available', 502);
+        const resolved = await resolveApkDownload({
+            env,
+            requestedProvider,
+            preferredProvider: readManifestPreferredApkProvider(manifest?.payload),
+            versionName,
+            storageFileName: fileName,
+            downloadFileName: fileName
+        });
+        if (resolved) return resolved.response;
+        return buildTextResponse('APK download providers are unavailable', 503);
     } catch (error: any) {
         return buildTextResponse(error?.message || 'Versioned APK download failed', 502);
     }

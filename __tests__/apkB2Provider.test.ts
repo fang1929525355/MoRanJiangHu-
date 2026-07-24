@@ -4,6 +4,45 @@ import { onRequestGet } from '../functions/api/apk/version/[file]';
 import { onRequestGet as onLatestApkRequestGet } from '../functions/api/apk/latest.apk';
 
 describe('APK B2 provider', () => {
+    it('uses Quark TV for latest.apk when the manifest does not declare a provider', async () => {
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = (async () => new Response(JSON.stringify({
+            code: 200,
+            data: {
+                content: [
+                    { name: 'latest.apk', is_dir: false, sign: 'default-provider-token' }
+                ]
+            }
+        }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        })) as typeof fetch;
+
+        try {
+            const response = await onLatestApkRequestGet({
+                request: new Request('https://msjh.bacon159.pp.ua/api/apk/latest.apk'),
+                env: {
+                    MORAN_OPENLIST_AUTH_TOKEN: 'test-token',
+                    MORAN_OPENLIST_BASE_URL: 'https://openlist.bacon.de5.net',
+                    RELEASE_MANIFEST: {
+                        get: async () => ({
+                            latest: {
+                                versionCode: 628,
+                                versionName: '1.0.628'
+                            }
+                        })
+                    }
+                }
+            } as any);
+
+            expect(response.status).toBe(302);
+            expect(response.headers.get('Location')).toBe('https://openlist.bacon.de5.net/d/%E5%A4%B8%E5%85%8BTV/MoRanJiangHu/releases/latest.apk?sign=default-provider-token');
+            expect(response.headers.get('X-Moran-Apk-Source')).toBe('quark-tv');
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
     it('rejects explicit B2 provider requests because B2 is decommissioned', async () => {
         const response = await onRequestGet({
             request: new Request('https://msjh.bacon159.pp.ua/api/apk/version/MoRanJiangHu-v1.0.523.apk?provider=b2'),
