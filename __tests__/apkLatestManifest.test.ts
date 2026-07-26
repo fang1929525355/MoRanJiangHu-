@@ -140,4 +140,25 @@ describe('APK latest manifest proxy', () => {
         );
         expect(payload.latest.apkUrls.some((url: string) => url.includes('provider=b2'))).toBe(false);
     });
+
+    it('publishes the VPS direct URL first when preferredApkProvider is vps', async () => {
+        const response = await onRequestGet({
+            request: buildRequest(),
+            env: buildEnv({
+                versionName: '1.0.629',
+                versionCode: 629,
+                preferredApkProvider: 'vps'
+            })
+        } as any);
+
+        expect(response.status).toBe(200);
+        const payload = await response.json();
+
+        expect(payload.latest.preferredApkProvider).toBe('vps');
+        expect(payload.latest.vpsApkUrl).toBe('https://moranjianghu.bacon159.pp.ua/latest.apk');
+        expect(payload.latest.apkUrls[1]).toBe(payload.latest.vpsApkUrl);
+        expect(payload.latest.apkUrls.indexOf(payload.latest.vpsApkUrl)).toBeLessThan(
+            payload.latest.apkUrls.indexOf(payload.latest.quarkTvApkUrl)
+        );
+    });
 });

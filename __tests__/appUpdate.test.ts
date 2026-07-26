@@ -235,4 +235,39 @@ describe('appUpdate native APK download', () => {
         expect(click).toHaveBeenCalledTimes(1);
         expect(revokeObjectURL).toHaveBeenCalledWith('blob:https://msjh.bacon159.pp.ua/apk');
     });
+
+    it('downloads the web APK from the VPS origin when opened on the VPS backup domain', async () => {
+        nativeRuntimeMock.native = false;
+        vi.stubGlobal('window', {
+            location: { href: 'https://moranjianghu.bacon159.pp.ua/' },
+            confirm: vi.fn(() => true),
+            alert: vi.fn(),
+            setTimeout: vi.fn((callback: () => void) => {
+                callback();
+                return 1;
+            })
+        });
+        const link: Record<string, any> = { click: vi.fn(), remove: vi.fn(), style: {} };
+        vi.stubGlobal('document', {
+            body: { appendChild: vi.fn() },
+            createElement: vi.fn(() => link)
+        });
+        vi.stubGlobal('URL', Object.assign(URL, {
+            createObjectURL: vi.fn(() => 'blob:https://moranjianghu.bacon159.pp.ua/apk'),
+            revokeObjectURL: vi.fn()
+        }));
+        const fetchMock = vi.fn(async () => new Response(new Uint8Array([0x50, 0x4b, 0x03, 0x04]), {
+            status: 200,
+            headers: { 'Content-Type': 'application/vnd.android.package-archive' }
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const { downloadLatestApkPackage } = await import('../services/appUpdate');
+        await downloadLatestApkPackage();
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            'https://moranjianghu.bacon159.pp.ua/api/apk/latest.apk',
+            expect.objectContaining({ method: 'GET' })
+        );
+    });
 });

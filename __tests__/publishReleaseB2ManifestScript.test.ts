@@ -5,11 +5,14 @@ import { describe, expect, it } from 'vitest';
 const scriptPath = path.join(process.cwd(), 'scripts', 'publish-release-b2.mjs');
 
 describe('release publish manifest script', () => {
-    it('uploads and verifies Quark before publishing a Quark-first manifest', () => {
+    it('verifies VPS before publishing a VPS-first manifest', () => {
         const source = readFileSync(scriptPath, 'utf8');
 
         expect(source).not.toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'hi168')");
-        expect(source).toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'quark-tv')");
+        expect(source).toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'vps')");
+        expect(source).toContain("MORAN_VPS_APK_BASE_URL || 'https://moranjianghu.bacon159.pp.ua'");
+        expect(source).toContain('vpsUrl: providerApkUrls.vps');
+        expect(source).toContain('vpsApkUrl: providerApkUrls.vps');
         expect(source).toContain("targetRoot: '/夸克/MoRanJiangHu/releases'");
         expect(source).toContain("downloadRoot: '/夸克TV/MoRanJiangHu/releases'");
         expect(source).toContain('providerApkUrls.quarkTv');

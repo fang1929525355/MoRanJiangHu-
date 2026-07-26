@@ -164,7 +164,7 @@ const resolveBrowserApkDownloadUrl = (rawUrl: string): string => {
     const base = typeof window !== 'undefined' ? window.location.href : 'https://msjh.bacon159.pp.ua';
     const current = new URL(base);
     const target = new URL(rawUrl, current.href);
-    if (/^(msjh\.bacon159\.pp\.ua|msjh\.bacon\.de5\.net)$/i.test(current.hostname)) {
+    if (/^(msjh\.bacon159\.pp\.ua|msjh\.bacon\.de5\.net|moranjianghu\.bacon159\.pp\.ua)$/i.test(current.hostname)) {
         target.protocol = current.protocol;
         target.host = current.host;
         const versionMatch = target.pathname.match(/\/MoRanJiangHu-v([^/?#]+\.apk)$/i);
@@ -371,6 +371,7 @@ const installUpdateInNativeApp = async (manifest: UpdateManifest) => {
     const getChannelLabel = (url: string): string => {
         const lower = url.toLowerCase();
         if (lower.includes('provider=quark-tv') || lower.includes('/d/%e5%a4%b8%e5%85%8btv/')) return '夸克TV';
+        if (lower.includes('moranjianghu.bacon159.pp.ua')) return 'VPS';
         if (lower.includes('provider=github-raw') || lower.includes('cloudflare-proxy-6rw.pages.dev/https://raw.githubusercontent.com') || lower.includes('raw.githubusercontent.com/ypq123456789/moranjianghu/apk-dist')) return 'GitHub Raw加速';
         if (lower.includes('provider=github') || lower.includes('objects.githubusercontent.com') || lower.includes('github.com/ypq123456789/moranjianghu/releases')) return 'GitHub';
         if (lower.includes('provider=b2') || lower.includes('backblazeb2.com') || lower.includes('obs.bacon159.pp.ua')) return 'B2';

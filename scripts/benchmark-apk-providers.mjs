@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,6 +11,8 @@ const releaseInfo = JSON.parse(fs.readFileSync(path.join(rootDir, 'release.confi
 const websiteBaseUrl = String(process.env.MORAN_RELEASE_BENCHMARK_BASE_URL || releaseInfo.websiteUrl || '').replace(/\/+$/, '');
 const versionedFileName = `MoRanJiangHu-v${releaseInfo.versionName}.apk`;
 const githubDirectUrl = `https://github.com/ypq123456789/MoRanJiangHu/releases/download/v${releaseInfo.versionName}/${versionedFileName}`;
+const githubRawUrl = `https://raw.githubusercontent.com/ypq123456789/moranjianghu-apk/main/releases/${versionedFileName}`;
+const vpsBaseUrl = String(process.env.MORAN_VPS_APK_BASE_URL || 'https://moranjianghu.bacon159.pp.ua').replace(/\/+$/, '');
 const outputDir = path.join(rootDir, 'output');
 fs.mkdirSync(outputDir, { recursive: true });
 
@@ -19,14 +22,14 @@ if (!websiteBaseUrl) {
 
 const providers = [
   {
-    provider: 'b2',
-    label: 'B2 (obs1.bacon159.pp.ua)',
-    url: `${websiteBaseUrl}/api/apk/version/${encodeURIComponent(versionedFileName)}?provider=b2`
+    provider: 'vps',
+    label: 'VPS 直连',
+    url: `${vpsBaseUrl}/latest.apk`
   },
   {
-    provider: 'onenode',
-    label: 'CDN (Worker → B2)',
-    url: `${websiteBaseUrl}/api/apk/version/${encodeURIComponent(versionedFileName)}`
+    provider: 'quark-tv',
+    label: '夸克 TV',
+    url: `${websiteBaseUrl}/api/apk/latest.apk?provider=quark-tv`
   },
   {
     provider: 'github-proxy',
@@ -38,6 +41,21 @@ const providers = [
     label: 'GitHub (直连)',
     url: githubDirectUrl
   },
+  {
+    provider: 'github-raw',
+    label: 'GitHub Raw',
+    url: githubRawUrl
+  },
+  {
+    provider: 'github-raw-cf',
+    label: 'GitHub Raw (CF 加速)',
+    url: `https://ghfast.top/${githubRawUrl}`
+  },
+  ...['https://gh.ddlc.top', 'https://gh-proxy.com', 'https://gh-proxy.ygxz.in', 'https://ghfast.top'].map((baseUrl) => ({
+    provider: `github-accelerator-${new URL(baseUrl).hostname}`,
+    label: `GitHub 加速 (${new URL(baseUrl).hostname})`,
+    url: `${baseUrl}/${githubDirectUrl}`
+  })),
   {
     provider: 'onedrive',
     label: 'OneDrive (OpenList 代理)',
@@ -52,6 +70,7 @@ const providers = [
 
 const timeoutMs = Math.max(1000, Number(process.env.MORAN_APK_PROVIDER_BENCHMARK_TIMEOUT_MS || 120000));
 const expectedSize = Number(process.env.MORAN_APK_PROVIDER_BENCHMARK_EXPECTED_SIZE || 0);
+const expectedSha256 = String(process.env.MORAN_APK_PROVIDER_BENCHMARK_EXPECTED_SHA256 || '').trim().toLowerCase();
 
 const download = async ({ provider, label, url }) => {
   const target = path.join(outputDir, `apk-provider-benchmark-${provider}.apk`);
@@ -73,6 +92,10 @@ const download = async ({ provider, label, url }) => {
   if (expectedSize > 0 && bytes.byteLength !== expectedSize) {
     throw new Error(`${label} size mismatch: got ${bytes.byteLength}, expected ${expectedSize}`);
   }
+  const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+  if (expectedSha256 && sha256 !== expectedSha256) {
+    throw new Error(`${label} SHA-256 mismatch: got ${sha256}, expected ${expectedSha256}`);
+  }
   return {
     provider,
     label,
@@ -80,6 +103,7 @@ const download = async ({ provider, label, url }) => {
     bytes: bytes.byteLength,
     elapsedMs: Math.round(elapsedMs),
     mbps: Number(((bytes.byteLength * 8) / 1024 / 1024 / (elapsedMs / 1000)).toFixed(2)),
+    sha256,
     output: target
   };
 };
@@ -101,7 +125,7 @@ for (const provider of providers) {
 const successful = results
   .filter((item) => !item.error)
   .sort((a, b) => b.mbps - a.mbps);
-const preferredApkProvider = successful[0]?.provider || 'b2';
+const preferredApkProvider = successful[0]?.provider || 'quark-tv';
 
 // ── 格式化输出表格 ──
 const labelWidth = Math.max(...providers.map(p => p.label.length), 10);

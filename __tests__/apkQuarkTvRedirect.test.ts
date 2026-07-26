@@ -120,7 +120,7 @@ describe('Quark TV APK redirect', () => {
         expect(response.headers.get('X-Moran-Apk-Source')).toBe('quark-tv');
     });
 
-    it('falls back to OneDrive when Quark TV is unavailable', async () => {
+    it('falls back to VPS when Quark TV is unavailable', async () => {
         const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
             const path = JSON.parse(String(init?.body || '{}')).path;
             const content = path === '/Onedrive/MoRanJiangHu/releases'
@@ -147,11 +147,12 @@ describe('Quark TV APK redirect', () => {
         } as any);
 
         expect(response.status).toBe(302);
-        expect(response.headers.get('X-Moran-Apk-Source')).toBe('onedrive-proxy');
-        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(response.headers.get('X-Moran-Apk-Source')).toBe('vps');
+        expect(response.headers.get('location')).toBe('https://moranjianghu.bacon159.pp.ua/latest.apk');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it('returns 503 when no default APK provider can build a response', async () => {
+    it('keeps VPS as the final direct fallback when API-backed providers are unavailable', async () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
             code: 200,
             data: { content: [] }
@@ -165,8 +166,9 @@ describe('Quark TV APK redirect', () => {
             }
         } as any);
 
-        expect(response.status).toBe(503);
-        expect(await response.text()).toContain('providers are unavailable');
+        expect(response.status).toBe(302);
+        expect(response.headers.get('X-Moran-Apk-Source')).toBe('vps');
+        expect(response.headers.get('location')).toBe('https://moranjianghu.bacon159.pp.ua/latest.apk');
     });
 
     it('uses Quark TV for a versioned APK request', async () => {

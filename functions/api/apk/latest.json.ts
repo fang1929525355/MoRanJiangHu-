@@ -63,6 +63,7 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
             : `${baseUrl}/api/apk/latest.apk`;
         const stableManifestUrl = `${baseUrl}/api/apk/latest.json`;
         const latestApkUrl = `${baseUrl}/api/apk/latest.apk`;
+        const vpsApkUrl = 'https://moranjianghu.bacon159.pp.ua/latest.apk';
         const quarkTvApkUrl = `${baseUrl}/api/apk/latest.apk?provider=quark-tv`;
         const oneDriveApkUrl = `${baseUrl}/api/apk/latest.apk?provider=onedrive`;
         const oneDriveDirectApkUrl = `${baseUrl}/api/apk/latest.apk?provider=onedrive-direct`;
@@ -77,13 +78,16 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
         const githubRawDirectApkUrl = versionedFileName ? buildGitHubRawDownloadUrl(versionedFileName) : '';
         const githubRawAcceleratedApkUrl = githubRawDirectApkUrl ? `${DEFAULT_GITHUB_RAW_ACCELERATOR}/${githubRawDirectApkUrl}` : '';
         const preferredApkProvider = readManifestPreferredApkProvider(payload);
-        // 按 preferredApkProvider 排序候选源：B2 渠道已废弃，默认优先夸克 TV。
+        // 按 preferredApkProvider 排序候选源；B2 渠道已废弃。
+        const vpsGroup = [vpsApkUrl];
         const quarkGroup = [quarkTvApkUrl];
         const githubGroup = [...githubAcceleratedApkUrls, githubApkUrl, githubDirectApkUrl];
         const githubRawGroup = [githubRawAcceleratedApkUrl, githubRawApkUrl, githubRawDirectApkUrl];
         const oneDriveGroup = [oneDriveApkUrl, oneDriveDirectApkUrl];
         let providerOrderedUrls: string[];
-        if (preferredApkProvider === 'quark-tv') {
+        if (preferredApkProvider === 'vps') {
+            providerOrderedUrls = [...vpsGroup, ...quarkGroup, ...oneDriveGroup, ...githubGroup, ...githubRawGroup];
+        } else if (preferredApkProvider === 'quark-tv') {
             providerOrderedUrls = [...quarkGroup, ...oneDriveGroup, ...githubGroup, ...githubRawGroup];
         } else if (preferredApkProvider === 'onedrive' || preferredApkProvider === 'onedrive-direct') {
             providerOrderedUrls = [...oneDriveGroup, ...quarkGroup, ...githubRawGroup, ...githubGroup];
@@ -109,6 +113,7 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
                 r2ApkUrl: '',
                 hi168ApkUrl: '',
                 b2ApkUrl: '',
+                vpsApkUrl,
                 quarkTvApkUrl,
                 githubApkUrl,
                 githubDirectApkUrl,

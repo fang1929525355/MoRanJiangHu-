@@ -13,7 +13,7 @@ export const readEnvString = (env: any, name: string, fallback = ''): string => 
     typeof env?.[name] === 'string' && env[name].trim() ? env[name].trim() : fallback
 );
 
-export type ApkProvider = 'quark-tv' | 'r2' | 'hi168' | 'b2' | 'github' | 'github-raw' | 'onedrive' | 'onedrive-direct' | 'onedrive-origin';
+export type ApkProvider = 'vps' | 'quark-tv' | 'r2' | 'hi168' | 'b2' | 'github' | 'github-raw' | 'onedrive' | 'onedrive-direct' | 'onedrive-origin';
 
 export const readReleaseBaseUrl = (request: Request, env: any): string => {
     const configured = readEnvString(env, 'MORAN_RELEASE_BASE_URL');
@@ -141,7 +141,7 @@ export const buildVersionedApkFileName = (versionName: unknown): string => {
 
 export const readManifestPreferredApkProvider = (payload: any): ApkProvider => {
     const provider = payload?.latest?.preferredApkProvider || payload?.preferredApkProvider;
-    return provider === 'quark-tv' || provider === 'github' || provider === 'github-raw' || provider === 'onedrive' || provider === 'onedrive-direct' || provider === 'onedrive-origin'
+    return provider === 'vps' || provider === 'quark-tv' || provider === 'github' || provider === 'github-raw' || provider === 'onedrive' || provider === 'onedrive-direct' || provider === 'onedrive-origin'
         ? provider
         : 'quark-tv';
 };
@@ -419,6 +419,26 @@ export const buildQuarkTvApkRedirect = async (
             'Cache-Control': cacheControl,
             'Content-Disposition': `attachment; filename="${downloadFileName}"`,
             'X-Moran-Apk-Source': 'quark-tv',
+            ...APK_CORS_HEADERS
+        }
+    });
+};
+
+export const buildVpsApkRedirect = (
+    env: any,
+    storageFileName: string,
+    downloadFileName: string,
+    cacheControl = APK_LATEST_CACHE_CONTROL
+): Response => {
+    const baseUrl = readEnvString(env, 'MORAN_VPS_APK_BASE_URL', 'https://moranjianghu.bacon159.pp.ua').replace(/\/+$/, '');
+    return new Response(null, {
+        status: 302,
+        headers: {
+            Location: `${baseUrl}/${encodeURIComponent(storageFileName)}`,
+            'Content-Type': 'application/vnd.android.package-archive',
+            'Cache-Control': cacheControl,
+            'Content-Disposition': `attachment; filename="${downloadFileName}"`,
+            'X-Moran-Apk-Source': 'vps',
             ...APK_CORS_HEADERS
         }
     });

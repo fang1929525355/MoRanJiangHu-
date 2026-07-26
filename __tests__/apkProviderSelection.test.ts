@@ -98,4 +98,36 @@ describe('APK provider selection helper', () => {
 
         expect(provider).toBe('github-raw');
     });
+
+    it('keeps VPS as preferred only after the remote APK passes validation', async () => {
+        const bytes = Buffer.from('published-vps-apk');
+        const apkSha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+        const provider = await resolvePreferredApkProvider({
+            requestedProvider: 'vps',
+            vpsUrl: 'https://moranjianghu.bacon159.pp.ua/latest.apk',
+            apkSize: bytes.byteLength,
+            apkSha256,
+            fetchImpl: vi.fn().mockResolvedValue(new Response(bytes, { status: 200 })),
+            timeoutMs: 1000,
+            logger: { warn: vi.fn() }
+        });
+
+        expect(provider).toBe('vps');
+    });
+
+    it('falls back to Quark TV when the VPS APK fails validation', async () => {
+        const warn = vi.fn();
+        const provider = await resolvePreferredApkProvider({
+            requestedProvider: 'vps',
+            vpsUrl: 'https://moranjianghu.bacon159.pp.ua/latest.apk',
+            apkSize: 123,
+            apkSha256: 'a'.repeat(64),
+            fetchImpl: vi.fn().mockResolvedValue(new Response('Not Found', { status: 404 })),
+            timeoutMs: 1000,
+            logger: { warn }
+        });
+
+        expect(provider).toBe('quark-tv');
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('VPS'));
+    });
 });

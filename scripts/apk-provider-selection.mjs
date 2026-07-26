@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 export const DEFAULT_APK_PROVIDER = 'quark-tv';
 
 const SUPPORTED_APK_PROVIDERS = new Set([
+  'vps',
   'quark-tv',
   'github-raw',
   'onedrive',
@@ -70,6 +71,7 @@ export const verifyRemoteApk = async ({
 
 export const resolvePreferredApkProvider = async ({
   requestedProvider,
+  vpsUrl,
   githubRawUrl,
   apkSize,
   apkSha256,
@@ -80,17 +82,18 @@ export const resolvePreferredApkProvider = async ({
   const normalizedProvider = SUPPORTED_APK_PROVIDERS.has(requestedProvider)
     ? requestedProvider
     : DEFAULT_APK_PROVIDER;
-  if (normalizedProvider !== 'github-raw') return normalizedProvider;
+  if (normalizedProvider !== 'github-raw' && normalizedProvider !== 'vps') return normalizedProvider;
 
   const verification = await verifyRemoteApk({
-    url: githubRawUrl,
+    url: normalizedProvider === 'vps' ? vpsUrl : githubRawUrl,
     expectedSize: apkSize,
     expectedSha256: apkSha256,
     fetchImpl,
     timeoutMs
   });
-  if (verification.ok) return 'github-raw';
+  if (verification.ok) return normalizedProvider;
 
-  logger?.warn?.(`[APK provider] GitHub Raw validation failed; falling back to Quark TV: ${verification.reason}`);
+  const label = normalizedProvider === 'vps' ? 'VPS' : 'GitHub Raw';
+  logger?.warn?.(`[APK provider] ${label} validation failed; falling back to Quark TV: ${verification.reason}`);
   return DEFAULT_APK_PROVIDER;
 };

@@ -1,5 +1,6 @@
 import {
     APK_LATEST_CACHE_CONTROL,
+    buildVpsApkRedirect,
     buildGitHubApkRedirect,
     buildGitHubRawApkRedirect,
     buildOneDriveApkRedirect,
@@ -8,7 +9,7 @@ import {
     isOneDriveProvider
 } from './_shared';
 
-export type ResolvedApkProvider = 'quark-tv' | 'onedrive' | 'onedrive-direct' | 'github' | 'github-raw';
+export type ResolvedApkProvider = 'vps' | 'quark-tv' | 'onedrive' | 'onedrive-direct' | 'github' | 'github-raw';
 
 export type ResolveApkDownloadInput = {
     env: any;
@@ -26,6 +27,7 @@ export type ResolvedApkDownload = {
 };
 
 const DEFAULT_PROVIDER_ORDER: ResolvedApkProvider[] = [
+    'vps',
     'quark-tv',
     'onedrive',
     'github',
@@ -37,6 +39,14 @@ const buildProviderResponse = async (
     input: ResolveApkDownloadInput
 ): Promise<Response | null> => {
     const cacheControl = input.cacheControl || APK_LATEST_CACHE_CONTROL;
+    if (provider === 'vps') {
+        return buildVpsApkRedirect(
+            input.env,
+            input.storageFileName,
+            input.downloadFileName,
+            cacheControl
+        );
+    }
     if (provider === 'quark-tv') {
         return buildQuarkTvApkRedirect(
             input.env,
