@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolvePreferredApkProvider } from './apk-provider-selection.mjs';
-import { uploadApkToOpenList, verifyOpenListApkFiles } from './upload-apk-onedrive.mjs';
+import { uploadApkFileToOpenListWithCurl, verifyOpenListApkFiles } from './upload-apk-onedrive.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -175,8 +175,8 @@ const openListBaseUrl = readEnv('MORAN_OPENLIST_BASE_URL', 'https://openlist.bac
 const openListAuthToken = readEnv('MORAN_OPENLIST_AUTH_TOKEN');
 const openListUploadTimeoutMs = Math.max(1000, Number(readEnv('MORAN_OPENLIST_UPLOAD_TIMEOUT_MS', '600000')));
 
-await uploadApkToOpenList({
-  apkBytes: currentApkBuffer,
+uploadApkFileToOpenListWithCurl({
+  apkPath,
   versionName: currentVersionName,
   targetRoot: '/夸克/MoRanJiangHu/releases',
   baseUrl: openListBaseUrl,
