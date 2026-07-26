@@ -615,5 +615,5 @@
     "备用站：https://msjh.bacon.de5.net/"
   ],
   "notes": "修复 VPS 备用站点击 APK 下载后提示 Failed to fetch 的问题，现在可直接正常下载。\n根据国内无代理环境完整 APK 实测，将 VPS 设为首选下载渠道；夸克、OneDrive 和 GitHub 等渠道继续提供自动回退。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-07-27T00:05:18+08:00"
+  "releasePublishedAt": "2026-07-27T00:07:28+08:00"
 }
