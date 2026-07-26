@@ -11,7 +11,9 @@ const releaseInfo = JSON.parse(fs.readFileSync(path.join(rootDir, 'release.confi
 const websiteBaseUrl = String(process.env.MORAN_RELEASE_BENCHMARK_BASE_URL || releaseInfo.websiteUrl || '').replace(/\/+$/, '');
 const versionedFileName = `MoRanJiangHu-v${releaseInfo.versionName}.apk`;
 const githubDirectUrl = `https://github.com/ypq123456789/MoRanJiangHu/releases/download/v${releaseInfo.versionName}/${versionedFileName}`;
-const githubRawUrl = `https://raw.githubusercontent.com/ypq123456789/moranjianghu-apk/main/releases/${versionedFileName}`;
+const githubRawRepo = String(process.env.MORAN_GITHUB_RAW_REPO || 'ypq123456789/MoRanJiangHu').trim();
+const githubRawBranch = String(process.env.MORAN_GITHUB_RAW_BRANCH || 'apk-dist').trim();
+const githubRawUrl = `https://raw.githubusercontent.com/${githubRawRepo}/${githubRawBranch}/releases/${versionedFileName}`;
 const vpsBaseUrl = String(process.env.MORAN_VPS_APK_BASE_URL || 'https://moranjianghu.bacon159.pp.ua').replace(/\/+$/, '');
 const outputDir = path.join(rootDir, 'output');
 fs.mkdirSync(outputDir, { recursive: true });
