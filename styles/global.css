@@ -1899,6 +1899,136 @@ html[data-theme="day"] .right-panel-bottom-fade {
   will-change: transform, opacity;
 }
 
+@media (min-width: 768px) and (max-height: 800px) {
+  .desktop-game-frame {
+    min-height: 0;
+  }
+
+  .desktop-game-main {
+    min-height: 0;
+  }
+
+  .desktop-game-topbar {
+    height: 48px !important;
+    min-height: 48px !important;
+  }
+
+  .desktop-game-topbar > .hidden.md\:flex {
+    padding-left: 3.5rem !important;
+    padding-right: 3.5rem !important;
+  }
+
+  .desktop-game-topbar > .hidden.md\:flex > .absolute.left-1\/2 {
+    top: -5px !important;
+  }
+
+  .desktop-game-topbar-date-card {
+    margin-top: 0.25rem !important;
+    min-width: 210px !important;
+    padding: 0.25rem 1.25rem !important;
+  }
+
+  .desktop-game-status-badges {
+    top: 0.5rem !important;
+  }
+
+  .app-play-mode-badge,
+  .app-main-model-badge {
+    display: none !important;
+  }
+
+  .desktop-quick-actions {
+    max-height: min(128px, 18vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.5rem !important;
+    scrollbar-gutter: stable;
+    touch-action: pan-y !important;
+    cursor: default !important;
+  }
+
+  .desktop-quick-actions-list {
+    min-width: 0 !important;
+    justify-content: center;
+    gap: 0.35rem !important;
+  }
+
+  .desktop-quick-action-button {
+    min-width: 88px !important;
+    max-width: min(100%, 260px);
+    white-space: normal !important;
+    padding: 0.25rem 0.6rem !important;
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0.04em !important;
+  }
+
+  .right-panel-body {
+    padding: 0.35rem !important;
+  }
+
+  .right-panel-system-header {
+    height: 46px !important;
+    margin-bottom: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+  }
+
+  .right-panel-system-header h1 {
+    font-size: 16px !important;
+    letter-spacing: 0.18em !important;
+  }
+
+  .right-panel-system-header > div:not(.absolute) {
+    font-size: 9px !important;
+  }
+
+  .right-panel-menu-frame {
+    gap: 0.25rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .right-panel-menu-scroll {
+    overflow-y: auto;
+    padding: 0.35rem !important;
+    scrollbar-width: thin;
+  }
+
+  .right-panel-menu-scroll > button {
+    min-height: 27px;
+    padding: 0.2rem 0.35rem !important;
+    border-width: 1px !important;
+  }
+
+  .right-panel-menu-scroll > button + button {
+    margin-top: 0.3rem !important;
+  }
+
+  .right-panel-menu-scroll > button span {
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    letter-spacing: 0.06em !important;
+  }
+
+  .right-panel-system-actions {
+    margin-top: 0.35rem !important;
+    padding-top: 0.35rem !important;
+  }
+
+  .right-panel-system-button {
+    padding-top: 0.15rem !important;
+    padding-bottom: 0.15rem !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .desktop-game-bottom-ticker {
+    height: 30px !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+}
+
 @media (min-width: 768px) {
   :root {
     --desktop-game-top: 75px;
@@ -2562,5 +2692,13 @@ html[data-theme="day"] .right-panel-bottom-fade {
   .desktop-right-detail-modal--fullscreen .right-detail-map-list-items > button {
     width: 100% !important;
     flex: 0 0 auto !important;
+  }
+}
+
+/* Keep short desktop detail panels aligned with the compact top and bottom chrome. */
+@media (min-width: 768px) and (max-height: 800px) {
+  :root {
+    --desktop-game-top: 60px;
+    --desktop-game-bottom: 46px;
   }
 }

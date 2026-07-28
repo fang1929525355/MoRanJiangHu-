@@ -3152,7 +3152,7 @@ const App: React.FC = () => {
             {state.view === 'game' && (
                 <ModalErrorBoundary title="主界面渲染失败">
                 {/* Main Game Frame Container */}
-                <div className={`relative flex-1 flex flex-col w-full h-full overflow-hidden bg-ink-black ${isMobile ? 'rounded-none shadow-none' : 'rounded-2xl shadow-2xl'}`}>
+                <div className={`desktop-game-frame relative flex-1 flex flex-col w-full h-full min-h-0 overflow-hidden bg-ink-black ${isMobile ? 'rounded-none shadow-none' : 'rounded-2xl shadow-2xl'}`}>
                     {isMobile && (
                         <div className="absolute right-2 top-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+10px)] z-[90] flex flex-col gap-1.5">
                             <button
@@ -3204,7 +3204,7 @@ const App: React.FC = () => {
                     </div>
 
                     {/* 中间主要互动区域 */}
-                    <div className={`flex-1 flex overflow-hidden relative z-10 ${isMobile ? 'mx-0 mb-0' : 'mx-1 mb-1'}`}>
+                    <div className={`desktop-game-main flex-1 min-h-0 flex overflow-hidden relative z-10 ${isMobile ? 'mx-0 mb-0' : 'mx-1 mb-1'}`}>
                         
                         {/* 左侧栏 */}
                         <div className="hidden md:block w-[14.285714%] h-full relative z-20 bg-ink-black/95 border-r border-wuxia-gold/20 flex flex-col shadow-[10px_0_20px_rgba(0,0,0,0.5)]">
@@ -3235,7 +3235,7 @@ const App: React.FC = () => {
                                     chatContentHidden ? 'opacity-0' : 'opacity-100'
                                 }`}
                             ></div>
-                              <div className={isMobile ? 'fixed right-2 top-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+72px)] z-[91] flex items-center gap-2' : 'absolute right-3 top-3 z-30 flex items-center gap-2'}>
+                              <div className={`desktop-game-status-badges ${isMobile ? 'fixed right-2 top-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+72px)] z-[91] flex items-center gap-2' : 'absolute right-3 top-3 z-30 flex items-center gap-2'}`}>
                                   <div
                                       className={`app-play-mode-badge hidden items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] shadow-[0_8px_20px_rgba(0,0,0,0.35)] backdrop-blur sm:inline-flex ${
                                           currentCloudPlayMode === 'object'
@@ -3249,7 +3249,7 @@ const App: React.FC = () => {
                                       {playModeLabel}
                                   </div>
                                   <div
-                                      className="hidden max-w-[360px] items-center truncate rounded-full border border-wuxia-gold/40 bg-black/65 px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] text-wuxia-gold shadow-[0_8px_20px_rgba(0,0,0,0.35)] backdrop-blur sm:inline-flex"
+                                      className="app-main-model-badge hidden max-w-[360px] items-center truncate rounded-full border border-wuxia-gold/40 bg-black/65 px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] text-wuxia-gold shadow-[0_8px_20px_rgba(0,0,0,0.35)] backdrop-blur sm:inline-flex"
                                       title={mainStoryApiLabel}
                                   >
                                       <span className="truncate">{mainStoryApiLabel}</span>
@@ -3589,7 +3589,7 @@ const App: React.FC = () => {
 
                     {!hideBottomTicker && (
                         <div
-                            className="hidden md:flex shrink-0 h-[37px] bg-ink-black/90 border-t border-wuxia-gold/20 justify-between px-4 items-center font-mono text-wuxia-gold-dark z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.8)] relative rounded-b-xl mx-1 mb-1 overflow-hidden"
+                            className="desktop-game-bottom-ticker hidden md:flex shrink-0 h-[37px] bg-ink-black/90 border-t border-wuxia-gold/20 justify-between px-4 items-center font-mono text-wuxia-gold-dark z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.8)] relative rounded-b-xl mx-1 mb-1 overflow-hidden"
                             style={{ fontSize: 'var(--ui-compact-mono-font-size, 12px)' }}
                         >
                             <button type="button" onClick={openWorld} className="shrink-0 text-wuxia-gold font-bold mr-2 z-20 bg-ink-black/90 px-2 flex items-center h-full border-r border-gray-800 text-transparent relative hover:bg-wuxia-gold/10 transition-colors cursor-pointer">
