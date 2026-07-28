@@ -1,6 +1,6 @@
 import { GameResponse } from '../../types';
 import { 规范化对白日志 } from '../../utils/dialogueLogNormalizer';
-import { 是否可信正文标签发送者, 规范化正文发送者名 } from '../../utils/dialogueSpeakerGuard';
+import { 是否可信正文标签发送者, 是否疑似叙事说话人提取候选, 规范化正文发送者名 } from '../../utils/dialogueSpeakerGuard';
 import { 拆分判定日志与后续正文, 提取判定日志前缀, 是否判定日志文本 } from '../../utils/judgmentFormat';
 import { 提取并清理Judge区块 } from '../../utils/judgeBlockExtractor';
 import { parseJsonWithRepair } from '../../utils/jsonRepair';
@@ -1178,13 +1178,13 @@ const 正文引号闭合表: Record<string, string> = {
     '"': '"'
 };
 
-const 提取无标签动作行人物名 = (line: string): string => {
+const 提取无标签动作行人物名 = (line: string, declaredNames?: Set<string>): string => {
     const text = (line || '').trim();
     for (let length = 4; length >= 2; length -= 1) {
         const name = text.slice(0, length);
         const rest = text.slice(length);
         if (!/^[\u4e00-\u9fff]{2,4}$/.test(name)) continue;
-        if (无标签非人名短语正则.test(name)) continue;
+        if (无标签非人名短语正则.test(name) || 是否疑似叙事说话人提取候选(name, { declaredNames })) continue;
         if (/[冷苦轻]$/.test(name) && /^笑/.test(rest)) continue;
         if (无标签人物动作动词正则.test(rest)) return name;
     }
@@ -1200,7 +1200,7 @@ const 是否像无标签口语行 = (line: string): boolean => {
     return 无标签口语起始正则.test(text) || /[？?！!]$/.test(text) || /(?:吧|吗|呢|啊|罢|了)$/.test(text);
 };
 
-const 提取显式说话引号人物名 = (line: string): string => {
+const 提取显式说话引号人物名 = (line: string, declaredNames?: Set<string>): string => {
     const source = (line || '').trim();
     const quoteIndex = source.search(/[“"「『]/);
     const prefix = quoteIndex >= 0 ? source.slice(0, quoteIndex) : source;
@@ -1213,7 +1213,8 @@ const 提取显式说话引号人物名 = (line: string): string => {
     }
     if (actionSpeaker) {
         const sender = 规范化日志发送者(actionSpeaker.replace(/[负收抬回点看盯望站坐走停俯侧拱抱伸皱沉笑低转放握按举落扬垂敛挑拔推扶拂掠倚跪躬作朝向对把将声]$/u, ''));
-        if (是否可信正文标签发送者(sender, { allowUnknownName: true })) return sender;
+        if (是否疑似叙事说话人提取候选(sender, { declaredNames })) return '';
+        if (是否可信正文标签发送者(sender, { allowUnknownName: true, declaredNames })) return sender;
     }
 
     const match = source.match(显式说话引号正则);
@@ -1223,7 +1224,8 @@ const 提取显式说话引号人物名 = (line: string): string => {
         .filter(Boolean)
         .pop() || '';
     const sender = 规范化日志发送者(rawSpeaker);
-    if (!是否可信正文标签发送者(sender, { allowUnknownName: true })) return '';
+    if (是否疑似叙事说话人提取候选(sender, { declaredNames })) return '';
+    if (!是否可信正文标签发送者(sender, { allowUnknownName: true, declaredNames })) return '';
     return sender;
 };
 
@@ -1304,7 +1306,7 @@ const 检测正文对白格式问题 = (body: string, declaredNames?: Set<string
                 return `正文第${index + 1}行包含高频套话「${stalePhrase}」，必须局部重写该句，避免“指节/指关节/手指/拳头泛白”类描写`;
             }
             if (sender === '旁白') {
-                const quotedSpeaker = 提取显式说话引号人物名(text);
+                const quotedSpeaker = 提取显式说话引号人物名(text, declaredNames);
                 if (quotedSpeaker) return `疑似角色「${quotedSpeaker}」的对白写在【旁白】行内`;
             } else {
                 const trailingNarration = 提取首段正文引号对白余文(text);
@@ -1347,12 +1349,12 @@ const 检测正文对白格式问题 = (body: string, declaredNames?: Set<string
             return `疑似角色「${colonLine.sender}」的对白使用了冒号格式，必须改为【${colonLine.sender}】开头`;
         }
 
-        const quotedSpeaker = 提取显式说话引号人物名(line);
+        const quotedSpeaker = 提取显式说话引号人物名(line, declaredNames);
         if (quotedSpeaker) {
             return `疑似角色「${quotedSpeaker}」的对白嵌在旁白引号中，没有使用【角色名】标签`;
         }
 
-        const actionSpeaker = 提取无标签动作行人物名(line);
+        const actionSpeaker = 提取无标签动作行人物名(line, declaredNames);
         const nextLine = lines[index + 1] || '';
         if (actionSpeaker && (是否像无标签口语行(nextLine) || 裸引号整行正则.test(nextLine))) {
             return `疑似角色「${actionSpeaker}」的对白没有使用【角色名】标签`;

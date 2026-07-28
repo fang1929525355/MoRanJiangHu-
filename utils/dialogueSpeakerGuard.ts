@@ -4,6 +4,8 @@ import { 姓名含已知中文姓氏 } from './chineseName';
 const 转义正则文本 = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const 泛称或非角色标签正则 = /^(?:旁白|奖励|系统|玩家|我|你|他|她|它|我们|你们|他们|她们|有人|无人|众人|众弟子|众门人|众侍从|众士卒|所有人|全场|人群|群声|齐声|对方|那人|这人|此人|男子|女子|少年|少女|老人|老者|汉子|侍女|侍从|弟子|门人|店小二|声音|语气|目光|视线|眼神|空气|雨声|风声|脚步声|灯光|夜色|晨光)$/;
+const 明显叙事连接词前缀正则 = /^(?:而是|但是|可是|不过|于是|因此|所以|因为|并非|却是|反而)/;
+const 叙事连接词后续成分正则 = /^(?:他|她|它|我|你|其|这|那|便|就|又|才|也|还|仍|再|却|我们|你们|他们|她们|它们|自己|这个|那个|这些|那些|此人|这人|那人|有人|众人|大家|对方)$/;
 const 明显叙事短语起始正则 = /^(?:随着|伴随|当他|当她|当你|当我|如果|若是|只是|这是|那是|这个|那个|这种|那种|此时|这时|随后|然后|接着|同时|终于|突然|忽然|仍然|已经|开始|继续|至于|关于|听起来|看起来|说起来|带来|带来的|传来|传来的|映入|落在|压在|来自|所有|全场|一切|空气|雨声|风声|灯光|夜色|晨光|脚步|声音|带来的)/;
 const 叙事动作词正则 = /(?:摇头|点头|皱眉|叹息|沉默|冷笑|苦笑|轻笑|发笑|开口|说道|说着|问道|答道|喝道|喊道|提醒|解释|望向|看向|盯着|看着|望着|瞥向|注视|抬头|低头|回头|转身|上前|退后|伸手|抬手|握住|按住|放下|拿起|推开|打开|走到|来到|回到|站在|坐在|停下|落在|映在|传来|带来|听起来|看起来)/;
 const 结构或句子符号正则 = /[，,。！？!?；;：:\n\r\t<>]|[“”"「」『』]/;
@@ -67,10 +69,27 @@ export const 是否疑似叙事短语标签 = (senderRaw: string): boolean => {
     if (sender.length > 6) return true;
     if (泛称或非角色标签正则.test(sender)) return true;
     if (身体部位或物件标签正则.test(sender)) return true;
+    if (sender.match(明显叙事连接词前缀正则)?.[0] === sender) return true;
     if (明显叙事短语起始正则.test(sender)) return true;
     if (叙事动作词正则.test(sender)) return true;
     if (sender.length >= 3 && 明显正文片段正则.test(sender) && !是否像中文姓名(sender)) return true;
     return false;
+};
+
+export const 是否疑似叙事说话人提取候选 = (
+    senderRaw: string,
+    options?: { declaredNames?: Set<string> }
+): boolean => {
+    const sender = 规范化正文发送者名(senderRaw);
+    if (是否疑似叙事短语标签(sender)) return true;
+
+    const connective = sender.match(明显叙事连接词前缀正则)?.[0] || '';
+    if (!connective) return false;
+    if (options?.declaredNames?.has(sender)) return false;
+
+    const suffix = sender.slice(connective.length);
+    if (叙事连接词后续成分正则.test(suffix)) return true;
+    return !是否像中文姓名(sender);
 };
 
 export const 是否可信角色发送者 = (
