@@ -1,14 +1,26 @@
 {
-  "versionCode": 629,
-  "versionName": "1.0.629",
+  "versionCode": 630,
+  "versionName": "1.0.630",
   "releaseChannel": "stable",
   "releaseNotes": [
-    "修复 VPS 备用站点击 APK 下载后提示 Failed to fetch 的问题，现在可直接正常下载。",
-    "根据国内无代理环境完整 APK 实测，将 VPS 设为首选下载渠道；夸克、OneDrive 和 GitHub 等渠道继续提供自动回退。",
+    "修复正文校验偶尔把“而是”“于是他”“而是他们”等普通叙事短语误判为人物的问题。",
+    "正文内容正常时，现在可以直接使用自动修复应用或手动编辑后应用，无需重新生成整段剧情。",
+    "同时保护“于是之”等真实姓名，并继续拦截真正缺少【角色名】标签的对白。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
   "releaseHistory": [
+    {
+      "versionName": "1.0.629",
+      "versionCode": 629,
+      "releasePublishedAt": "2026-07-27T00:07:28+08:00",
+      "releaseNotes": [
+        "修复 VPS 备用站点击 APK 下载后提示 Failed to fetch 的问题，现在可直接正常下载。",
+        "根据国内无代理环境完整 APK 实测，将 VPS 设为首选下载渠道；夸克、OneDrive 和 GitHub 等渠道继续提供自动回退。",
+        "官网：https://msjh.bacon159.pp.ua/",
+        "备用站：https://msjh.bacon.de5.net/"
+      ]
+    },
     {
       "versionName": "1.0.628",
       "versionCode": 628,
@@ -609,11 +621,12 @@
   "multiDeviceSyncGuideUrl": "https://msjh.bacon159.pp.ua/tutorials.html#sync",
   "tutorialsUrl": "https://msjh.bacon159.pp.ua/tutorials.html",
   "changes": [
-    "修复 VPS 备用站点击 APK 下载后提示 Failed to fetch 的问题，现在可直接正常下载。",
-    "根据国内无代理环境完整 APK 实测，将 VPS 设为首选下载渠道；夸克、OneDrive 和 GitHub 等渠道继续提供自动回退。",
+    "修复正文校验偶尔把“而是”“于是他”“而是他们”等普通叙事短语误判为人物的问题。",
+    "正文内容正常时，现在可以直接使用自动修复应用或手动编辑后应用，无需重新生成整段剧情。",
+    "同时保护“于是之”等真实姓名，并继续拦截真正缺少【角色名】标签的对白。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
-  "notes": "修复 VPS 备用站点击 APK 下载后提示 Failed to fetch 的问题，现在可直接正常下载。\n根据国内无代理环境完整 APK 实测，将 VPS 设为首选下载渠道；夸克、OneDrive 和 GitHub 等渠道继续提供自动回退。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-07-27T00:07:28+08:00"
+  "notes": "修复正文校验偶尔把“而是”“于是他”“而是他们”等普通叙事短语误判为人物的问题。\n正文内容正常时，现在可以直接使用自动修复应用或手动编辑后应用，无需重新生成整段剧情。\n同时保护“于是之”等真实姓名，并继续拦截真正缺少【角色名】标签的对白。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
+  "releasePublishedAt": "2026-07-28T20:40:37+08:00"
 }
