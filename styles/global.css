@@ -1922,7 +1922,7 @@ html[data-theme="day"] .right-panel-bottom-fade {
     top: -5px !important;
   }
 
-  .desktop-game-topbar > .hidden.md\:flex > .absolute.left-1\/2 > div:last-child {
+  .desktop-game-topbar-date-card {
     margin-top: 0.25rem !important;
     min-width: 210px !important;
     padding: 0.25rem 1.25rem !important;

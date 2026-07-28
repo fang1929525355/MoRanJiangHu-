@@ -680,7 +680,7 @@ const TopBar: React.FC<Props> = ({ 环境, 游戏初始时间, timeFormat, festi
                         <div className="w-[2px] h-7 md:h-8 bg-gradient-to-b from-wuxia-gold/40 to-black"></div>
                         <div className="w-[2px] h-7 md:h-8 bg-gradient-to-b from-wuxia-gold/40 to-black"></div>
                     </div>
-                    <div onClick={toggleFullScreen} className="mt-0 md:mt-2 bg-[#111]/95 border border-wuxia-gold/25 md:border-2 md:border-double md:border-wuxia-gold/50 px-2 md:px-8 py-0.5 md:py-2 rounded-md md:rounded-lg shadow-[0_8px_18px_rgba(0,0,0,0.55)] relative flex flex-col items-center min-w-[104px] md:min-w-[240px] max-w-[118px] md:max-w-none transform md:hover:scale-105 transition-transform duration-500 pointer-events-none md:pointer-events-auto cursor-default md:cursor-pointer">
+                    <div onClick={toggleFullScreen} className="desktop-game-topbar-date-card mt-0 md:mt-2 bg-[#111]/95 border border-wuxia-gold/25 md:border-2 md:border-double md:border-wuxia-gold/50 px-2 md:px-8 py-0.5 md:py-2 rounded-md md:rounded-lg shadow-[0_8px_18px_rgba(0,0,0,0.55)] relative flex flex-col items-center min-w-[104px] md:min-w-[240px] max-w-[118px] md:max-w-none transform md:hover:scale-105 transition-transform duration-500 pointer-events-none md:pointer-events-auto cursor-default md:cursor-pointer">
                         <div className="hidden md:block absolute top-1 left-1 w-2 h-2 border-t border-l border-wuxia-gold/50"></div>
                         <div className="hidden md:block absolute top-1 right-1 w-2 h-2 border-t border-r border-wuxia-gold/50"></div>
                         <div className="hidden md:block absolute bottom-1 left-1 w-2 h-2 border-b border-l border-wuxia-gold/50"></div>
