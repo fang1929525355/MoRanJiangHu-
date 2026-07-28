@@ -327,6 +327,51 @@ describe('storyResponseParser', () => {
         }]);
     });
 
+    it('does not treat a connective-led action line as the speaker of following first-person narration', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '而是看着水面上倒映的烛火，久久没有动作。',
+            '我并不打算把这份沉默解释成软弱。',
+            '</正文>',
+            '<短期记忆>烛火映在水面，气氛沉默。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: true });
+
+        expect(parsed.logs).toEqual([{
+            sender: '旁白',
+            text: '而是看着水面上倒映的烛火，久久没有动作。\n我并不打算把这份沉默解释成软弱。'
+        }]);
+    });
+
+    it('does not treat a connective plus pronoun action line as a dialogue speaker', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '而是他看着水面上倒映的烛火，久久没有动作。',
+            '我并不打算把这份沉默解释成软弱。',
+            '</正文>',
+            '<短期记忆>烛火映在水面，气氛沉默。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: true });
+
+        expect(parsed.logs).toEqual([{
+            sender: '旁白',
+            text: '而是他看着水面上倒映的烛火，久久没有动作。\n我并不打算把这份沉默解释成软弱。'
+        }]);
+    });
+
+    it('does not treat a connective plus plural pronoun action line as a dialogue speaker', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '而是他们看着水面上倒映的烛火，久久没有动作。',
+            '我不会再解释了。',
+            '</正文>',
+            '<短期记忆>众人看着水面，气氛沉默。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: true });
+
+        expect(parsed.logs).toEqual([{
+            sender: '旁白',
+            text: '而是他们看着水面上倒映的烛火，久久没有动作。\n我不会再解释了。'
+        }]);
+    });
+
     it('rejects an empty body protocol tag followed by bare Xiaomi MiMo prose', () => {
         expect(() => parseStoryRawText([
             '<正文>',
@@ -374,6 +419,28 @@ describe('storyResponseParser', () => {
         ]);
     });
 
+    it('keeps a real name that starts with a narrative connective as a dialogue speaker', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【于是之】“台上见真章。”',
+            '</正文>',
+            '<短期记忆>于是之约定台上较量。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: true });
+
+        expect(parsed.logs).toEqual([
+            { sender: '于是之', text: '“台上见真章。”' }
+        ]);
+    });
+
+    it('still rejects unlabeled quoted dialogue from a real name that starts with a connective', () => {
+        expect(() => parseStoryRawText([
+            '<正文>',
+            '【旁白】于是之放下茶盏，抬眼开口：“台上见真章。”',
+            '</正文>',
+            '<短期记忆>于是之约定台上较量。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: true })).toThrow(/疑似角色「于是之」/);
+    });
+
     it('accepts known four-character in-scene speaker tags as dialogue turns', () => {
         const parsed = parseStoryRawText([
             '<正文>',
@@ -390,6 +457,16 @@ describe('storyResponseParser', () => {
             { sender: '阿卡菲尔', text: '我已经在这里等你很久了。' },
             { sender: '旁白', text: '雨声压过窗棂。' }
         ]);
+    });
+
+    it('rejects quoted dialogue from a declared four-character speaker embedded in narration', () => {
+        expect(() => parseStoryRawText([
+            '<角色名单>阿卡菲尔</角色名单>',
+            '<正文>',
+            '【旁白】阿卡菲尔放下茶盏，抬眼开口：“台上见真章。”',
+            '</正文>',
+            '<短期记忆>阿卡菲尔约定台上较量。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: true })).toThrow(/疑似角色「阿卡菲尔」/);
     });
 
     it('rejects a speaker tag on its own line so the model must repair the body format', () => {
@@ -472,6 +549,36 @@ describe('storyResponseParser', () => {
         ].join('\n'), { validateDialogueFormat: true });
 
         expect(parsed.logs.map(log => log.text).join('\n')).toContain('time: 9月上旬');
+    });
+
+    it('does not mistake narrative connectives before quoted speech for character names', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【旁白】苏辰没有急着饮茶，而是看着水面上倒映出的烛火，沉默片刻后开口：“凡儿这孩子，心思太重。”',
+            '</正文>',
+            '<短期记忆>苏辰谈起凡儿。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: true });
+
+        expect(parsed.logs).toEqual([
+            {
+                sender: '旁白',
+                text: '苏辰没有急着饮茶，而是看着水面上倒映出的烛火，沉默片刻后开口：“凡儿这孩子，心思太重。”'
+            }
+        ]);
+    });
+
+    it('does not mistake a connective plus pronoun before quoted speech for a character name', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【旁白】于是他看着水面，沉默片刻后开口：“此事不可。”',
+            '</正文>',
+            '<短期记忆>他拒绝了此事。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: true });
+
+        expect(parsed.logs).toEqual([{
+            sender: '旁白',
+            text: '于是他看着水面，沉默片刻后开口：“此事不可。”'
+        }]);
     });
 
     it('still rejects likely unlabeled oral dialogue during strict parsing', () => {
