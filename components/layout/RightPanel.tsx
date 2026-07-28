@@ -176,7 +176,7 @@ const RightPanel: React.FC<Props> = ({
                     <div className="right-panel-menu-corner absolute bottom-0 left-0 w-2 h-2 border-b border-l border-gray-600"></div>
                     <div className="right-panel-menu-corner absolute bottom-0 right-0 w-2 h-2 border-b border-r border-gray-600"></div>
                 </div>
-                <div className="p-2.5 space-y-2 h-full overflow-y-auto no-scrollbar relative z-10">
+                <div className="right-panel-menu-scroll p-2.5 space-y-2 h-full overflow-y-auto no-scrollbar relative z-10">
                     {menuItems.map((item) => {
                         const changeKeys = Array.isArray((item as any).changeKeys) ? (item as any).changeKeys as string[] : [];
                         const hasUnreadChange = changeKeys.some((key) => latestChangedSections.includes(key) && !dismissedChangeKeys.has(key));
@@ -196,7 +196,7 @@ const RightPanel: React.FC<Props> = ({
                     );})}
                 </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-gray-800 space-y-1.5 shrink-0">
+            <div className="right-panel-system-actions mt-3 pt-3 border-t border-gray-800 space-y-1.5 shrink-0">
                 {systemItems.map((item) => (
                     <button
                         key={item.label}

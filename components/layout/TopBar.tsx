@@ -562,7 +562,7 @@ const TopBar: React.FC<Props> = ({ 环境, 游戏初始时间, timeFormat, festi
     ];
 
     return (
-        <div className="w-full relative overflow-visible z-[230] bg-[#000] pt-[var(--app-safe-top,env(safe-area-inset-top,0px))] md:h-[58px] md:min-h-[58px] md:pt-0" style={{ color: topBarStyle.color, fontFamily: topBarStyle.fontFamily, fontStyle: topBarStyle.fontStyle }}>
+        <div className="desktop-game-topbar w-full relative overflow-visible z-[230] bg-[#000] pt-[var(--app-safe-top,env(safe-area-inset-top,0px))] md:h-[58px] md:min-h-[58px] md:pt-0" style={{ color: topBarStyle.color, fontFamily: topBarStyle.fontFamily, fontStyle: topBarStyle.fontStyle }}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-ink-black via-wuxia-gold/40 to-ink-black"></div>
 
             <div className="md:hidden fixed left-2 top-[calc(var(--app-safe-top,env(safe-area-inset-top,0px))+60px)] z-[88] flex items-start gap-2 pointer-events-auto">
