@@ -1102,7 +1102,6 @@ const InputArea: React.FC<Props> = ({
                 <div
                     ref={quickActionsRef}
                     className="desktop-quick-actions w-full px-2 md:px-4 pb-0 overflow-x-auto no-scrollbar select-none cursor-grab active:cursor-grabbing"
-                    style={{ touchAction: 'pan-y' }}
                     onPointerDown={handleQuickActionsPointerDown}
                     onPointerMove={handleQuickActionsPointerMove}
                     onPointerUp={endQuickActionsDrag}

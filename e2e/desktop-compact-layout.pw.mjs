@@ -365,6 +365,7 @@ test('390×844 移动端继续使用横向行动选项且无页面横向溢出',
             quickScrollWidth: quick?.scrollWidth || 0,
             quickOverflowX: quickStyle?.overflowX || '',
             quickOverflowY: quickStyle?.overflowY || '',
+            quickTouchAction: quickStyle?.touchAction || '',
             quickMaxHeight: quickStyle?.maxHeight || '',
             topbarHeight: topbar?.getBoundingClientRect().height || 0,
             tickerDisplay: ticker ? getComputedStyle(ticker).display : '',
@@ -373,6 +374,7 @@ test('390×844 移动端继续使用横向行动选项且无页面横向溢出',
 
     expect(layout.bodyOverflowX).toBeLessThanOrEqual(1);
     expect(layout.quickOverflowX).toBe('auto');
+    expect(layout.quickTouchAction).toBe('pan-x');
     expect(layout.quickMaxHeight).toBe('none');
     expect(layout.quickScrollWidth).toBeGreaterThan(layout.quickClientWidth);
     expect(layout.topbarHeight).not.toBe(48);

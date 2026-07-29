@@ -1900,6 +1900,15 @@ html[data-theme="day"] .right-panel-bottom-fade {
 }
 
 /*
+ * Mobile baseline: the quick-actions row is a single horizontally-scrolling strip
+ * (overflow-x-auto + flex-nowrap). Allow horizontal pan so touch users can swipe the
+ * option chips left/right. Desktop (>=768px) overrides this with pan-y below.
+ */
+.desktop-quick-actions {
+  touch-action: pan-x;
+}
+
+/*
  * Desktop game layout — baseline quick-actions constraints for ALL desktop resolutions
  * (min-width: 768px). Prevents long option lists (e.g. 10+ choices) from consuming
  * the entire game viewport and squeezing out the story narrative area.
