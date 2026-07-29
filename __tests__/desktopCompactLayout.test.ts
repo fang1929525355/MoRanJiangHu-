@@ -42,6 +42,24 @@ describe('低高度桌面端紧凑布局', () => {
         expect(topBar).toContain('desktop-game-topbar-date-card');
     });
 
+    it('为所有桌面分辨率（≥768px）提供选项区域滚动和换行基线', () => {
+        const css = read('styles/global.css');
+
+        // 基线媒体查询：仅 min-width 约束，不限制 height
+        expect(css).toMatch(/@media\s*\(min-width:\s*768px\)\s*\{/);
+        expect(css).toMatch(/\.desktop-quick-actions\s*\{[^}]*max-height:\s*min\(220px,\s*30vh\);/s);
+        expect(css).toMatch(/\.desktop-quick-actions\s*\{[^}]*overflow-y:\s*auto;/s);
+        expect(css).toMatch(/\.desktop-quick-action-button\s*\{[^}]*white-space:\s*normal;/s);
+        expect(css).toMatch(/\.desktop-quick-action-button\s*\{[^}]*max-width:\s*min\(100%,\s*320px\);/s);
+        expect(css).toMatch(/\.desktop-quick-actions-list\s*\{[^}]*flex-wrap:\s*wrap;/s);
+
+        // 基线块必须位于短屏覆盖块之前
+        const baselineIndex = css.indexOf('@media (min-width: 768px) {');
+        const compactIndex = css.indexOf('@media (min-width: 768px) and (max-height: 800px)');
+        expect(baselineIndex).toBeGreaterThanOrEqual(0);
+        expect(compactIndex).toBeGreaterThan(baselineIndex);
+    });
+
     it('在不超过 800px 高的桌面视口启用独立滚动和紧凑尺寸', () => {
         const css = read('styles/global.css');
 
