@@ -226,36 +226,129 @@ test('1366×768 桌面端保持正文、选项和菜单均可用', async ({ page
     });
 });
 
-test('1366×900 常规桌面端不误用短屏压缩规则', async ({ page }) => {
+test('1366×900 常规桌面端应用基线选项约束（非短屏压缩）', async ({ page }) => {
     await loadCompactGame(page, { width: 1366, height: 900 });
+
+    const quickActions = page.locator('.desktop-quick-actions');
+    await expect(quickActions).toBeVisible();
 
     const layout = await page.evaluate(() => {
         const quick = document.querySelector('.desktop-quick-actions');
         const topbar = document.querySelector('.desktop-game-topbar');
         const ticker = document.querySelector('.desktop-game-bottom-ticker');
         const playModeBadge = document.querySelector('.app-play-mode-badge');
+        const firstOption = document.querySelector('.desktop-quick-action-button');
         const rootStyle = getComputedStyle(document.documentElement);
         const quickStyle = quick ? getComputedStyle(quick) : null;
+        const firstOptionStyle = firstOption ? getComputedStyle(firstOption) : null;
         return {
             bodyOverflowX: document.documentElement.scrollWidth - window.innerWidth,
             desktopGameTop: rootStyle.getPropertyValue('--desktop-game-top').trim(),
             desktopGameBottom: rootStyle.getPropertyValue('--desktop-game-bottom').trim(),
             quickMaxHeight: quickStyle?.maxHeight || '',
+            quickOverflowY: quickStyle?.overflowY || '',
             quickTouchAction: quickStyle?.touchAction || '',
+            quickClientHeight: quick?.clientHeight || 0,
+            quickScrollHeight: quick?.scrollHeight || 0,
             topbarHeight: topbar?.getBoundingClientRect().height || 0,
             tickerHeight: ticker?.getBoundingClientRect().height || 0,
             playModeDisplay: playModeBadge ? getComputedStyle(playModeBadge).display : '',
+            firstOptionWhiteSpace: firstOptionStyle?.whiteSpace || '',
+            firstOptionMaxWidth: firstOptionStyle?.maxWidth || '',
         };
     });
 
     expect(layout.bodyOverflowX).toBeLessThanOrEqual(1);
+    // 1366×900 不在 <800px 短屏范围内，使用默认的 top/bottom CSS 变量
     expect(layout.desktopGameTop).toBe('75px');
     expect(layout.desktopGameBottom).toBe('57px');
-    expect(layout.quickMaxHeight).toBe('none');
-    expect(layout.quickTouchAction).toBe('pan-x');
+
+    // 基线规则应对所有 ≥768px 生效：有 max-height、overflow-y:auto、pan-y
+    expect(layout.quickMaxHeight).not.toBe('none');
+    expect(layout.quickMaxHeight).toMatch(/220px|30vh/);
+    expect(layout.quickOverflowY).toBe('auto');
+    expect(layout.quickTouchAction).toBe('pan-y');
+
+    // 18 条选项应超出基线 max-height，触发滚动
+    expect(layout.quickScrollHeight).toBeGreaterThan(layout.quickClientHeight);
+
+    // 非短屏：badge 可见，topbar/ticker 用常规尺寸
     expect(layout.topbarHeight).toBe(58);
     expect(layout.tickerHeight).toBe(37);
     expect(layout.playModeDisplay).not.toBe('none');
+
+    // 按钮文本应可换行，且有合理最大宽度
+    expect(layout.firstOptionWhiteSpace).toBe('normal');
+    expect(layout.firstOptionMaxWidth).not.toBe('none');
+});
+
+test('1920×1080 全高清桌面端选项区域不侵占正文', async ({ page }) => {
+    await loadCompactGame(page, { width: 1920, height: 1080 });
+
+    const quickActions = page.locator('.desktop-quick-actions');
+    await expect(quickActions).toBeVisible();
+    await expect(page.locator('.desktop-quick-action-button')).toHaveCount(compactOptions.length);
+
+    const layout = await page.evaluate(() => {
+        const quick = document.querySelector('.desktop-quick-actions');
+        const gameMain = document.querySelector('.desktop-game-main');
+        const topbar = document.querySelector('.desktop-game-topbar');
+        const ticker = document.querySelector('.desktop-game-bottom-ticker');
+        const firstOption = document.querySelector('.desktop-quick-action-button');
+        const quickStyle = quick ? getComputedStyle(quick) : null;
+        const firstOptionStyle = firstOption ? getComputedStyle(firstOption) : null;
+        const rect = (el) => el?.getBoundingClientRect();
+        return {
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+            bodyOverflowX: document.documentElement.scrollWidth - window.innerWidth,
+            quick: {
+                clientHeight: quick?.clientHeight || 0,
+                scrollHeight: quick?.scrollHeight || 0,
+                maxHeight: quickStyle?.maxHeight || '',
+                overflowY: quickStyle?.overflowY || '',
+                rect: rect(quick),
+            },
+            gameMainRect: rect(gameMain),
+            topbarRect: rect(topbar),
+            tickerRect: rect(ticker),
+            firstOptionStyle: {
+                whiteSpace: firstOptionStyle?.whiteSpace || '',
+                maxWidth: firstOptionStyle?.maxWidth || '',
+                fontSize: firstOptionStyle?.fontSize || '',
+            },
+        };
+    });
+
+    // 无横向溢出
+    expect(layout.bodyOverflowX).toBeLessThanOrEqual(1);
+
+    // 基线约束生效：max-height 存在、overflow-y auto
+    expect(layout.quick.maxHeight).not.toBe('none');
+    expect(layout.quick.overflowY).toBe('auto');
+
+    // 选项区域高度不应超过视口的 ~35%（30vh + padding）
+    const maxAllowedQuickHeight = Math.ceil(layout.viewport.height * 0.35);
+    expect(layout.quick.clientHeight).toBeLessThanOrEqual(maxAllowedQuickHeight);
+
+    // 18 条长选项必须超出容器高度（触发滚动）
+    expect(layout.quick.scrollHeight).toBeGreaterThan(layout.quick.clientHeight);
+
+    // 按钮文本换行 + 合理宽度约束
+    expect(layout.firstOptionStyle.whiteSpace).toBe('normal');
+    expect(layout.firstOptionStyle.maxWidth).not.toBe('none');
+
+    // 选项区域必须在顶栏之下、底栏之上
+    expect(layout.quick.rect.top).toBeGreaterThanOrEqual(layout.topbarRect.bottom);
+    expect(layout.quick.rect.bottom).toBeLessThanOrEqual(layout.tickerRect.top + 1);
+
+    // 滚动功能验证
+    await quickActions.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await expect.poll(() => quickActions.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+
+    await page.screenshot({
+        path: 'output/playwright/desktop-1920x1080-options-layout.png',
+        fullPage: false,
+    });
 });
 
 test('390×844 移动端继续使用横向行动选项且无页面横向溢出', async ({ page }) => {

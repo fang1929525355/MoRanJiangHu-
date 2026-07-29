@@ -1102,7 +1102,7 @@ const InputArea: React.FC<Props> = ({
                 <div
                     ref={quickActionsRef}
                     className="desktop-quick-actions w-full px-2 md:px-4 pb-0 overflow-x-auto no-scrollbar select-none cursor-grab active:cursor-grabbing"
-                    style={{ touchAction: 'pan-x' }}
+                    style={{ touchAction: 'pan-y' }}
                     onPointerDown={handleQuickActionsPointerDown}
                     onPointerMove={handleQuickActionsPointerMove}
                     onPointerUp={endQuickActionsDrag}
@@ -1115,7 +1115,7 @@ const InputArea: React.FC<Props> = ({
                                 key={idx}
                                 onClick={() => handleOptionClick(opt)}
                                 disabled={loading}
-                                className="desktop-quick-action-button shrink-0 whitespace-nowrap px-3 py-1.5 bg-black/55 border border-wuxia-gold/40 text-gray-100 rounded hover:bg-wuxia-gold hover:text-ink-black hover:border-wuxia-gold transition-all text-sm sm:text-base tracking-[0.08em] shadow-sm backdrop-blur-sm min-w-[96px] sm:min-w-[112px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="desktop-quick-action-button shrink-0 px-3 py-1.5 bg-black/55 border border-wuxia-gold/40 text-gray-100 rounded hover:bg-wuxia-gold hover:text-ink-black hover:border-wuxia-gold transition-all text-sm sm:text-base tracking-[0.08em] shadow-sm backdrop-blur-sm min-w-[96px] sm:min-w-[112px] max-w-[320px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                  {opt}
                             </button>

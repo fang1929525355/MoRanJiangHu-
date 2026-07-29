@@ -1899,6 +1899,38 @@ html[data-theme="day"] .right-panel-bottom-fade {
   will-change: transform, opacity;
 }
 
+/*
+ * Desktop game layout — baseline quick-actions constraints for ALL desktop resolutions
+ * (min-width: 768px). Prevents long option lists (e.g. 10+ choices) from consuming
+ * the entire game viewport and squeezing out the story narrative area.
+ *
+ * The later (max-height: 800px) block adds MORE aggressive overrides for short screens.
+ */
+@media (min-width: 768px) {
+  .desktop-quick-actions {
+    max-height: min(220px, 30vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    touch-action: pan-y;
+    cursor: default;
+  }
+
+  .desktop-quick-actions-list {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .desktop-quick-action-button {
+    white-space: normal;
+    max-width: min(100%, 320px);
+    padding: 0.35rem 0.75rem;
+    line-height: 1.3;
+  }
+}
+
+/* Short-screen (<800px) aggressive overrides on top of the baseline above */
 @media (min-width: 768px) and (max-height: 800px) {
   .desktop-game-frame {
     min-height: 0;
