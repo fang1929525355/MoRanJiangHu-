@@ -1,15 +1,25 @@
 {
-  "versionCode": 631,
-  "versionName": "1.0.631",
+  "versionCode": 632,
+  "versionName": "1.0.632",
   "releaseChannel": "stable",
   "releaseNotes": [
-    "优化 1366×768 笔记本屏幕布局，正文区域不再被大量行动选项过度挤压。",
-    "行动选项支持独立滚动和长文本换行，按钮文字与背景对比更清晰。",
-    "短屏下的顶栏、右侧功能菜单和底部事件栏更加紧凑，常规桌面与手机布局保持原有体验。",
+    "全桌面分辨率（含 1920×1080）选项区域不再侵占正文：长选项列表自动约束高度并支持滚动。",
+    "行动按钮文本默认换行，超长选项不再把正文挤出屏幕；短屏紧凑规则继续生效。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
   "releaseHistory": [
+    {
+      "versionName": "1.0.631",
+      "versionCode": 631,
+      "releasePublishedAt": "2026-07-29T00:19:50+08:00",
+      "releaseNotes": [
+        "全桌面分辨率（含 1920×1080）选项区域不再侵占正文：长选项列表自动约束高度并支持滚动。",
+        "行动按钮文本默认换行，超长选项不再把正文挤出屏幕；短屏紧凑规则继续生效。",
+        "官网：https://msjh.bacon159.pp.ua/",
+        "备用站：https://msjh.bacon.de5.net/"
+      ]
+    },
     {
       "versionName": "1.0.630",
       "versionCode": 630,
@@ -633,12 +643,11 @@
   "multiDeviceSyncGuideUrl": "https://msjh.bacon159.pp.ua/tutorials.html#sync",
   "tutorialsUrl": "https://msjh.bacon159.pp.ua/tutorials.html",
   "changes": [
-    "优化 1366×768 笔记本屏幕布局，正文区域不再被大量行动选项过度挤压。",
-    "行动选项支持独立滚动和长文本换行，按钮文字与背景对比更清晰。",
-    "短屏下的顶栏、右侧功能菜单和底部事件栏更加紧凑，常规桌面与手机布局保持原有体验。",
+    "全桌面分辨率（含 1920×1080）选项区域不再侵占正文：长选项列表自动约束高度并支持滚动。",
+    "行动按钮文本默认换行，超长选项不再把正文挤出屏幕；短屏紧凑规则继续生效。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
-  "notes": "优化 1366×768 笔记本屏幕布局，正文区域不再被大量行动选项过度挤压。\n行动选项支持独立滚动和长文本换行，按钮文字与背景对比更清晰。\n短屏下的顶栏、右侧功能菜单和底部事件栏更加紧凑，常规桌面与手机布局保持原有体验。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-07-29T00:19:50+08:00"
+  "notes": "全桌面分辨率（含 1920×1080）选项区域不再侵占正文：长选项列表自动约束高度并支持滚动。\n行动按钮文本默认换行，超长选项不再把正文挤出屏幕；短屏紧凑规则继续生效。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
+  "releasePublishedAt": "2026-07-29T04:31:17+08:00"
 }
