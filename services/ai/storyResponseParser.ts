@@ -5,6 +5,7 @@ import { 拆分判定日志与后续正文, 提取判定日志前缀, 是否判�
 import { 提取并清理Judge区块 } from '../../utils/judgeBlockExtractor';
 import { parseJsonWithRepair } from '../../utils/jsonRepair';
 import { 是否裸标准游戏时间行, 检测裸标准游戏时间行 } from '../../utils/bodyTextSanitizer';
+import { 剥离强调标记 } from '../../utils/stateHelpers';
 
 export interface StoryParseOptions {
     validateTagCompleteness?: boolean;
@@ -1445,7 +1446,7 @@ const 清理命令包裹文本 = (input: string): string => (
 );
 
 const 解析命令值 = (rawValue: string | undefined): any => {
-    const text = 预处理命令文本((rawValue || '').trim()).trim();
+    const text = 剥离强调标记(预处理命令文本((rawValue || '').trim()).trim());
     if (!text) return null;
 
     if (

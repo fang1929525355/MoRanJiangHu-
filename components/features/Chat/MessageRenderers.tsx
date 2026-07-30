@@ -49,6 +49,8 @@ type ParsedJudgment = {
     consequence?: string;
     discovery?: string;
     modifiers: JudgmentModifier[];
+    /** 判定块内未被识别为结构化字段的自由叙事正文（如战斗描写、过程描述），需单独渲染，避免被吞掉 */
+    narrative?: string[];
 };
 
 const createEmptyJudgment = (): ParsedJudgment => ({
@@ -58,7 +60,8 @@ const createEmptyJudgment = (): ParsedJudgment => ({
     target: '自身',
     score: 0,
     difficulty: 0,
-    modifiers: []
+    modifiers: [],
+    narrative: []
 });
 
 const MODIFIER_LABELS: Record<string, string> = {
@@ -171,7 +174,7 @@ const 剥离串入正文 = (text: string): string => {
     return source;
 };
 
-const parseJudgmentText = (text: string): ParsedJudgment => {
+export const parseJudgmentText = (text: string): ParsedJudgment => {
     const parts = 剥离串入正文(text).split('｜').map(s => s.trim()).filter(Boolean);
     if (parts.length === 0) return createEmptyJudgment();
 
@@ -207,64 +210,81 @@ const parseJudgmentText = (text: string): ParsedJudgment => {
         }
     }
 
+    const narrative: string[] = [];
+
     for (let i = 1; i < parts.length; i++) {
         const part = parts[i];
-        if (isResultToken(part)) continue;
+        let matched = false;
+        if (isResultToken(part)) {
+            parsed.result = part;
+            matched = true;
+        }
 
         const targetMatch = part.match(/^(?:触发对象\s+|触发对象[:：]\s*|判定角色\s+|判定角色[:：]\s*|对象[:：]\s*)(.+)$/);
         if (targetMatch) {
             parsed.target = targetMatch[1].trim() || parsed.target;
+            matched = true;
             continue;
         }
         const scoreDiffMatch = part.match(/^判定值\s*([+\-]?\d+(?:\.\d+)?)\s*\/\s*难度\s*([+\-]?\d+(?:\.\d+)?)$/);
         if (scoreDiffMatch) {
             parsed.score = Number(scoreDiffMatch[1]);
             parsed.difficulty = Number(scoreDiffMatch[2]);
+            matched = true;
             continue;
         }
         const winnerMatch = part.match(/^胜方[:：]\s*(.+)$/);
         if (winnerMatch) {
             parsed.winner = winnerMatch[1].trim();
+            matched = true;
             continue;
         }
         const loserMatch = part.match(/^败方[:：]\s*(.+)$/);
         if (loserMatch) {
             parsed.loser = loserMatch[1].trim();
+            matched = true;
             continue;
         }
         const deltaMatch = part.match(/^差值\s*([+\-]?\d+(?:\.\d+)?)$/);
         if (deltaMatch) {
             parsed.delta = Number(deltaMatch[1]);
+            matched = true;
             continue;
         }
         const damageMatch = part.match(/^伤害值\s*([+\-]?\d+(?:\.\d+)?)$/);
         if (damageMatch) {
             parsed.damage = Number(damageMatch[1]);
+            matched = true;
             continue;
         }
         const costMatch = part.match(/^消耗[:：]\s*(.+)$/);
         if (costMatch) {
             parsed.cost = costMatch[1].trim();
+            matched = true;
             continue;
         }
         const remainingMatch = part.match(/^剩余[:：]\s*(.+)$/);
         if (remainingMatch) {
             parsed.remaining = remainingMatch[1].trim();
+            matched = true;
             continue;
         }
         const consequenceMatch = part.match(/^后果[:：]\s*(.+)$/);
         if (consequenceMatch) {
             parsed.consequence = consequenceMatch[1].trim();
+            matched = true;
             continue;
         }
         const discoveryMatch = part.match(/^发现度[:：]\s*(.+)$/);
         if (discoveryMatch) {
             parsed.discovery = discoveryMatch[1].trim();
+            matched = true;
             continue;
         }
         const modifier = parseModifier(part);
         if (modifier) {
             parsed.modifiers.push(modifier);
+            matched = true;
             continue;
         }
         if (part.startsWith('基础') || part.startsWith('境界') || part.startsWith('环境') || part.startsWith('状态') || part.startsWith('幸运') || part.startsWith('装备')) {
@@ -278,8 +298,14 @@ const parseJudgmentText = (text: string): ParsedJudgment => {
                 raw: part,
                 description: descMatch ? descMatch[1].trim() : undefined
             });
+            matched = true;
         }
+
+        // 未被识别为任何结构化字段的行，视为自由叙事正文，单独保留渲染，避免被吞掉
+        if (!matched) narrative.push(part);
     }
+
+    parsed.narrative = narrative.filter(Boolean);
 
     return parsed;
 };
@@ -1095,7 +1121,13 @@ export const JudgmentRenderer: React.FC<{ text: string; thoughtBlock?: JudgmentT
 
                     <div className="w-full flex flex-col items-center text-center">
                         <div className={`text-2xl sm:text-3xl font-black italic tracking-[0.2em] sm:tracking-[0.25em] mb-3 sm:mb-5 ${theme.successColor} drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] filter`} style={{ fontFamily: style.fontFamily }}>{result}</div>
-                        
+
+                        {parsed.narrative && parsed.narrative.length > 0 && (
+                            <div className="w-full max-w-4xl mb-4 px-4 py-3 rounded-xl border border-white/10 bg-black/40 text-left text-sm sm:text-[15px] leading-7 text-gray-200 whitespace-pre-wrap break-words font-sans">
+                                {parsed.narrative.join('\n')}
+                            </div>
+                        )}
+
                         {/* 战斗核心数值区域 */}
                         <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center max-w-full px-2 mb-4 sm:mb-5">
                             {parsed.target !== '自身' && (

@@ -53,6 +53,17 @@ type 命令结果结构 = {
 
 const 深拷贝 = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
+/**
+ * 剥离 AI 输出里常见的 markdown 强调包裹（如 `*角色.容貌*`、`_环境.天气_`、`**社交[0].姓名**`）。
+ * 当 AI 把状态命令的 key / value 用斜体或粗体包裹时，若不做剥离会导致路径匹配失败、
+ * 整条属性/变量命令被静默丢弃（玩家反馈：属性被 em 后不 roll / 不更新）。
+ */
+export const 剥离强调标记 = (raw: string): string => {
+    const text = (raw || '').trim();
+    if (!text) return text;
+    return text.replace(/^([*_~]{1,3})([\s\S]+?)\1$/u, '$2').trim();
+};
+
 const 是对象 = (value: unknown): value is Record<string, unknown> => (
     Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
@@ -101,7 +112,7 @@ export const 是否废弃世界地图字段路径 = (normalizedKey: string): boo
 };
 
 export const normalizeStateCommandKey = (rawKey: string): string => {
-    const key = 兼容值路径别名(rawKey);
+    const key = 剥离强调标记(兼容值路径别名(rawKey));
     if (!key) return '';
 
     if (key.startsWith('gameState.')) {

@@ -1245,6 +1245,7 @@ export interface 游戏设置结构 {
     启用非流式输出: boolean; // Disable streaming output, use non-streaming request instead
     启用NSFW模式: boolean; // Gate NSFW prompt and heroine privacy UI
     启用男娘NSFW内容: boolean; // Gate femboy/male NSFW archive prompts, UI, and auto secret image generation
+    启用NPC调试日志?: boolean; // 开启后输出 NPC 私密生图 / 社交规范化相关的调试日志；默认关闭，避免普通玩家被调试信息刷屏
     启用亲密边界机制: boolean; // Require consent, privacy, relationship thresholds, and character agency for intimacy
     启用饱腹口渴系统: boolean; // Toggle hunger/thirst prompt injection and UI visibility
     启用修炼体系: boolean; // Toggle cultivation/realm/kungfu prompt injection and related UI visibility

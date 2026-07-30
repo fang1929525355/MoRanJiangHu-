@@ -17,6 +17,7 @@ import { 获取展开货币系统 } from '../../utils/apiConfig';
 import { 获取境界配置, 规范化境界显示文本 as 规范化境界显示文本共享, 获取境界层级, 获取境界名称列表 } from '../../utils/realmConfig';
 import { 确保角色金钱BaseAmount, 规范化角色金钱 } from '../../utils/currencyDisplay';
 import type { 境界配置 } from '../../utils/realmConfig';
+import { NPC调试日志已启用 } from '../../utils/debugFlags';
 
 const 深拷贝 = <T,>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
 
@@ -2421,7 +2422,7 @@ const NPC占位身份疑似同一人 = (leftRaw: any, rightRaw: any): boolean =>
 
 const 社交规范化调试已启用 = (): boolean => {
     try {
-        return typeof window !== 'undefined' && window.localStorage?.getItem('DEBUG_NPC_AUTO_IMAGE') === '1';
+        return NPC调试日志已启用();
     } catch {
         return false;
     }
@@ -2429,7 +2430,11 @@ const 社交规范化调试已启用 = (): boolean => {
 
 const 输出社交规范化调试 = (message: string, payload?: any) => {
     if (!社交规范化调试已启用()) return;
-    console.info(`[SOCIAL_NORMALIZE] ${message}`, payload ?? '');
+    try {
+        console.info(`[SOCIAL_NORMALIZE] ${message}`, payload ?? '');
+    } catch {
+        /* 调试日志绝不应干扰主流程 */
+    }
 };
 
 const 选择合并后NPC姓名 = (leftRaw: any, rightRaw: any): string => {

@@ -111,6 +111,7 @@ import { 规范化游戏设置 } from '../utils/gameSettings';
 import { 规范化视觉设置 } from '../utils/visualSettings';
 import { 默认图片管理设置, 规范化图片管理设置 } from '../utils/imageManagerSettings';
 import { 规范化可选开局配置 } from '../utils/openingConfig';
+import { 设置NPC调试日志, NPC调试日志已启用 } from '../utils/debugFlags';
 import { 修复开局伙伴社交列表 } from '../utils/openingCompanion';
 import {
     构建COT伪装提示词,
@@ -637,6 +638,12 @@ export const useGame = () => {
     useEffect(() => {
         刷新NPC记忆总结队列(Array.isArray(社交) ? 社交 : [], { 静默: NPC记忆总结阶段 === 'processing' || NPC记忆总结阶段 === 'review' });
     }, [社交, memoryConfig]);
+
+    useEffect(() => {
+        // 将「NPC 调试日志」设置同步到共享开关，供私密生图 / 社交规范化调试读取。
+        // 取代原先无界面入口的 localStorage 后门，玩家可通过设置正常开关。
+        设置NPC调试日志(gameConfig?.启用NPC调试日志 === true);
+    }, [gameConfig?.启用NPC调试日志]);
 
     const 上一次回合处理中Ref = useRef(false);
     useEffect(() => {
@@ -2305,7 +2312,7 @@ export const useGame = () => {
 
     const NPC自动生图调试已启用 = (): boolean => {
         try {
-            return typeof window !== 'undefined' && window.localStorage?.getItem('DEBUG_NPC_AUTO_IMAGE') === '1';
+            return NPC调试日志已启用();
         } catch {
             return false;
         }
@@ -2313,7 +2320,11 @@ export const useGame = () => {
 
     const 输出NPC自动生图调试 = (message: string, payload?: any) => {
         if (!NPC自动生图调试已启用()) return;
-        console.info(`[NPC_AUTO_IMAGE] ${message}`, payload ?? '');
+        try {
+            console.info(`[NPC_AUTO_IMAGE] ${message}`, payload ?? '');
+        } catch {
+            /* 调试日志绝不应干扰主流程 */
+        }
     };
 
     const 男娘NSFW内容已启用 = (): boolean => (
