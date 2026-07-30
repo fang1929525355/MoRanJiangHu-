@@ -112,7 +112,10 @@ export const 是否废弃世界地图字段路径 = (normalizedKey: string): boo
 };
 
 export const normalizeStateCommandKey = (rawKey: string): string => {
-    const key = 剥离强调标记(兼容值路径别名(rawKey));
+    // 必须先剥离 markdown 强调包裹（如 *背包*），再走别名归一化，
+    // 否则 *背包* / *背包[0]* 等被强调包裹的别名 key 不会命中「背包 → 角色.物品列表」映射，
+    // 导致与未包裹版本归一化结果不一致、整条命令被静默丢弃。
+    const key = 兼容值路径别名(剥离强调标记(rawKey));
     if (!key) return '';
 
     if (key.startsWith('gameState.')) {

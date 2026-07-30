@@ -26,6 +26,15 @@ describe('Bug C: 状态命令 key/value 被 markdown 强调包裹时应正常解
         expect(包裹.startsWith('gameState.')).toBe(true);
         expect(包裹).toBe(裸);
     });
+
+    it('normalizeStateCommandKey 对 *背包* / *背包[0]* 别名 key 与未包裹结果一致（剥离顺序）', () => {
+        // 必须先剥离强调再走别名归一化，否则 *背包* 不会映射成 角色.物品列表。
+        expect(normalizeStateCommandKey('*背包*')).toBe(normalizeStateCommandKey('背包'));
+        expect(normalizeStateCommandKey('*背包[0]*')).toBe(normalizeStateCommandKey('背包[0]'));
+        // 校验确实归一化到了物品列表路径，而非被静默丢弃为 gameState.背包
+        expect(normalizeStateCommandKey('背包')).toBe('gameState.角色.物品列表');
+        expect(normalizeStateCommandKey('背包[0]')).toBe('gameState.角色.物品列表[0]');
+    });
 });
 
 describe('Bug B: 判定块内的自由叙事正文应被保留并展示，而非被吞', () => {
@@ -60,5 +69,12 @@ describe('Bug B: 判定块内的自由叙事正文应被保留并展示，而非
             '你抢先一步踏前。',
             '刀光先敌半寸落下，寒风掠过巷口。',
         ]);
+    });
+
+    it('含「结果=」字段时不被误判为叙事泄漏', () => {
+        const parsed = parseJudgmentText('比试｜结果=成功｜基础+3（身法）');
+        expect(parsed.result).toBe('成功');
+        expect(parsed.modifiers.length).toBe(1);
+        expect(parsed.narrative).toEqual([]);
     });
 });

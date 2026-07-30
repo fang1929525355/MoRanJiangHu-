@@ -668,11 +668,11 @@ const GameSettings: React.FC<Props> = ({ settings, onSave, gameInitialTime, curr
                 <div className="flex items-center justify-between gap-4">
                     <div>
                         <div className="text-sm text-wuxia-cyan font-bold">NPC 调试日志</div>
-                        <div className="text-xs text-gray-400 mt-1">开启后输出 NPC 私密生图（香闺秘档）与社交规范化的调试日志。默认关闭，避免普通玩家被调试信息刷屏；如之前在开发者工具里手动开过旧开关，请在此关闭。</div>
+                        <div className="text-xs text-gray-300 mt-1">开启后输出 NPC 私密生图（香闺秘档）与社交规范化的调试日志。默认关闭，避免普通玩家被调试信息刷屏；如之前在开发者工具里手动开过旧开关，请在此关闭。</div>
                     </div>
                     <ToggleSwitch
-                        checked={(form as any).启用NPC调试日志 === true}
-                        onChange={(next) => 实时应用更新({ 启用NPC调试日志: next } as any)}
+                        checked={form.启用NPC调试日志 === true}
+                        onChange={(next) => 实时应用更新({ 启用NPC调试日志: next })}
                         ariaLabel="切换 NPC 调试日志"
                     />
                 </div>

@@ -215,7 +215,12 @@ export const parseJudgmentText = (text: string): ParsedJudgment => {
     for (let i = 1; i < parts.length; i++) {
         const part = parts[i];
         let matched = false;
-        if (isResultToken(part)) {
+        if (part.startsWith('结果=')) {
+            // 已在首轮解析中消费的「结果=」字段，主循环须显式标记为 matched，
+            // 否则会被误判为自由叙事而写进 narrative 渲染出来（如「比试｜结果=成功｜基础+3」）。
+            parsed.result = part.replace(/^结果=/, '').trim();
+            matched = true;
+        } else if (isResultToken(part)) {
             parsed.result = part;
             matched = true;
         }
