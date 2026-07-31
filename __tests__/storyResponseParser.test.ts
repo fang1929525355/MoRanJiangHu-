@@ -4,6 +4,33 @@ import { 规范化可渲染对白日志 } from '../utils/dialogueLogNormalizer';
 import { 构建标签缺失补充提示 } from '../utils/parseErrorHints';
 
 describe('storyResponseParser', () => {
+    it('把已闭合角色对白后的无标签叙事切回旁白，保留后续同角色短句气泡', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '折生的话音刚落，房间里那股原本还算欢快的邀功气氛，极其突兀地停滞了一瞬。',
+            '【萧蒲童子】“哈？”',
+            '萧蒲童子终于反应过来了，她指着地上还在不停扭动、流着口水的苏清月，爆发出一阵极其夸张的大笑。',
+            '【萧蒲童子】“民女？主人，你是不是昨晚睡觉把脑子给压扁了？谁家民女大半夜的在荒郊野外的破庙里御剑飞行啊！还拿着把冷飕飕的破剑到处乱砍！”',
+            '葛叶御前松开踩在苏清月臀部上的脚，双手抱胸，踩着高齿木履往前走了一步。',
+            '【葛叶御前】“妾身看你不仅抠门，眼神也不太好使。”',
+            '</正文>',
+            '<短期记忆>萧蒲童子与葛叶御前回应折生。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: false });
+
+        expect(parsed.logs).toEqual([
+            { sender: '旁白', text: '折生的话音刚落，房间里那股原本还算欢快的邀功气氛，极其突兀地停滞了一瞬。' },
+            { sender: '萧蒲童子', text: '“哈？”' },
+            { sender: '旁白', text: '萧蒲童子终于反应过来了，她指着地上还在不停扭动、流着口水的苏清月，爆发出一阵极其夸张的大笑。' },
+            { sender: '萧蒲童子', text: '“民女？主人，你是不是昨晚睡觉把脑子给压扁了？谁家民女大半夜的在荒郊野外的破庙里御剑飞行啊！还拿着把冷飕飕的破剑到处乱砍！”' },
+            { sender: '旁白', text: '葛叶御前松开踩在苏清月臀部上的脚，双手抱胸，踩着高齿木履往前走了一步。' },
+            { sender: '葛叶御前', text: '“妾身看你不仅抠门，眼神也不太好使。”' }
+        ]);
+
+        const rendered = 规范化可渲染对白日志(parsed.logs);
+        expect(rendered.filter(item => item.sender === '萧蒲童子')).toHaveLength(2);
+        expect(rendered.some(item => item.sender === '萧蒲童子' && item.text.includes('民女？主人'))).toBe(true);
+    });
+
     it('合并模型返回的多个正文标签，避免界面只显示第一段', () => {
         const parsed = parseStoryRawText([
             '<正文>',

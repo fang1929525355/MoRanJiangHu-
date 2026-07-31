@@ -1087,6 +1087,18 @@ const 提取残缺角色名单标签 = (text: string): string => {
     return match?.[1]?.trim() || '';
 };
 
+const 是否完整闭合的角色对白 = (value: string): boolean => {
+    const source = (value || '').trim();
+    if (!source || !/^[“"「『]/u.test(source)) return false;
+    const opener = source[0];
+    const closer = opener === '“' ? '”'
+        : opener === '「' ? '」'
+            : opener === '『' ? '』'
+                : '"';
+    const closingIndex = source.indexOf(closer, 1);
+    return closingIndex === source.length - 1;
+};
+
 const 解析正文日志 = (body: string, declaredNames?: Set<string>): Array<{ sender: string; text: string }> => {
     if (!body || !body.trim()) return [];
     const lines = body.replace(/\r\n/g, '\n').split('\n');
@@ -1145,6 +1157,14 @@ const 解析正文日志 = (body: string, declaredNames?: Set<string>): Array<{ 
             continue;
         }
         if (currentIsJudgment) {
+            写入旁白行(rawLine.trimEnd());
+            continue;
+        }
+
+        // 角色对白已经闭合后，后续没有标签的行属于叙事，而不是继续挂在角色气泡里。
+        // 这兼容酒馆预设偶尔省略【旁白】标签的输出，同时避免同一角色的下一句对白
+        // 与中间叙事合并后只渲染出第一句气泡。
+        if (current && current.sender !== '旁白' && 是否完整闭合的角色对白(current.text)) {
             写入旁白行(rawLine.trimEnd());
             continue;
         }

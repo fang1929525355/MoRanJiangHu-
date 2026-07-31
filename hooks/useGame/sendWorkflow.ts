@@ -1159,6 +1159,8 @@ export type 发送结果 = {
 type 回合快照结构 = {
     玩家输入: string;
     游戏时间: string;
+    关联自动存档ID?: number;
+    自动存档完成?: Promise<number | null>;
     回档前状态: {
         角色: any;
         环境: any;
@@ -1235,7 +1237,7 @@ type 主剧情发送依赖 = {
         baseState?: Partial<响应命令处理状态>,
         options?: { applyState?: boolean }
     ) => 响应命令处理状态;
-    performAutoSave: (snapshot?: 自动存档快照结构) => Promise<void>;
+    performAutoSave: (snapshot?: 自动存档快照结构) => Promise<{ id?: number } | null>;
     执行NPC变量自动备份?: (socialList: any[], options?: { 标签?: string }) => void | Promise<void>;
     执行正文润色: (
         baseResponse: GameResponse,
@@ -1604,7 +1606,7 @@ export const 执行主剧情发送工作流 = async (
     const canonicalTime = 环境时间转标准串(currentState.环境);
     const currentGameTime = canonicalTime || '未知时间';
     const memBeforeSend = normalizedMemBeforeSend;
-    deps.推入重Roll快照({
+    const 本回合重Roll快照: 回合快照结构 = {
         玩家输入: sendInput,
         游戏时间: currentGameTime,
         回档前状态: {
@@ -1629,7 +1631,8 @@ export const 执行主剧情发送工作流 = async (
             场景图片档案: deps.深拷贝(currentState.sceneImageArchive)
         },
         回档前历史: deps.深拷贝(historyBeforeSend)
-    });
+    };
+    deps.推入重Roll快照(本回合重Roll快照);
     void Promise.resolve(deps.执行NPC变量自动备份?.(currentState.社交, {
         标签: `回合发送前 · ${currentGameTime}`
     })).catch((error) => {
@@ -3143,7 +3146,7 @@ export const 执行主剧情发送工作流 = async (
                 deps.检查主角每回合生图(finalState.角色);
 
                 if (回合结束自动存档已开启) {
-                    await deps.performAutoSave({
+                    const autoSaveTask = deps.performAutoSave({
                         history: [...updatedDisplayHistory, queuedAiMsg],
                         role: finalState.角色,
                         env: finalState.环境,
@@ -3162,6 +3165,17 @@ export const 执行主剧情发送工作流 = async (
                         叙事平静值: 本回合更新后的叙事平静值 || undefined,
                         force: true
                     });
+                    本回合重Roll快照.自动存档完成 = autoSaveTask
+                        .then((saved) => {
+                            const id = Number(saved?.id);
+                            if (Number.isSafeInteger(id) && id > 0) {
+                                本回合重Roll快照.关联自动存档ID = id;
+                                return id;
+                            }
+                            return null;
+                        })
+                        .catch(() => null);
+                    await autoSaveTask;
                 }
             } catch (backgroundError: any) {
                 if (backgroundError?.name === "AbortError") {
@@ -3242,9 +3256,6 @@ export const 执行主剧情发送工作流 = async (
                 detailPrefix: '主剧情解析失败'
             });
             deps.设置历史记录(preservedDraftHistory || historyBeforeSend);
-            if (preservedDraftHistory) {
-                void deps.performAutoSave({ history: preservedDraftHistory, force: true });
-            }
             const parseFailureGameConfig = 规范化游戏设置(currentState.gameConfig);
             const parseFailureApi = 获取主剧情接口配置(currentState.apiConfig);
             const parseErrorWithHint = 构建标签缺失补充提示({
@@ -3344,7 +3355,6 @@ export const 执行主剧情发送工作流 = async (
         const nextHistory = preservedDraftHistory || [...updatedDisplayHistory, errorMsg];
         deps.设置历史记录(nextHistory);
         if (preservedDraftHistory) {
-            void deps.performAutoSave({ history: preservedDraftHistory, force: true });
             return {
                 cancelled: true,
                 needRerollConfirm: true,

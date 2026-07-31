@@ -16,6 +16,8 @@ import { 同步剧情小说分解时间校准 } from '../../services/novelDecomp
 type 回合快照结构 = {
     玩家输入: string;
     游戏时间: string;
+    关联自动存档ID?: number;
+    自动存档完成?: Promise<number | null>;
     回档前状态: {
         角色: 角色数据结构;
         环境: 环境信息结构;
@@ -52,7 +54,7 @@ type 历史回合工作流依赖 = {
     获取最新快照: () => 回合快照结构 | null;
     回档到快照: (snapshot: 回合快照结构, options?: { 保留图片状态?: boolean }) => void;
     弹出重Roll快照: () => 回合快照结构 | null;
-    删除最近自动存档并重置状态: () => Promise<void>;
+    清理回合自动存档并重置状态: (snapshot: 回合快照结构) => Promise<void>;
     深拷贝: <T>(value: T) => T;
     环境时间转标准串: (env: 环境信息结构) => string;
     获取开局配置: () => any;
@@ -470,8 +472,8 @@ export const 创建历史回合工作流 = (deps: 历史回合工作流依赖) =
         if (deps.loading) return null;
         const snapshot = deps.弹出重Roll快照();
         if (!snapshot) return null;
-        await deps.删除最近自动存档并重置状态();
         deps.回档到快照(snapshot);
+        void deps.清理回合自动存档并重置状态(snapshot);
         return snapshot.玩家输入;
     };
 

@@ -168,6 +168,8 @@ const 加载场景生图工作流 = () => import('./useGame/sceneImageWorkflow')
 type 回合快照结构 = {
     玩家输入: string;
     游戏时间: string;
+    关联自动存档ID?: number;
+    自动存档完成?: Promise<number | null>;
     回档前状态: {
         角色: 角色数据结构;
         环境: 环境信息结构;
@@ -675,13 +677,17 @@ export const useGame = () => {
         最近自动存档时间戳Ref.current = 0;
         最近自动存档签名Ref.current = '';
     };
-    const 删除最近自动存档并重置状态 = async (): Promise<void> => {
+    const 清理回合自动存档并重置状态 = async (snapshot: 回合快照结构): Promise<void> => {
+        重置自动存档状态();
+        let autoSaveId = Number(snapshot?.关联自动存档ID);
+        if (!(Number.isSafeInteger(autoSaveId) && autoSaveId > 0) && snapshot?.自动存档完成) {
+            autoSaveId = Number(await snapshot.自动存档完成.catch(() => null));
+        }
+        if (!Number.isSafeInteger(autoSaveId) || autoSaveId <= 0) return;
         try {
-            await dbService.删除最近自动存档();
+            await dbService.删除存档(autoSaveId);
         } catch (error) {
-            console.error('删除最近自动存档失败', error);
-        } finally {
-            重置自动存档状态();
+            console.error('清理重ROLL自动存档失败', error);
         }
     };
     const 推送右下角提示 = (toast: Omit<右下角提示结构, 'id'>) => {
@@ -3327,7 +3333,7 @@ export const useGame = () => {
         获取最新快照: () => 回合快照栈Ref.current[回合快照栈Ref.current.length - 1] || null,
         回档到快照,
         弹出重Roll快照,
-        删除最近自动存档并重置状态,
+        清理回合自动存档并重置状态,
         深拷贝,
         环境时间转标准串,
         获取开局配置: () => 开局配置,
