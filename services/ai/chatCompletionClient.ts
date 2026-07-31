@@ -15,9 +15,19 @@ export type 通用消息 = {
 
 export type 响应格式类型 = 'json_object';
 
+export type 通用流式结束信息 = {
+    /** 是否收到了上游的 [DONE] 结束信号；false 表示连接被上游提前关闭（常见于内容审核拦截或代理断流）。 */
+    sawDone: boolean;
+    /** SSE 最后一帧的 finish_reason（如有）；'content_filter' 表示明确命中上游内容审核。 */
+    finishReason?: string;
+    /** 流结束时的累积文本长度。 */
+    accumulatedLength: number;
+};
+
 export type 通用流式选项 = {
     stream?: boolean;
     onDelta?: (delta: string, accumulated: string) => void;
+    onStreamEnd?: (info: 通用流式结束信息) => void;
 } | undefined;
 
 export type 模型请求附加选项 = {
@@ -898,13 +908,15 @@ export const 读取失败详情文本 = async (response: Response, maxLen = 600)
 
 const 创建SSE文本处理器 = (
     extractDelta: 增量提取器,
-    onDelta?: (delta: string, accumulated: string) => void
+    onDelta?: (delta: string, accumulated: string) => void,
+    onStreamEnd?: (info: 通用流式结束信息) => void
 ) => {
     let rawBuffer = '';
     let accumulated = '';
     let sawSseFrame = false;
     let doneSignal = false;
     let pendingJsonPayload = '';
+    let lastFinishReason = '';
 
     const emitDelta = (delta: string) => {
         if (!delta) return;
@@ -918,6 +930,10 @@ const 创建SSE文本处理器 = (
 
         try {
             const json = JSON.parse(payload);
+            const finishReason = json?.choices?.[0]?.finish_reason;
+            if (typeof finishReason === 'string' && finishReason.trim()) {
+                lastFinishReason = finishReason.trim();
+            }
             emitDelta(extractDelta(json));
             return true;
         } catch {
@@ -1003,6 +1019,12 @@ const 创建SSE文本处理器 = (
             throw new Error('Stream response did not contain text/event-stream data frames');
         }
 
+        onStreamEnd?.({
+            sawDone: doneSignal,
+            finishReason: lastFinishReason || undefined,
+            accumulatedLength: accumulated.length
+        });
+
         return accumulated.trim();
     };
 
@@ -1017,13 +1039,14 @@ const 解析SSE文本 = async (
     response: Response,
     extractDelta: 增量提取器,
     onDelta?: (delta: string, accumulated: string) => void,
-    emptyBodyError = 'Stream body is empty'
+    emptyBodyError = 'Stream body is empty',
+    onStreamEnd?: (info: 通用流式结束信息) => void
 ): Promise<string> => {
     if (!response.body) throw new Error(emptyBodyError);
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
-    const processor = 创建SSE文本处理器(extractDelta, onDelta);
+    const processor = 创建SSE文本处理器(extractDelta, onDelta, onStreamEnd);
     const fetchStats = {
         totalChunks: 0,
         totalBytes: 0,
@@ -1097,10 +1120,11 @@ const 解析SSE文本原生 = async (
     body: string,
     signal: AbortSignal | undefined,
     extractDelta: 增量提取器,
-    onDelta?: (delta: string, accumulated: string) => void
+    onDelta?: (delta: string, accumulated: string) => void,
+    onStreamEnd?: (info: 通用流式结束信息) => void
 ): Promise<string> => {
     const requestId = 生成原生流请求ID();
-    const processor = 创建SSE文本处理器(extractDelta, onDelta);
+    const processor = 创建SSE文本处理器(extractDelta, onDelta, onStreamEnd);
     let listenerHandle: PluginListenerHandle | null = null;
     let settled = false;
 
@@ -1203,10 +1227,11 @@ const 解析SSE文本XHR = (
     body: string,
     signal: AbortSignal | undefined,
     extractDelta: 增量提取器,
-    onDelta?: (delta: string, accumulated: string) => void
+    onDelta?: (delta: string, accumulated: string) => void,
+    onStreamEnd?: (info: 通用流式结束信息) => void
 ): Promise<string> => new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const processor = 创建SSE文本处理器(extractDelta, onDelta);
+    const processor = 创建SSE文本处理器(extractDelta, onDelta, onStreamEnd);
     let consumedLength = 0;
     let settled = false;
     const streamStats = {
@@ -1647,7 +1672,8 @@ const 请求OpenAI家族文本 = async (
                     requestBody,
                     signal,
                     创建OpenAI流增量提取器({ includeReasoning: requestOptions?.includeReasoning }),
-                    streamOptions?.onDelta
+                    streamOptions?.onDelta,
+                    streamOptions?.onStreamEnd
                 );
             } catch (error) {
                 console.warn('[native.stream.failed]', {
@@ -1686,7 +1712,8 @@ const 请求OpenAI家族文本 = async (
                     requestBody,
                     signal,
                     创建OpenAI流增量提取器({ includeReasoning: requestOptions?.includeReasoning }),
-                    streamOptions?.onDelta
+                    streamOptions?.onDelta,
+                    streamOptions?.onStreamEnd
                 );
             } catch (error) {
                 写入流式诊断日志('xhr stream failed', {
@@ -1754,7 +1781,7 @@ const 请求OpenAI家族文本 = async (
                 supplier: apiConfig.供应商,
                 contentType
             });
-            return await 解析SSE文本(response, 创建OpenAI流增量提取器({ includeReasoning: requestOptions?.includeReasoning }), streamOptions?.onDelta, 'Stream body is empty');
+            return await 解析SSE文本(response, 创建OpenAI流增量提取器({ includeReasoning: requestOptions?.includeReasoning }), streamOptions?.onDelta, 'Stream body is empty', streamOptions?.onStreamEnd);
         } catch (error) {
             if (!downgradedFromStream && 错误疑似不支持流式(error)) {
                 useStream = false;

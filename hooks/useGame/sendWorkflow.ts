@@ -1,4 +1,5 @@
 import * as textAIService from '../../services/ai/text';
+import { 是否流式连接中断错误消息 } from '../../services/ai/chatCompletionClient';
 import { recordAiParseFailureDiagnostic } from '../../services/diagnosticContext';
 import { recordDiagnosticLog } from '../../services/diagnosticLog';
 import type { GameResponse, OpeningConfig, 聊天记录结构, 记忆系统结构, 角色数据结构, 剧情系统结构, 剧情规划结构, 女主剧情规划结构, 同人剧情规划结构, 同人女主剧情规划结构, 世界书结构, 内置提示词条目结构, 叙事状态结构, 叙事平静值配置结构 } from '../../types';
@@ -230,6 +231,37 @@ export const 提取自动重试原因文本 = (error: any): string => {
     }
     return '请求失败，正在重试';
 };
+
+/**
+ * 判断错误是否属于「流式输出被上游意外终止」：
+ * 典型场景是正文出现特定词汇（如“娼妇”）触发上游内容审核直接掐断流式通道，
+ * 也可能由代理断流或流式空闲超时引起。命中后外层重试应降级为非流式请求。
+ */
+export const 是否流式意外终止错误 = (error: any): boolean => {
+    if (!error || error?.name === 'AbortError') return false;
+    if (error?.流式意外终止 === true) return true;
+    const message = String(error?.message || '');
+    const detail = String(error?.detail || '');
+    if (是否流式连接中断错误消息(message) || 是否流式连接中断错误消息(detail)) return true;
+    if (message.includes('模型流式连接中途断开') || detail.includes('模型流式连接中途断开')) return true;
+    if (String(error?.name || '') === 'TimeoutError' && message.includes('流式输出空闲超时')) return true;
+    return false;
+};
+
+export const 判定主剧情重试流式策略 = (params: {
+    isStreaming: boolean;
+    fallbackToNonStreaming: boolean;
+    lastError?: any;
+}): { useStreaming: boolean; fallbackToNonStreaming: boolean } => {
+    const fallbackToNonStreaming = params.fallbackToNonStreaming
+        || (params.isStreaming && Boolean(params.lastError) && 是否流式意外终止错误(params.lastError));
+    return {
+        useStreaming: params.isStreaming && !fallbackToNonStreaming,
+        fallbackToNonStreaming
+    };
+};
+
+export const 流式意外终止降级提示 = '流式输出被上游中断（常见于触发上游内容审核或代理断流），已自动切换为非流式重新生成';
 
 export const 校验响应未命中女性姓名黑名单 = (
     response: GameResponse,
@@ -1712,6 +1744,9 @@ export const 执行主剧情发送工作流 = async (
     let 后台队列已启动 = false;
     let streamMarker = 0;
     let latestStreamDraftText = '';
+    // 流式输出被上游意外终止（如内容审核掐断、代理断流、流式空闲超时）后置为 true，
+    // 后续自动重试改用非流式请求，避免同一内容在流式通道上反复被掐断。
+    let 流式意外终止需降级非流式 = false;
 
     try {
         const recallContextActiveForMain = recallFeatureEnabled && Boolean(recallTag);
@@ -1811,20 +1846,31 @@ export const 执行主剧情发送工作流 = async (
         const aiResult = await deps.执行带自动重试的生成请求<textAIService.StoryResponseResult>({
             enabled: deps.游戏设置启用自动重试(runtimeGameConfig),
             onRetry: (attempt, maxAttempts, reason) => {
+                const 重试原因 = 流式意外终止需降级非流式 && isStreaming
+                    ? 流式意外终止降级提示
+                    : reason;
                 recordDiagnosticLog('warn', ['主剧情重试', {
                     attempt,
                     maxAttempts,
-                    reason: typeof reason === 'string' ? reason : reason?.message || '',
-                    errorName: reason?.name || '',
-                    streaming: isStreaming
+                    reason: 重试原因,
+                    streaming: isStreaming,
+                    降级非流式: 流式意外终止需降级非流式
                 }]);
                 if (isStreaming) {
-                    deps.设置历史记录(prev => deps.更新流式草稿为自动重试提示(prev, attempt, maxAttempts, reason));
+                    deps.设置历史记录(prev => deps.更新流式草稿为自动重试提示(prev, attempt, maxAttempts, 重试原因));
                 }
             },
             action: async (attempt, lastError) => {
                 const lastErrorIsBodyLengthShortage = 是否正文字数不足错误(lastError);
                 const lastErrorIsBodyQualityIssue = 是否正文质量审查错误(lastError);
+                // 上一次尝试若是流式被上游意外终止（含 storyTasks 标记的“流式意外终止”），本次起降级为非流式
+                const streamRetryStrategy = 判定主剧情重试流式策略({
+                    isStreaming,
+                    fallbackToNonStreaming: 流式意外终止需降级非流式,
+                    lastError
+                });
+                流式意外终止需降级非流式 = streamRetryStrategy.fallbackToNonStreaming;
+                const 本次使用流式 = streamRetryStrategy.useStreaming;
                 const protocolRetryPrompt = (
                     attempt > 1
                     && !lastErrorIsBodyLengthShortage
@@ -1868,7 +1914,7 @@ export const 执行主剧情发送工作流 = async (
                         '',
                         activeApi,
                         signal,
-                        isStreaming
+                        本次使用流式
                             ? {
                                 stream: true,
                                 onDelta: (_delta, accumulated) => {
@@ -1920,20 +1966,35 @@ export const 执行主剧情发送工作流 = async (
                         }
                     );
 
-                const storyResult = !isStreaming
-                    ? await requestStory(controller.signal)
-                    : await 执行主剧情流式请求带空闲超时(
-                        controller.signal,
-                        (signal, markStreamActivity) => requestStory(signal, markStreamActivity),
-                        () => 尝试解析完整主剧情流式草稿(latestStreamDraftText, {
-                            validateTagCompleteness: runtimeGameConfig.启用标签检测完整性 === true,
-                            enableTagRepair: runtimeGameConfig.启用标签修复 !== false,
-                            requireActionOptionsTag: runtimeGameConfig.启用行动选项 !== false,
-                            validateDialogueFormat: runtimeGameConfig.启用严格正文对白格式 !== false,
-                            knownSpeakers: knownDialogueSpeakers
-                        }),
-                        获取游玩请求超时毫秒(runtimeGameConfig.游玩请求超时设置)
-                    );
+                let storyResult: textAIService.StoryResponseResult;
+                try {
+                    storyResult = !本次使用流式
+                        ? await requestStory(controller.signal)
+                        : await 执行主剧情流式请求带空闲超时(
+                            controller.signal,
+                            (signal, markStreamActivity) => requestStory(signal, markStreamActivity),
+                            () => 尝试解析完整主剧情流式草稿(latestStreamDraftText, {
+                                validateTagCompleteness: runtimeGameConfig.启用标签检测完整性 === true,
+                                enableTagRepair: runtimeGameConfig.启用标签修复 !== false,
+                                requireActionOptionsTag: runtimeGameConfig.启用行动选项 !== false,
+                                validateDialogueFormat: runtimeGameConfig.启用严格正文对白格式 !== false,
+                                knownSpeakers: knownDialogueSpeakers
+                            }),
+                            获取游玩请求超时毫秒(runtimeGameConfig.游玩请求超时设置)
+                        );
+                } catch (streamError: any) {
+                    // 流式被上游意外终止时立即标记，让 onRetry 与下一次尝试切换到非流式
+                    if (本次使用流式 && !流式意外终止需降级非流式 && 是否流式意外终止错误(streamError)) {
+                        流式意外终止需降级非流式 = true;
+                        recordDiagnosticLog('warn', ['主剧情流式意外终止-降级非流式', {
+                            attempt,
+                            message: String(streamError?.message || ''),
+                            errorName: String(streamError?.name || ''),
+                            已被服务层标记: streamError?.流式意外终止 === true
+                        }]);
+                    }
+                    throw streamError;
+                }
                 const rawStoryText = deps.获取原始AI消息(storyResult.rawText);
                 const reviewedResponse = runtimeGameConfig.启用正文词汇审查 === false
                     ? storyResult.response
