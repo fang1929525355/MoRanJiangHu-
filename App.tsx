@@ -3688,6 +3688,7 @@ const App: React.FC = () => {
             {/* Settings Modal */}
             {state.showSettings && (
                 <div className={desktopRightDetailClass}>
+                <ModalErrorBoundary title="设置打开失败" onClose={closeSettings}>
                 <懒加载边界>
                     {isMobile ? (
                         <MobileSettingsModal
@@ -3785,6 +3786,7 @@ const App: React.FC = () => {
                         />
                     )}
                 </懒加载边界>
+                </ModalErrorBoundary>
                 </div>
             )}
 

@@ -40,12 +40,14 @@ import { 世界书本体槽位 } from '../../utils/worldbook';
 import { 获取内置提示词槽位内容 } from '../../utils/builtinPrompts';
 import {
     type 通用消息,
+    type 通用流式结束信息,
     规范化文本补全消息链,
     请求模型文本,
     替换COT伪装身份占位
 } from './chatCompletionClient';
 import {
     parseStoryRawText,
+    StoryResponseParseError,
     type StoryParseOptions,
     提取首个标签内容,
     提取首尾思考区段,
@@ -204,6 +206,7 @@ export interface NovelDecompositionAnalysisResult {
 export interface StoryStreamOptions {
     stream?: boolean;
     onDelta?: (delta: string, accumulated: string) => void;
+    onStreamEnd?: (info: 通用流式结束信息) => void;
 }
 
 export interface StoryRequestOptions {
@@ -2088,6 +2091,53 @@ export const generateStoryResponse = async (
 ): Promise<StoryResponseResult> => {
     if (!apiConfig.apiKey) throw new Error('Missing API Key');
 
+    // 流式输出被上游提前关闭（常见于内容审核拦截，例如正文出现“娼妇”等词汇时上游直接掐断流）时，
+    // 记录结束信息并给错误打上“流式意外终止”标记，供外层重试逻辑自动降级为非流式请求，
+    // 避免同一内容在流式通道上反复被掐断导致本回合彻底失败。
+    let 流式结束信息: 通用流式结束信息 | null = null;
+    const 带结束回调的流式选项: StoryStreamOptions | undefined = streamOptions?.stream === true
+        ? {
+            ...streamOptions,
+            onStreamEnd: (info) => {
+                流式结束信息 = info;
+                streamOptions.onStreamEnd?.(info);
+            }
+        }
+        : streamOptions;
+    const 流式疑似被上游中断 = (): boolean => Boolean(
+        streamOptions?.stream === true
+        && 流式结束信息
+        && (流式结束信息.sawDone === false || 流式结束信息.finishReason === 'content_filter')
+    );
+    const 解析主剧情故事响应 = (rawText: string): StoryResponseResult => {
+        const result = 解析故事响应(rawText, requestOptions);
+        if (!流式疑似被上游中断()) return result;
+        if (流式结束信息?.finishReason === 'content_filter') {
+            const detail = '流式输出被上游内容审核拦截（finish_reason=content_filter），响应不完整，请改用非流式重新生成';
+            const error = new StoryResponseParseError(detail, rawText, detail);
+            (error as any).流式意外终止 = true;
+            throw error;
+        }
+        if (流式结束信息?.sawDone === false) {
+            console.warn('[主剧情] 流式连接未收到 [DONE] 即结束，但响应解析成功，按完整响应接受', {
+                accumulatedLength: 流式结束信息.accumulatedLength
+            });
+        }
+        return result;
+    };
+    const 流式意外终止则抛出 = (error: any): void => {
+        if (!流式疑似被上游中断()) return;
+        if (error && typeof error === 'object') {
+            error.流式意外终止 = true;
+        }
+        console.warn('[主剧情] 流式输出疑似被上游中断，跳过截断稿修复，交给外层降级非流式重试', {
+            sawDone: 流式结束信息?.sawDone,
+            finishReason: 流式结束信息?.finishReason,
+            accumulatedLength: 流式结束信息?.accumulatedLength
+        });
+        throw error;
+    };
+
     const orderedMessagesRaw = Array.isArray(requestOptions?.orderedMessages)
         ? requestOptions.orderedMessages
             .map((item) => {
@@ -2139,7 +2189,7 @@ export const generateStoryResponse = async (
         const rawText = await 请求模型文本(apiConfig, messagesWithRuntimeRequirements, {
             temperature: 0.7,
             signal,
-            streamOptions,
+            streamOptions: 带结束回调的流式选项,
             errorDetailLimit: requestOptions?.errorDetailLimit,
             includeReasoning: requestOptions?.includeReasoning,
             disableThinking: requestOptions?.disableThinking,
@@ -2147,8 +2197,9 @@ export const generateStoryResponse = async (
             prefixMode: requestOptions?.prefixMode
         });
         try {
-            return 解析故事响应(rawText, requestOptions);
+            return 解析主剧情故事响应(rawText);
         } catch (error: any) {
+            流式意外终止则抛出(error);
             if (requestOptions?.validateDialogueFormat === true && error?.name === 'StoryResponseParseError') {
                 if (是否正文对白格式错误(error)) {
                     try {
@@ -2233,7 +2284,7 @@ export const generateStoryResponse = async (
     const rawText = await 请求模型文本(apiConfig, normalizedApiMessages, {
         temperature: 0.7,
         signal,
-        streamOptions,
+        streamOptions: 带结束回调的流式选项,
         errorDetailLimit: requestOptions?.errorDetailLimit,
         includeReasoning: requestOptions?.includeReasoning,
         disableThinking: requestOptions?.disableThinking,
@@ -2242,8 +2293,9 @@ export const generateStoryResponse = async (
     });
 
     try {
-        return 解析故事响应(rawText, requestOptions);
+        return 解析主剧情故事响应(rawText);
     } catch (error: any) {
+        流式意外终止则抛出(error);
         if (requestOptions?.validateDialogueFormat === true && error?.name === 'StoryResponseParseError') {
             if (是否正文对白格式错误(error)) {
                 try {

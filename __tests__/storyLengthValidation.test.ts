@@ -236,6 +236,7 @@ describe('主剧情正文字数校验', () => {
                 境界体系提示词: '',
                 离场NPC档案: '',
                 otherPrompts: '',
+                文风提示词: '',
                 难度设置提示词: '',
                 叙事人称提示词: '',
                 字数设置提示词: '<字数>本次<正文>内的正文必须达到动态注入的最低字数要求。</字数>',
@@ -301,6 +302,7 @@ describe('主剧情正文字数校验', () => {
                 境界体系提示词: '',
                 离场NPC档案: '',
                 otherPrompts: '',
+                文风提示词: '',
                 难度设置提示词: '',
                 叙事人称提示词: '',
                 字数设置提示词: '<字数>旧字数提示会被运行时修正。</字数>',
@@ -328,6 +330,7 @@ describe('主剧情正文字数校验', () => {
             gameConfig: {
                 ...默认游戏设置,
                 字数要求: 2200,
+                启用严格正文对白格式: false,
                 启用酒馆预设模式: true,
                 当前酒馆预设ID: 'travel',
                 酒馆预设角色ID: 1,
@@ -373,6 +376,96 @@ describe('主剧情正文字数校验', () => {
         expect(result.orderedMessages.some((message) => message.content.includes('2200字以上'))).toBe(true);
         // 也不应注入项目输出协议和风格助手
         expect(result.orderedMessages.some((message) => message.content.includes('输出协议'))).toBe(false);
+        expect(result.messageEntries.some((entry) => entry.id === 'tavern_format_requirement')).toBe(false);
+
+        const strictResult = 构建主剧情请求参数({
+            gameConfig: {
+                ...默认游戏设置,
+                字数要求: 2200,
+                启用严格正文对白格式: true,
+                启用酒馆预设模式: true,
+                当前酒馆预设ID: 'travel',
+                酒馆预设角色ID: 1,
+                酒馆预设列表: [{
+                    id: 'travel',
+                    名称: '双人旅行',
+                    角色ID: 1,
+                    预设: {
+                        spec: 'chara_card_v3',
+                        prompts: [
+                            { identifier: 'main', name: 'main', role: 'system', content: '固定预设' },
+                            { identifier: 'worldInfoBefore', name: 'worldInfoBefore', role: 'system', content: '' },
+                            { identifier: 'userInput', name: 'userInput', role: 'user', content: '' }
+                        ],
+                        prompt_order: [{
+                            character_id: 1,
+                            order: [
+                                { identifier: 'main', enabled: true },
+                                { identifier: 'worldInfoBefore', enabled: true },
+                                { identifier: 'userInput', enabled: true }
+                            ]
+                        }]
+                    } as any
+                }]
+            },
+            apiConfig: {
+                apiKey: 'test-key',
+                baseUrl: 'https://example.test/v1',
+                model: 'gemini-test'
+            } as any,
+            builtContext,
+            updatedContextHistory: [],
+            updatedMemSys: {} as any,
+            sendInput: '继续剧情。'
+        });
+
+        expect(strictResult.messageEntries).toContainEqual(expect.objectContaining({
+            id: 'tavern_format_requirement',
+            role: 'system',
+            content: '<正文>...</正文>'
+        }));
+
+        const placeholderResult = 构建主剧情请求参数({
+            gameConfig: {
+                ...默认游戏设置,
+                字数要求: 2200,
+                启用严格正文对白格式: true,
+                启用酒馆预设模式: true,
+                当前酒馆预设ID: 'format-placeholder',
+                酒馆预设角色ID: 1,
+                酒馆预设列表: [{
+                    id: 'format-placeholder',
+                    名称: '格式占位预设',
+                    角色ID: 1,
+                    预设: {
+                        spec: 'chara_card_v3',
+                        prompts: [
+                            { identifier: 'main', name: 'main', role: 'system', content: '固定预设\n{{格式}}' },
+                            { identifier: 'userInput', name: 'userInput', role: 'user', content: '' }
+                        ],
+                        prompt_order: [{
+                            character_id: 1,
+                            order: [
+                                { identifier: 'main', enabled: true },
+                                { identifier: 'userInput', enabled: true }
+                            ]
+                        }]
+                    } as any
+                }]
+            },
+            apiConfig: {
+                apiKey: 'test-key',
+                baseUrl: 'https://example.test/v1',
+                model: 'gemini-test'
+            } as any,
+            builtContext,
+            updatedContextHistory: [],
+            updatedMemSys: {} as any,
+            sendInput: '继续剧情。'
+        });
+
+        expect(placeholderResult.messageEntries.some((entry) => entry.id === 'tavern_format_requirement')).toBe(false);
+        expect(placeholderResult.messageEntries.filter((entry) => entry.content.includes('<正文>...</正文>'))).toHaveLength(1);
     });
 
     it('酒馆预设使用 cot 占位符时仍保留时间和地点关键运行规则', () => {
@@ -391,6 +484,7 @@ describe('主剧情正文字数校验', () => {
                 境界体系提示词: '',
                 离场NPC档案: '',
                 otherPrompts: '',
+                文风提示词: '',
                 难度设置提示词: '',
                 叙事人称提示词: '',
                 字数设置提示词: '',
