@@ -25,14 +25,14 @@ describe('Fullstack cloud APK upload targets', () => {
         expect(() => buildFullstackUploadTargets('../bad')).toThrow('Invalid release versionName');
     });
 
-    it('wires Fullstack cloud into release publishing and benchmarking without 115 Open', () => {
+    it('keeps Fullstack tooling available but disabled in release publishing after the 413 limit', () => {
         const publishSource = fs.readFileSync(path.resolve(testDir, '../scripts/publish-release-b2.mjs'), 'utf8');
         const benchmarkSource = fs.readFileSync(path.resolve(testDir, '../scripts/benchmark-apk-providers.mjs'), 'utf8');
         const packageJson = JSON.parse(fs.readFileSync(path.resolve(testDir, '../package.json'), 'utf8'));
 
-        expect(publishSource).toContain("import { uploadApkToFullstack } from './upload-apk-fullstack.mjs'");
-        expect(publishSource).toContain("preferredApkProvider = 'fullstack'");
-        expect(publishSource).toContain('providerApkUrls.fullstack');
+        expect(publishSource).not.toContain("import { uploadApkToFullstack } from './upload-apk-fullstack.mjs'");
+        expect(publishSource).toContain("fullstack: ''");
+        expect(publishSource).not.toContain("preferredApkProvider = 'fullstack'");
         expect(publishSource).not.toContain('115open');
         expect(benchmarkSource).toContain("provider: 'fullstack'");
         expect(packageJson.scripts['release:fullstack']).toBe('node scripts/upload-apk-fullstack.mjs');

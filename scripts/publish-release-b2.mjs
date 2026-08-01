@@ -6,7 +6,6 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolvePreferredApkProvider } from './apk-provider-selection.mjs';
 import { uploadApkFileToOpenListWithCurl, verifyOpenListApkFiles } from './upload-apk-onedrive.mjs';
-import { uploadApkToFullstack } from './upload-apk-fullstack.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -176,14 +175,6 @@ const openListBaseUrl = readEnv('MORAN_OPENLIST_BASE_URL', 'https://openlist.bac
 const openListAuthToken = readEnv('MORAN_OPENLIST_AUTH_TOKEN');
 const openListUploadTimeoutMs = Math.max(1000, Number(readEnv('MORAN_OPENLIST_UPLOAD_TIMEOUT_MS', '600000')));
 
-await uploadApkToFullstack({
-  apkPath,
-  versionName: currentVersionName,
-  baseUrl: openListBaseUrl,
-  authToken: openListAuthToken,
-  timeoutMs: openListUploadTimeoutMs
-});
-
 uploadApkFileToOpenListWithCurl({
   apkPath,
   versionName: currentVersionName,
@@ -235,7 +226,7 @@ const b2ManifestKey = normalizeKey(`${prefix}/latest.json`);
 const hi168VersionedKey = (versionName) => normalizeKey(`${s3Prefix}/${versionedFileName(versionName)}`);
 
 const providerApkUrls = {
-  fullstack: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=fullstack` : '',
+  fullstack: '',
   vps: `${String(process.env.MORAN_VPS_APK_BASE_URL || 'https://moranjianghu.bacon159.pp.ua').replace(/\/+$/, '')}/latest.apk`,
   quarkTv: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=quark-tv` : '',
   onedrive: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=onedrive` : '',
@@ -271,8 +262,8 @@ const fallbackProviderUrls = fallbackPreferredApkProvider === 'vps'
       : fallbackPreferredApkProvider === 'quark-tv'
         ? [providerApkUrls.quarkTv, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, ...githubAcceleratedApkUrls, providerApkUrls.github, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.githubRawDirect, providerApkUrls.githubDirect].filter(Boolean)
         : [githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.githubRawDirect, providerApkUrls.quarkTv, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.githubDirect].filter(Boolean);
-const preferredApkProvider = 'fullstack';
-const orderedProviderUrls = [providerApkUrls.fullstack, ...fallbackProviderUrls].filter(Boolean);
+const preferredApkProvider = fallbackPreferredApkProvider;
+const orderedProviderUrls = fallbackProviderUrls;
 
 const manifest = {
   latest: {
