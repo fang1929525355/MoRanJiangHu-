@@ -13,8 +13,8 @@ describe('release publish manifest script', () => {
         expect(source).toContain("MORAN_VPS_APK_BASE_URL || 'https://moranjianghu.bacon159.pp.ua'");
         expect(source).toContain('vpsUrl: providerApkUrls.vps');
         expect(source).toContain('vpsApkUrl: providerApkUrls.vps');
-        expect(source).toContain("targetRoot: '/夸克/MoRanJiangHu/releases'");
-        expect(source).toContain("downloadRoot: '/夸克TV/MoRanJiangHu/releases'");
+        expect(source).toContain("targetRoot: '/Onedrive/MoRanJiangHu/releases'");
+        expect(source).toContain("downloadRoot: '/Onedrive/MoRanJiangHu/releases'");
         expect(source).toContain('uploadApkFileToOpenListWithCurl({');
         expect(source).toContain('providerApkUrls.quarkTv');
         expect(source).toContain("import { resolvePreferredApkProvider } from './apk-provider-selection.mjs'");
