@@ -681,7 +681,7 @@ export const RELEASE_INFO = {
         "备用站：https://msjh.bacon.de5.net/"
     ],
     "notes": "修复 AI 流式输出被上游提前截断时剧情中断的问题：系统会自动改用非流式重试，完整响应即使省略结束信号也不会被误判。\n修复启用酒馆预设后“严格旁白/对白格式”可能失效的问题：开关开启时会继续要求旁白与角色对白使用正确标签。\n修复网站更新后旧设置模块加载失败可能让整个游戏进入错误页的问题：异常现在只影响设置弹窗，可关闭或刷新恢复。\n修复重ROLL遇到后台处理或自动存档尚未完成时可能残留或误删存档的问题：现在只清理当前回合对应的自动存档，并保留上一轮有效存档。\n修复短对白后的叙事被并入人物气泡的问题：同角色多段短对白会独立显示，中间叙事恢复为旁白，并支持对白前的动作描述。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-    "releasePublishedAt": "2026-08-01T19:15:05+08:00"
+    "releasePublishedAt": "2026-08-01T19:17:52+08:00"
 } as const;
 
 export type ReleaseInfo = typeof RELEASE_INFO;
