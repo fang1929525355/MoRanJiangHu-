@@ -4,7 +4,7 @@ export const RELEASE_INFO = {
     "versionName": "1.0.635",
     "releaseChannel": "stable",
     "releaseNotes": [
-        "APK 自动更新新增全栈云盘下载源，并作为优先线路，改善国内无代理环境下的下载速度。",
+        "APK 自动更新已更新国内可用下载线路，OneDrive 最新版与版本包同步就绪。",
         "下载过程中若连续检测到速度低于 128 KB/s，会自动切换备用线路，减少长时间卡在慢速源。",
         "优化更新源选择方式：按服务端推荐顺序下载，失败或持续慢速时再回退，避免短暂测速误选线路。",
         "官网：https://msjh.bacon159.pp.ua/",
@@ -684,14 +684,14 @@ export const RELEASE_INFO = {
     "multiDeviceSyncGuideUrl": "https://msjh.bacon159.pp.ua/tutorials.html#sync",
     "tutorialsUrl": "https://msjh.bacon159.pp.ua/tutorials.html",
     "changes": [
-        "APK 自动更新新增全栈云盘下载源，并作为优先线路，改善国内无代理环境下的下载速度。",
+        "APK 自动更新已更新国内可用下载线路，OneDrive 最新版与版本包同步就绪。",
         "下载过程中若连续检测到速度低于 128 KB/s，会自动切换备用线路，减少长时间卡在慢速源。",
         "优化更新源选择方式：按服务端推荐顺序下载，失败或持续慢速时再回退，避免短暂测速误选线路。",
         "官网：https://msjh.bacon159.pp.ua/",
         "备用站：https://msjh.bacon.de5.net/"
     ],
-    "notes": "APK 自动更新新增全栈云盘下载源，并作为优先线路，改善国内无代理环境下的下载速度。\n下载过程中若连续检测到速度低于 128 KB/s，会自动切换备用线路，减少长时间卡在慢速源。\n优化更新源选择方式：按服务端推荐顺序下载，失败或持续慢速时再回退，避免短暂测速误选线路。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-    "releasePublishedAt": "2026-08-02T03:29:48+08:00"
+    "notes": "APK 自动更新已更新国内可用下载线路，OneDrive 最新版与版本包同步就绪。\n下载过程中若连续检测到速度低于 128 KB/s，会自动切换备用线路，减少长时间卡在慢速源。\n优化更新源选择方式：按服务端推荐顺序下载，失败或持续慢速时再回退，避免短暂测速误选线路。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
+    "releasePublishedAt": "2026-08-02T03:58:28+08:00"
 } as const;
 
 export type ReleaseInfo = typeof RELEASE_INFO;
