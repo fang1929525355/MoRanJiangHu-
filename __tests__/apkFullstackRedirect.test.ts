@@ -35,7 +35,7 @@ describe('Fullstack cloud APK redirect', () => {
         );
         expect(response?.status).toBe(302);
         expect(response?.headers.get('Location')).toBe(
-            'https://openlist.example/d/%E5%85%A8%E6%A0%88%E4%BA%91%E7%9B%98/MoRanJiangHu/apk/latest.apk?sign=fullstack%20sign'
+            'https://openlist.example/d/%E5%85%A8%E6%A0%88%E4%BA%91%E7%9B%98/MoRanJiangHu/releases/latest.apk?sign=fullstack%20sign'
         );
         expect(response?.headers.get('X-Moran-Apk-Source')).toBe('fullstack');
     });
