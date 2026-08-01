@@ -178,7 +178,7 @@ const openListUploadTimeoutMs = Math.max(1000, Number(readEnv('MORAN_OPENLIST_UP
 uploadApkFileToOpenListWithCurl({
   apkPath,
   versionName: currentVersionName,
-  targetRoot: '/夸克/MoRanJiangHu/releases',
+  targetRoot: '/Onedrive/MoRanJiangHu/releases',
   baseUrl: openListBaseUrl,
   authToken: openListAuthToken,
   timeoutMs: openListUploadTimeoutMs
@@ -186,7 +186,7 @@ uploadApkFileToOpenListWithCurl({
 await verifyOpenListApkFiles({
   versionName: currentVersionName,
   expectedSize: apkSize,
-  downloadRoot: '/夸克TV/MoRanJiangHu/releases',
+  downloadRoot: '/Onedrive/MoRanJiangHu/releases',
   baseUrl: openListBaseUrl,
   authToken: openListAuthToken
 });
