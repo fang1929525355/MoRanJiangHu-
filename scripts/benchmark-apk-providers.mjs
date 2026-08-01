@@ -24,6 +24,11 @@ if (!websiteBaseUrl) {
 
 const providers = [
   {
+    provider: 'fullstack',
+    label: '全栈云盘',
+    url: `${websiteBaseUrl}/api/apk/latest.apk?provider=fullstack`
+  },
+  {
     provider: 'vps',
     label: 'VPS 直连',
     url: `${vpsBaseUrl}/latest.apk`

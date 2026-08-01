@@ -1,0 +1,40 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+import { buildFullstackUploadTargets } from '../scripts/upload-apk-fullstack.mjs';
+
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+
+describe('Fullstack cloud APK upload targets', () => {
+    it('separates latest and versioned APK paths', () => {
+        expect(buildFullstackUploadTargets('1.0.633')).toEqual([
+            {
+                filePath: '/全栈云盘/MoRanJiangHu/apk/latest.apk',
+                cacheControl: 'public, max-age=3600, stale-while-revalidate=86400'
+            },
+            {
+                filePath: '/全栈云盘/MoRanJiangHu/releases/MoRanJiangHu-v1.0.633.apk',
+                cacheControl: 'public, max-age=86400, stale-while-revalidate=604800'
+            }
+        ]);
+    });
+
+    it('rejects unsafe version names', () => {
+        expect(() => buildFullstackUploadTargets('../bad')).toThrow('Invalid release versionName');
+    });
+
+    it('wires Fullstack cloud into release publishing and benchmarking without 115 Open', () => {
+        const publishSource = fs.readFileSync(path.resolve(testDir, '../scripts/publish-release-b2.mjs'), 'utf8');
+        const benchmarkSource = fs.readFileSync(path.resolve(testDir, '../scripts/benchmark-apk-providers.mjs'), 'utf8');
+        const packageJson = JSON.parse(fs.readFileSync(path.resolve(testDir, '../package.json'), 'utf8'));
+
+        expect(publishSource).toContain("import { uploadApkToFullstack } from './upload-apk-fullstack.mjs'");
+        expect(publishSource).toContain("preferredApkProvider = 'fullstack'");
+        expect(publishSource).toContain('providerApkUrls.fullstack');
+        expect(publishSource).not.toContain('115open');
+        expect(benchmarkSource).toContain("provider: 'fullstack'");
+        expect(packageJson.scripts['release:fullstack']).toBe('node scripts/upload-apk-fullstack.mjs');
+    });
+});

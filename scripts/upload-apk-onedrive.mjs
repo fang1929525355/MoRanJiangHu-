@@ -155,6 +155,7 @@ export const uploadApkFileToOpenListWithCurl = ({
   baseUrl,
   authToken,
   targetRoot = '/Onedrive/MoRanJiangHu/releases',
+  uploadTargets,
   timeoutMs,
   spawnImpl = spawnSync
 }) => {
@@ -164,7 +165,9 @@ export const uploadApkFileToOpenListWithCurl = ({
 
   const normalizedBaseUrl = String(baseUrl).replace(/\/+$/, '');
   const curl = process.platform === 'win32' ? 'curl.exe' : 'curl';
-  const targets = buildOpenListApkTargets(versionName, targetRoot);
+  const targets = Array.isArray(uploadTargets) && uploadTargets.length > 0
+    ? uploadTargets
+    : buildOpenListApkTargets(versionName, targetRoot);
   const maxTimeSeconds = String(Math.ceil(timeoutMs / 1000));
 
   for (const target of targets) {
@@ -209,6 +212,43 @@ export const uploadApkFileToOpenListWithCurl = ({
     bytes,
     versionName
   };
+};
+
+export const verifyOpenListApkTargets = async ({
+  targets,
+  expectedSize,
+  baseUrl = 'https://openlist.bacon.de5.net',
+  authToken,
+  fetchImpl = fetch
+}) => {
+  if (!authToken) throw new Error('Missing MORAN_OPENLIST_AUTH_TOKEN.');
+  if (!Array.isArray(targets) || targets.length === 0) throw new Error('OpenList verification targets are empty.');
+  if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) {
+    throw new Error(`OpenList verification expected size is invalid: ${expectedSize}`);
+  }
+
+  const normalizedBaseUrl = String(baseUrl).replace(/\/+$/, '');
+  const files = [];
+  for (const target of targets) {
+    const response = await fetchImpl(`${normalizedBaseUrl}/api/fs/get`, {
+      method: 'POST',
+      headers: { Authorization: authToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: target.filePath, password: '' }),
+      signal: AbortSignal.timeout(30_000)
+    });
+    const payload = await response.json().catch(() => null);
+    const item = payload?.data;
+    if (!response.ok || payload?.code !== 200 || !item) {
+      throw new Error(`OpenList verification failed for ${target.filePath}`);
+    }
+    if (Number(item.size) !== expectedSize) {
+      throw new Error(`OpenList verification size mismatch for ${target.filePath}: ${item.size}`);
+    }
+    if (!item.sign) throw new Error(`OpenList verification missing sign for ${target.filePath}`);
+    files.push({ filePath: target.filePath, size: Number(item.size), sign: String(item.sign) });
+  }
+
+  return { ok: true, files };
 };
 
 if (isMain) {
