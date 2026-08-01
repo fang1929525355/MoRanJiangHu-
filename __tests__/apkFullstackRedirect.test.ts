@@ -25,7 +25,7 @@ describe('Fullstack cloud APK redirect', () => {
             'https://openlist.example/api/fs/list',
             expect.objectContaining({
                 body: JSON.stringify({
-                    path: '/全栈云盘/MoRanJiangHu/apk',
+                    path: '/全栈云盘/MoRanJiangHu/releases',
                     password: '',
                     page: 1,
                     per_page: 100,

@@ -35,7 +35,7 @@
 
 - [ ] **Step 1: 写失败测试**
 
-测试调用 `buildFullstackApkRedirect(env, 'latest.apk', 'MoRanJiangHu-v1.0.633.apk')`，模拟 OpenList `/api/fs/get` 返回 `{ code: 200, data: { sign: 'signed-token' } }`，断言响应为 302，`Location` 为编码后的 `/d/全栈云盘/MoRanJiangHu/apk/latest.apk?sign=signed-token`，且 `X-Moran-Apk-Source` 为 `fullstack`。再通过 `latest.apk` handler 验证 `provider=fullstack` 会选择该路由。
+测试调用 `buildFullstackApkRedirect(env, 'latest.apk', 'MoRanJiangHu-v1.0.633.apk')`，模拟 OpenList `/api/fs/get` 返回 `{ code: 200, data: { sign: 'signed-token' } }`，断言响应为 302，`Location` 为编码后的 `/d/全栈云盘/MoRanJiangHu/releases/latest.apk?sign=signed-token`，且 `X-Moran-Apk-Source` 为 `fullstack`。再通过 `latest.apk` handler 验证 `provider=fullstack` 会选择该路由。
 
 - [ ] **Step 2: 运行测试并确认失败**
 
@@ -57,7 +57,7 @@ export const buildFullstackApkRedirect = async (
     cacheControl = APK_LATEST_CACHE_CONTROL
 ): Promise<Response | null> => {
     const directory = storageFileName === 'latest.apk'
-        ? `${FULLSTACK_APK_ROOT}/apk`
+        ? `${FULLSTACK_APK_ROOT}/releases`
         : `${FULLSTACK_APK_ROOT}/releases`;
     const sign = await fetchOpenListFileSign(env, directory, storageFileName);
     if (!sign) return null;
@@ -200,7 +200,7 @@ git commit -m "fix: switch slow apk sources sooner"
 
 ```ts
 expect(buildFullstackUploadTargets('1.0.633')).toEqual([
-  '/全栈云盘/MoRanJiangHu/apk/latest.apk',
+  '/全栈云盘/MoRanJiangHu/releases/latest.apk',
   '/全栈云盘/MoRanJiangHu/releases/MoRanJiangHu-v1.0.633.apk'
 ]);
 ```
@@ -219,7 +219,7 @@ Expected: FAIL，脚本和目标构造函数尚不存在。
 
 ```js
 export const buildFullstackUploadTargets = (versionName) => [
-  '/全栈云盘/MoRanJiangHu/apk/latest.apk',
+  '/全栈云盘/MoRanJiangHu/releases/latest.apk',
   `/全栈云盘/MoRanJiangHu/releases/MoRanJiangHu-v${versionName}.apk`
 ];
 ```

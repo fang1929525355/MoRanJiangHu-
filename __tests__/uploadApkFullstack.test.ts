@@ -11,7 +11,7 @@ describe('Fullstack cloud APK upload targets', () => {
     it('separates latest and versioned APK paths', () => {
         expect(buildFullstackUploadTargets('1.0.633')).toEqual([
             {
-                filePath: '/全栈云盘/MoRanJiangHu/apk/latest.apk',
+                filePath: '/全栈云盘/MoRanJiangHu/releases/latest.apk',
                 cacheControl: 'public, max-age=3600, stale-while-revalidate=86400'
             },
             {

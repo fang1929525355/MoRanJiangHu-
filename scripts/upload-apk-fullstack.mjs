@@ -18,7 +18,7 @@ export const buildFullstackUploadTargets = (versionName) => {
   }
   return [
     {
-      filePath: '/全栈云盘/MoRanJiangHu/apk/latest.apk',
+      filePath: '/全栈云盘/MoRanJiangHu/releases/latest.apk',
       cacheControl: 'public, max-age=3600, stale-while-revalidate=86400'
     },
     {
@@ -55,7 +55,7 @@ export const uploadApkToFullstack = async ({
 
 if (isMain) {
   if (process.argv.includes('--help')) {
-    console.log(`Usage: node scripts/upload-apk-fullstack.mjs [apkPath]\n\nRequired environment:\n  MORAN_OPENLIST_AUTH_TOKEN\n\nTargets:\n  /全栈云盘/MoRanJiangHu/apk/latest.apk\n  /全栈云盘/MoRanJiangHu/releases/MoRanJiangHu-v<version>.apk`);
+    console.log(`Usage: node scripts/upload-apk-fullstack.mjs [apkPath]\n\nRequired environment:\n  MORAN_OPENLIST_AUTH_TOKEN\n\nTargets:\n  /全栈云盘/MoRanJiangHu/releases/latest.apk\n  /全栈云盘/MoRanJiangHu/releases/MoRanJiangHu-v<version>.apk`);
     process.exit(0);
   }
 

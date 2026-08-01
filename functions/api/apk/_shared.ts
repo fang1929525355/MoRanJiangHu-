@@ -431,9 +431,7 @@ export const buildFullstackApkRedirect = async (
     downloadFileName: string,
     cacheControl = APK_LATEST_CACHE_CONTROL
 ): Promise<Response | null> => {
-    const directory = storageFileName === 'latest.apk'
-        ? `${FULLSTACK_APK_ROOT}/apk`
-        : `${FULLSTACK_APK_ROOT}/releases`;
+    const directory = `${FULLSTACK_APK_ROOT}/releases`;
     const sign = await fetchOpenListFileSign(env, directory, storageFileName);
     if (!sign) return null;
     const encodedPath = directory
