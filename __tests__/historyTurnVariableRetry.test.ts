@@ -122,6 +122,40 @@ describe('history turn variable retry', () => {
         expect(result).toContain('MiMo variable failed');
     });
 
+    it('重ROLL先立即回档，并只异步清理当前快照关联的自动存档', async () => {
+        const snapshot = {
+            ...createSnapshot(),
+            关联自动存档ID: 901
+        };
+        const events: string[] = [];
+        let releaseCleanup: (() => void) | undefined;
+        const cleanupPending = new Promise<void>((resolve) => {
+            releaseCleanup = resolve;
+        });
+        const workflow = 创建历史回合工作流(createBaseDeps({
+            弹出重Roll快照: () => snapshot,
+            回档到快照: () => {
+                events.push('rollback');
+            },
+            删除最近自动存档并重置状态: async () => {
+                events.push('legacy-delete-latest');
+            },
+            清理回合自动存档并重置状态: async (target: any) => {
+                events.push(`cleanup:${target.关联自动存档ID}`);
+                await cleanupPending;
+            }
+        }) as any);
+
+        const result = await Promise.race([
+            (workflow.handleRegenerate as any)(),
+            new Promise<string>((resolve) => setTimeout(() => resolve('timeout'), 80))
+        ]);
+
+        expect(result).toBe('继续探索');
+        expect(events).toEqual(['rollback', 'cleanup:901']);
+        releaseCleanup?.();
+    });
+
     it('可以基于最新正文单独重试失败的动态世界阶段', async () => {
         const progress: Array<{ phase?: string; text?: string; commandTexts?: string[] }> = [];
         const workflow = 创建历史回合工作流(createBaseDeps({

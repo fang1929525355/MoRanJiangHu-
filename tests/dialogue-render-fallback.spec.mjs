@@ -83,6 +83,95 @@ const makeDialogueFallbackSave = () => {
     return save;
 };
 
+const screenshotDialogueRaw = [
+    '<正文>',
+    '折生的话音刚落，房间里那股原本还算欢快的邀功气氛，极其突兀地停滞了一瞬。',
+    '',
+    '【萧蒲童子】“哈？”',
+    '',
+    '萧蒲童子终于反应过来了，她指着地上还在不停扭动、流着口水的苏清月，爆发出一阵极其夸张的大笑。',
+    '',
+    '【萧蒲童子】“民女？主人，你是不是昨晚睡觉把脑子给压扁了？谁家民女大半夜的在荒郊野外的破庙里御剑飞行啊！还拿着把冷飕飕的破剑到处乱砍！”',
+    '',
+    '葛叶御前松开踩在苏清月臀部上的脚，双手抱胸，踩着高齿木履往前走了一步。',
+    '',
+    '【葛叶御前】“妾身看你不仅抠门，眼神也不太好使。”',
+    '</正文>',
+    '<短期记忆>折生与萧蒲童子、葛叶御前交谈。</短期记忆>'
+].join('\n');
+
+const makeScreenshotDialogueSave = () => {
+    const save = structuredClone(baseSave);
+    save.id = 9102;
+    save.类型 = 'manual';
+    save.时间戳 = 1713772900000;
+    save.元数据 = {
+        ...(save.元数据 || {}),
+        名称: '短对白气泡回归测试',
+        现实保存时间戳: 1713772900000,
+        现实保存时间ISO: new Date(1713772900000).toISOString()
+    };
+    save.历史记录 = [
+        {
+            role: 'user',
+            content: '端到端检查短对白气泡拆分'
+        },
+        {
+            role: 'assistant',
+            content: 'Structured Response',
+            rawJson: screenshotDialogueRaw,
+            structuredResponse: {
+                logs: [{ sender: '旁白', text: '等待编辑原文后重新解析。' }],
+                shortTerm: '等待重新解析。'
+            }
+        }
+    ];
+    return save;
+};
+
+const makeRerollSave = () => {
+    const save = structuredClone(baseSave);
+    save.id = 9103;
+    save.类型 = 'manual';
+    save.时间戳 = 1713773000000;
+    save.元数据 = {
+        ...(save.元数据 || {}),
+        名称: '重ROLL存档回归测试',
+        现实保存时间戳: 1713773000000,
+        现实保存时间ISO: new Date(1713773000000).toISOString()
+    };
+    save.历史记录 = [
+        {
+            role: 'user',
+            content: '这条输入应在重ROLL后回填'
+        },
+        {
+            role: 'assistant',
+            content: 'Structured Response',
+            rawJson: '<正文>\n【旁白】这一回合稍后会被回档。\n</正文>\n<短期记忆>回档测试。</短期记忆>',
+            structuredResponse: {
+                logs: [{ sender: '旁白', text: '这一回合稍后会被回档。' }],
+                shortTerm: '回档测试。'
+            }
+        }
+    ];
+    return save;
+};
+
+const makePreservedAutoSave = () => {
+    const save = structuredClone(baseSave);
+    save.id = 9199;
+    save.类型 = 'auto';
+    save.时间戳 = 1713772999000;
+    save.元数据 = {
+        ...(save.元数据 || {}),
+        名称: '上一轮有效自动存档',
+        现实保存时间戳: 1713772999000,
+        现实保存时间ISO: new Date(1713772999000).toISOString()
+    };
+    return save;
+};
+
 const makeSummary = (save) => ({
     id: save.id,
     类型: save.类型,
@@ -114,8 +203,8 @@ const makeSummary = (save) => ({
         : undefined,
 });
 
-const injectSaveAndReload = async (page) => {
-    await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+const injectSaveAndReload = async (page, primarySave = makeDialogueFallbackSave(), extraSaves = [], gameSettings = null) => {
+    await page.goto('http://127.0.0.1:4173', { waitUntil: 'domcontentloaded' });
     await closeReleaseNotesIfOpen(page);
     await page.evaluate(async (payload) => {
         const req = indexedDB.open('WuxiaGameDB');
@@ -130,21 +219,34 @@ const injectSaveAndReload = async (page) => {
             };
         });
         await new Promise((resolve, reject) => {
-            const tx = db.transaction(['saves', 'save_summaries'], 'readwrite');
+            const stores = payload.gameSettings ? ['saves', 'save_summaries', 'settings'] : ['saves', 'save_summaries'];
+            const tx = db.transaction(stores, 'readwrite');
             const store = tx.objectStore('saves');
             const summaryStore = tx.objectStore('save_summaries');
             store.clear();
             summaryStore.clear();
-            store.put(payload.save);
-            summaryStore.put(payload.summary);
+            for (const save of payload.saves) {
+                store.put(save);
+                summaryStore.put(payload.summaries.find((summary) => summary.id === save.id));
+            }
+            if (payload.gameSettings) {
+                tx.objectStore('settings').put({
+                    key: 'game_settings',
+                    value: payload.gameSettings,
+                    version: 2,
+                    updatedAt: Date.now(),
+                    category: 'gameplay'
+                });
+            }
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
-    }, (() => {
-        const save = makeDialogueFallbackSave();
-        return { save, summary: makeSummary(save) };
-    })());
-    await page.reload({ waitUntil: 'networkidle' });
+    }, {
+        saves: [primarySave, ...extraSaves],
+        summaries: [primarySave, ...extraSaves].map(makeSummary),
+        gameSettings
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await closeReleaseNotesIfOpen(page);
 };
 
@@ -185,4 +287,83 @@ test('角色对话框只渲染完整引号对白，串入叙事会回落为旁�
     expect(narratorText.join('\n')).toContain('“遵命！”');
     expect(narratorText.join('\n')).toContain('夜店里的灯光晃了一下。');
     expect(narratorText.join('\n')).toContain('他只是缓缓伸出右手，把冰冷的杯壁贴近嘴唇。');
+});
+
+test('编辑玩家反馈原文后，同角色的两段短对白都渲染为独立气泡', async ({ page }) => {
+    test.setTimeout(60000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => {
+        localStorage.setItem('moranjianghu.releaseNotesSuppressDate', new Date().toISOString().slice(0, 10));
+    });
+
+    const save = makeScreenshotDialogueSave();
+    await injectSaveAndReload(page, save, [], {
+        启用严格正文对白格式: false,
+        启用行动选项: false
+    });
+    await clickByTexts(page, ['本地游玩']);
+    await clickByTexts(page, ['重入江湖', '读取进度', '继续游戏', '读取', '载入']);
+    await page.waitForTimeout(700);
+    await clickByTexts(page, ['短对白气泡回归测试', '9102']);
+    await page.waitForTimeout(300);
+    await clickByTexts(page, ['读取最新存档']);
+    const confirmDialog = page.getByText('读取存档：杨培强').locator('xpath=ancestor::div[contains(@class,"fixed")][1]');
+    await confirmDialog.getByRole('button', { name: '读取' }).click({ force: true });
+    await expect(confirmDialog).toBeHidden({ timeout: 5000 });
+
+    await page.locator('button[title="查看/编辑原文"]').click();
+    await expect(page.locator('textarea.h-96')).toBeVisible();
+    await page.getByRole('button', { name: '保存并重解析' }).click();
+
+    const xiaoPuBubbles = page.locator('.chat-character-name', { hasText: '萧蒲童子' });
+    await expect(xiaoPuBubbles).toHaveCount(2, { timeout: 10000 });
+    await expect(page.locator('.chat-character-name', { hasText: '葛叶御前' })).toHaveCount(1);
+    const secondBubbleText = await xiaoPuBubbles.nth(1)
+        .locator('xpath=ancestor::div[contains(@class,"flex-col")]/following-sibling::div[1]')
+        .first()
+        .innerText();
+    expect(secondBubbleText).toContain('民女？主人，你是不是昨晚睡觉把脑子给压扁了？');
+    expect((await page.locator('.narrator-renderer').allInnerTexts()).join('\n')).toContain('萧蒲童子终于反应过来了');
+});
+
+test('重ROLL回档后保留上一轮有效自动存档', async ({ page }) => {
+    test.setTimeout(60000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => {
+        localStorage.setItem('moranjianghu.releaseNotesSuppressDate', new Date().toISOString().slice(0, 10));
+    });
+
+    const save = makeRerollSave();
+    const preservedAutoSave = makePreservedAutoSave();
+    await injectSaveAndReload(page, save, [preservedAutoSave]);
+    await clickByTexts(page, ['本地游玩']);
+    await clickByTexts(page, ['重入江湖', '读取进度', '继续游戏', '读取', '载入']);
+    await page.waitForTimeout(700);
+    await clickByTexts(page, ['重ROLL存档回归测试', '9103']);
+    await page.waitForTimeout(300);
+    await clickByTexts(page, ['读取最新存档']);
+    const confirmDialog = page.getByText('读取存档：杨培强').locator('xpath=ancestor::div[contains(@class,"fixed")][1]');
+    await confirmDialog.getByRole('button', { name: '读取' }).click({ force: true });
+    await expect(confirmDialog).toBeHidden({ timeout: 5000 });
+
+    const rerollButton = page.locator('button[title="重ROLL：回档到上一轮并回填输入"]');
+    await expect(rerollButton).toBeEnabled({ timeout: 10000 });
+    await rerollButton.click();
+    await expect(page.locator('input[placeholder="输入你的行动..."]')).toHaveValue('这条输入应在重ROLL后回填');
+    await page.waitForTimeout(500);
+
+    const preserved = await page.evaluate(async () => {
+        const req = indexedDB.open('WuxiaGameDB');
+        const db = await new Promise((resolve, reject) => {
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => resolve(req.result);
+        });
+        return new Promise((resolve, reject) => {
+            const request = db.transaction('saves', 'readonly').objectStore('saves').get(9199);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    });
+    expect(preserved).not.toBeNull();
+    expect(preserved.元数据.名称).toBe('上一轮有效自动存档');
 });

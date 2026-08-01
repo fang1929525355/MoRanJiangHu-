@@ -164,33 +164,7 @@ const 加载NPC生图工作流 = () => import('./useGame/npcImageWorkflow');
 import { 清空NPC生图等待队列 } from './useGame/npcImageQueue';
 const 加载NPC香闺秘档生图工作流 = () => import('./useGame/npcSecretImageWorkflow');
 const 加载场景生图工作流 = () => import('./useGame/sceneImageWorkflow');
-
-type 回合快照结构 = {
-    玩家输入: string;
-    游戏时间: string;
-    回档前状态: {
-        角色: 角色数据结构;
-        环境: 环境信息结构;
-        社交: any[];
-        世界: 世界数据结构;
-        战斗: 战斗状态结构;
-        玩家门派: 详细门派结构;
-        任务列表: any[];
-        约定列表: any[];
-        剧情: 剧情系统结构;
-        剧情规划: 剧情规划结构;
-        女主剧情规划?: 女主剧情规划结构;
-        同人剧情规划?: 同人剧情规划结构;
-        同人女主剧情规划?: 同人女主剧情规划结构;
-        记忆系统: 记忆系统结构;
-        叙事平静值?: 叙事状态结构;
-    };
-    回档前持久态: {
-        视觉设置: 视觉设置结构;
-        场景图片档案: 场景图片档案;
-    };
-    回档前历史: 聊天记录结构[];
-};
+import type { 回合快照结构 } from './useGame/turnSnapshot';
 
 const 游戏初始时间占位值 = '1:01:01:00:00';
 
@@ -675,13 +649,17 @@ export const useGame = () => {
         最近自动存档时间戳Ref.current = 0;
         最近自动存档签名Ref.current = '';
     };
-    const 删除最近自动存档并重置状态 = async (): Promise<void> => {
+    const 清理回合自动存档并重置状态 = async (snapshot: 回合快照结构): Promise<void> => {
+        重置自动存档状态();
+        let autoSaveId = Number(snapshot?.关联自动存档ID);
+        if (!(Number.isSafeInteger(autoSaveId) && autoSaveId > 0) && snapshot?.自动存档完成) {
+            autoSaveId = Number(await snapshot.自动存档完成.catch(() => null));
+        }
+        if (!Number.isSafeInteger(autoSaveId) || autoSaveId <= 0) return;
         try {
-            await dbService.删除最近自动存档();
+            await dbService.删除存档(autoSaveId);
         } catch (error) {
-            console.error('删除最近自动存档失败', error);
-        } finally {
-            重置自动存档状态();
+            console.error('清理重ROLL自动存档失败', error);
         }
     };
     const 推送右下角提示 = (toast: Omit<右下角提示结构, 'id'>) => {
@@ -3327,7 +3305,7 @@ export const useGame = () => {
         获取最新快照: () => 回合快照栈Ref.current[回合快照栈Ref.current.length - 1] || null,
         回档到快照,
         弹出重Roll快照,
-        删除最近自动存档并重置状态,
+        清理回合自动存档并重置状态,
         深拷贝,
         环境时间转标准串,
         获取开局配置: () => 开局配置,
