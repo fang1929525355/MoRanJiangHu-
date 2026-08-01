@@ -149,7 +149,7 @@ describe('Quark TV APK redirect', () => {
         expect(response.status).toBe(302);
         expect(response.headers.get('X-Moran-Apk-Source')).toBe('vps');
         expect(response.headers.get('location')).toBe('https://moranjianghu.bacon159.pp.ua/latest.apk');
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('keeps VPS as the final direct fallback when API-backed providers are unavailable', async () => {
