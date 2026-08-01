@@ -63,6 +63,7 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
             : `${baseUrl}/api/apk/latest.apk`;
         const stableManifestUrl = `${baseUrl}/api/apk/latest.json`;
         const latestApkUrl = `${baseUrl}/api/apk/latest.apk`;
+        const fullstackApkUrl = `${baseUrl}/api/apk/latest.apk?provider=fullstack`;
         const vpsApkUrl = 'https://moranjianghu.bacon159.pp.ua/latest.apk';
         const quarkTvApkUrl = `${baseUrl}/api/apk/latest.apk?provider=quark-tv`;
         const oneDriveApkUrl = `${baseUrl}/api/apk/latest.apk?provider=onedrive`;
@@ -77,28 +78,31 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
         const githubAcceleratedApkUrls = versionedFileName ? buildGitHubAcceleratedUrls(versionName, versionedFileName) : [];
         const githubRawDirectApkUrl = versionedFileName ? buildGitHubRawDownloadUrl(versionedFileName) : '';
         const githubRawAcceleratedApkUrl = githubRawDirectApkUrl ? `${DEFAULT_GITHUB_RAW_ACCELERATOR}/${githubRawDirectApkUrl}` : '';
-        const preferredApkProvider = readManifestPreferredApkProvider(payload);
+        const manifestPreferredApkProvider = readManifestPreferredApkProvider(payload);
+        const preferredApkProvider = 'fullstack';
         // 按 preferredApkProvider 排序候选源；B2 渠道已废弃。
+        const fullstackGroup = [fullstackApkUrl];
         const vpsGroup = [vpsApkUrl];
         const quarkGroup = [quarkTvApkUrl];
         const githubGroup = [...githubAcceleratedApkUrls, githubApkUrl, githubDirectApkUrl];
         const githubRawGroup = [githubRawAcceleratedApkUrl, githubRawApkUrl, githubRawDirectApkUrl];
         const oneDriveGroup = [oneDriveApkUrl, oneDriveDirectApkUrl];
         let providerOrderedUrls: string[];
-        if (preferredApkProvider === 'vps') {
+        if (manifestPreferredApkProvider === 'vps') {
             providerOrderedUrls = [...vpsGroup, ...quarkGroup, ...oneDriveGroup, ...githubGroup, ...githubRawGroup];
-        } else if (preferredApkProvider === 'quark-tv') {
+        } else if (manifestPreferredApkProvider === 'quark-tv') {
             providerOrderedUrls = [...quarkGroup, ...oneDriveGroup, ...githubGroup, ...githubRawGroup];
-        } else if (preferredApkProvider === 'onedrive' || preferredApkProvider === 'onedrive-direct') {
+        } else if (manifestPreferredApkProvider === 'onedrive' || manifestPreferredApkProvider === 'onedrive-direct') {
             providerOrderedUrls = [...oneDriveGroup, ...quarkGroup, ...githubRawGroup, ...githubGroup];
-        } else if (preferredApkProvider === 'github') {
+        } else if (manifestPreferredApkProvider === 'github') {
             providerOrderedUrls = [...githubGroup, ...githubRawGroup, ...quarkGroup, ...oneDriveGroup];
         } else {
             providerOrderedUrls = [...githubRawGroup, ...quarkGroup, ...githubGroup, ...oneDriveGroup];
         }
         const orderedApkUrls = [
-            latestApkUrl,
-            ...providerOrderedUrls
+            ...fullstackGroup,
+            ...providerOrderedUrls,
+            latestApkUrl
         ].filter(Boolean);
         const nextPayload = {
             ...payload,
@@ -113,6 +117,7 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
                 r2ApkUrl: '',
                 hi168ApkUrl: '',
                 b2ApkUrl: '',
+                fullstackApkUrl,
                 vpsApkUrl,
                 quarkTvApkUrl,
                 githubApkUrl,
