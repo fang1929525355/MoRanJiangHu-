@@ -164,35 +164,7 @@ const 加载NPC生图工作流 = () => import('./useGame/npcImageWorkflow');
 import { 清空NPC生图等待队列 } from './useGame/npcImageQueue';
 const 加载NPC香闺秘档生图工作流 = () => import('./useGame/npcSecretImageWorkflow');
 const 加载场景生图工作流 = () => import('./useGame/sceneImageWorkflow');
-
-type 回合快照结构 = {
-    玩家输入: string;
-    游戏时间: string;
-    关联自动存档ID?: number;
-    自动存档完成?: Promise<number | null>;
-    回档前状态: {
-        角色: 角色数据结构;
-        环境: 环境信息结构;
-        社交: any[];
-        世界: 世界数据结构;
-        战斗: 战斗状态结构;
-        玩家门派: 详细门派结构;
-        任务列表: any[];
-        约定列表: any[];
-        剧情: 剧情系统结构;
-        剧情规划: 剧情规划结构;
-        女主剧情规划?: 女主剧情规划结构;
-        同人剧情规划?: 同人剧情规划结构;
-        同人女主剧情规划?: 同人女主剧情规划结构;
-        记忆系统: 记忆系统结构;
-        叙事平静值?: 叙事状态结构;
-    };
-    回档前持久态: {
-        视觉设置: 视觉设置结构;
-        场景图片档案: 场景图片档案;
-    };
-    回档前历史: 聊天记录结构[];
-};
+import type { 回合快照结构 } from './useGame/turnSnapshot';
 
 const 游戏初始时间占位值 = '1:01:01:00:00';
 

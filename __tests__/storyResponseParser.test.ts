@@ -27,8 +27,28 @@ describe('storyResponseParser', () => {
         ]);
 
         const rendered = 规范化可渲染对白日志(parsed.logs);
-        expect(rendered.filter(item => item.sender === '萧蒲童子')).toHaveLength(2);
-        expect(rendered.some(item => item.sender === '萧蒲童子' && item.text.includes('民女？主人'))).toBe(true);
+        expect(rendered[1]?.sender).toBe('萧蒲童子');
+        expect(rendered[1]?.text).toBe('“哈？”');
+        expect(rendered[2]?.sender).toBe('旁白');
+        expect(rendered[2]?.text).toContain('终于反应过来了');
+        expect(rendered[3]?.sender).toBe('萧蒲童子');
+        expect(rendered[3]?.text).toContain('民女？主人');
+    });
+
+    it('识别带括号动作前缀的完整角色对白边界', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【萧蒲童子】（轻笑）“哈？”',
+            '她抬手指向门外。',
+            '【旁白】风声从廊下掠过。',
+            '</正文>',
+            '<短期记忆>萧蒲童子轻笑后观察门外。</短期记忆>'
+        ].join('\n'), { validateDialogueFormat: false });
+
+        expect(parsed.logs).toEqual([
+            { sender: '萧蒲童子', text: '（轻笑）“哈？”' },
+            { sender: '旁白', text: '她抬手指向门外。\n风声从廊下掠过。' }
+        ]);
     });
 
     it('合并模型返回的多个正文标签，避免界面只显示第一段', () => {

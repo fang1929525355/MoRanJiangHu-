@@ -32,6 +32,7 @@ import { 对AI输出执行酒馆正则 } from '../../utils/tavernRegexEngine';
 import { 提取酒馆选项 } from '../../utils/tavernOptionRenderer';
 import { 获取预设已分类正则脚本 } from '../../utils/tavernPreset';
 import { 从文本解析推理块 } from '../../utils/tavernTemplateEngine';
+import type { 回合快照结构 } from './turnSnapshot';
 
 type 回忆检索进度 = {
     phase: 'start' | 'stream' | 'done' | 'error';
@@ -1156,35 +1157,6 @@ export type 发送结果 = {
     recoveryHint?: string;
 };
 
-type 回合快照结构 = {
-    玩家输入: string;
-    游戏时间: string;
-    关联自动存档ID?: number;
-    自动存档完成?: Promise<number | null>;
-    回档前状态: {
-        角色: any;
-        环境: any;
-        社交: any[];
-        世界: any;
-        战斗: any;
-        玩家门派: any;
-        任务列表: any[];
-        约定列表: any[];
-        剧情: 剧情系统结构;
-        剧情规划: 剧情规划结构;
-        女主剧情规划?: 女主剧情规划结构;
-        同人剧情规划?: 同人剧情规划结构;
-        同人女主剧情规划?: 同人女主剧情规划结构;
-        记忆系统: 记忆系统结构;
-        叙事平静值?: 叙事状态结构;
-    };
-    回档前持久态: {
-        视觉设置: any;
-        场景图片档案: any;
-    };
-    回档前历史: 聊天记录结构[];
-};
-
 type 主剧情发送当前状态 = {
     历史记录: 聊天记录结构[];
     记忆系统: 记忆系统结构;
@@ -1606,9 +1578,20 @@ export const 执行主剧情发送工作流 = async (
     const canonicalTime = 环境时间转标准串(currentState.环境);
     const currentGameTime = canonicalTime || '未知时间';
     const memBeforeSend = normalizedMemBeforeSend;
+    let resolve自动存档完成: (id: number | null) => void = () => undefined;
+    let 自动存档完成已收束 = false;
+    const 自动存档完成 = new Promise<number | null>((resolve) => {
+        resolve自动存档完成 = resolve;
+    });
+    const 收束自动存档完成 = (id: number | null) => {
+        if (自动存档完成已收束) return;
+        自动存档完成已收束 = true;
+        resolve自动存档完成(id);
+    };
     const 本回合重Roll快照: 回合快照结构 = {
         玩家输入: sendInput,
         游戏时间: currentGameTime,
+        自动存档完成,
         回档前状态: {
             角色: deps.深拷贝(currentState.角色),
             环境: deps.规范化环境信息(deps.深拷贝(currentState.环境)),
@@ -3146,38 +3129,41 @@ export const 执行主剧情发送工作流 = async (
                 deps.检查主角每回合生图(finalState.角色);
 
                 if (回合结束自动存档已开启) {
-                    const autoSaveTask = deps.performAutoSave({
-                        history: [...updatedDisplayHistory, queuedAiMsg],
-                        role: finalState.角色,
-                        env: finalState.环境,
-                        social: finalState.社交,
-                        world: finalState.世界,
-                        battle: finalState.战斗,
-                        sect: finalState.玩家门派,
-                        tasks: finalState.任务列表,
-                        agreements: finalState.约定列表,
-                        story: finalState.剧情,
-                        storyPlan: finalState.剧情规划,
-                        heroinePlan: finalState.女主剧情规划,
-                        fandomStoryPlan: finalState.同人剧情规划,
-                        fandomHeroinePlan: finalState.同人女主剧情规划,
-                        memory: nextMemory,
-                        叙事平静值: 本回合更新后的叙事平静值 || undefined,
-                        force: true
-                    });
-                    本回合重Roll快照.自动存档完成 = autoSaveTask
-                        .then((saved) => {
-                            const id = Number(saved?.id);
-                            if (Number.isSafeInteger(id) && id > 0) {
-                                本回合重Roll快照.关联自动存档ID = id;
-                                return id;
-                            }
-                            return null;
-                        })
-                        .catch(() => null);
-                    await autoSaveTask;
+                    try {
+                        const saved = await deps.performAutoSave({
+                            history: [...updatedDisplayHistory, queuedAiMsg],
+                            role: finalState.角色,
+                            env: finalState.环境,
+                            social: finalState.社交,
+                            world: finalState.世界,
+                            battle: finalState.战斗,
+                            sect: finalState.玩家门派,
+                            tasks: finalState.任务列表,
+                            agreements: finalState.约定列表,
+                            story: finalState.剧情,
+                            storyPlan: finalState.剧情规划,
+                            heroinePlan: finalState.女主剧情规划,
+                            fandomStoryPlan: finalState.同人剧情规划,
+                            fandomHeroinePlan: finalState.同人女主剧情规划,
+                            memory: nextMemory,
+                            叙事平静值: 本回合更新后的叙事平静值 || undefined,
+                            force: true
+                        });
+                        const autoSaveId = Number(saved?.id);
+                        const validAutoSaveId = Number.isSafeInteger(autoSaveId) && autoSaveId > 0
+                            ? autoSaveId
+                            : null;
+                        if (validAutoSaveId !== null) {
+                            本回合重Roll快照.关联自动存档ID = validAutoSaveId;
+                        }
+                        收束自动存档完成(validAutoSaveId);
+                    } catch (autoSaveError) {
+                        收束自动存档完成(null);
+                        throw autoSaveError;
+                    }
                 }
             } catch (backgroundError: any) {
+                收束自动存档完成(null);
                 if (backgroundError?.name === "AbortError") {
                     options?.onPolishProgress?.({
                         phase: "cancelled",
@@ -3219,6 +3205,7 @@ export const 执行主剧情发送工作流 = async (
                     text: backgroundError?.message || "后台队列执行失败"
                 });
             } finally {
+                收束自动存档完成(null);
                 deps.set后台队列处理中(false);
                 if (deps.abortControllerRef.current === controller) {
                     deps.abortControllerRef.current = null;
@@ -3227,6 +3214,7 @@ export const 执行主剧情发送工作流 = async (
         })();
         return { attachedRecallPreview };
     } catch (error: any) {
+        收束自动存档完成(null);
         if (error.name === 'AbortError') {
             const snapshot = deps.弹出重Roll快照();
             if (snapshot) {
@@ -3371,6 +3359,9 @@ export const 执行主剧情发送工作流 = async (
             errorTitle: '请求失败'
         };
     } finally {
+        if (!后台队列已启动) {
+            收束自动存档完成(null);
+        }
         deps.setLoading(false);
         if (!后台队列已启动 && deps.abortControllerRef.current === controller) {
             deps.abortControllerRef.current = null;

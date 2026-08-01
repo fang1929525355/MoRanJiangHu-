@@ -1089,13 +1089,17 @@ const 提取残缺角色名单标签 = (text: string): string => {
 
 const 是否完整闭合的角色对白 = (value: string): boolean => {
     const source = (value || '').trim();
-    if (!source || !/^[“"「『]/u.test(source)) return false;
-    const opener = source[0];
+    if (!source) return false;
+    const openerIndex = source.search(/[“"「『]/u);
+    if (openerIndex < 0) return false;
+    const prefix = source.slice(0, openerIndex).trim();
+    if (prefix && !/^(?:（[^）]{0,120}）|\([^)]{0,120}\)|\*[^*]{0,120}\*)$/u.test(prefix)) return false;
+    const opener = source[openerIndex];
     const closer = opener === '“' ? '”'
         : opener === '「' ? '」'
             : opener === '『' ? '』'
                 : '"';
-    const closingIndex = source.indexOf(closer, 1);
+    const closingIndex = source.indexOf(closer, openerIndex + 1);
     return closingIndex === source.length - 1;
 };
 
