@@ -129,8 +129,8 @@ const 计算任务进度 = (dataset: ReturnType<typeof 规范化小说拆分数�
     const completedSegments = allSegments.filter((item) => item.处理状态 === '已完成');
     const failedSegments = allSegments.filter((item) => item.处理状态 === '失败');
     const total = allSegments.length;
-    const firstIncompleteIndex = allSegments.findIndex((item) => item.处理状态 !== '已完成');
-    const currentIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : total;
+    const firstPendingIndex = allSegments.findIndex((item) => item.处理状态 === '待处理' || item.处理状态 === '处理中');
+    const currentIndex = firstPendingIndex >= 0 ? firstPendingIndex : total;
     return 规范化小说拆分任务进度({
         ...(task?.进度 || {}),
         总分段数: total,
@@ -139,6 +139,37 @@ const 计算任务进度 = (dataset: ReturnType<typeof 规范化小说拆分数�
         当前分段索引: currentIndex,
         百分比: total > 0 ? Math.round((completedSegments.length / total) * 100) : 0
     });
+};
+
+export const 获取小说拆分自动重试次数 = (configuredRetries: unknown): number => (
+    Math.max(3, Math.floor(Number(configuredRetries) || 0))
+);
+
+export const 获取小说拆分待处理索引 = (
+    segments: Array<{ 处理状态?: string }> | null | undefined,
+    startIndex = 0,
+    batchSize = 1
+): number[] => {
+    const indexes: number[] = [];
+    const source = Array.isArray(segments) ? segments : [];
+    for (let index = Math.max(0, startIndex); index < source.length; index += 1) {
+        const status = source[index]?.处理状态;
+        if (status !== '待处理' && status !== '处理中') continue;
+        indexes.push(index);
+        if (indexes.length >= Math.max(1, batchSize)) break;
+    }
+    return indexes;
+};
+
+export const 构建小说拆分失败汇总 = (
+    segments: Array<{ 标题?: string; 处理状态?: string; 最近错误?: string }> | null | undefined
+): string => {
+    const failedSegments = (Array.isArray(segments) ? segments : []).filter((item) => item?.处理状态 === '失败');
+    if (failedSegments.length <= 0) return '';
+    const details = failedSegments.map((item, index) => (
+        `${item.标题 || `第 ${index + 1} 个失败分段`}：${item.最近错误 || '未知错误'}`
+    ));
+    return `共 ${failedSegments.length} 个分段处理失败：${details.join('；')}`;
 };
 
 const 获取上一已完成分段结束时间 = (
@@ -190,10 +221,6 @@ const 构建前一组参考文本 = (
     }
     return '';
 };
-
-const 获取首个未完成分段索引 = (
-    segments: ReturnType<typeof 规范化小说拆分数据集>['分段列表']
-): number => segments.findIndex((segment) => segment.处理状态 !== '已完成');
 
 const 默认小说拆分执行器 = async (params: {
     task: any;
@@ -292,38 +319,16 @@ const 默认小说拆分执行器 = async (params: {
     }
 
     const batchSize = Math.max(1, Number(task?.单次处理批量) || 1);
-    const 自动重试次数 = Math.max(0, Number(task?.自动重试次数) || 0);
-    const firstIncompleteIndex = 获取首个未完成分段索引(workingDataset.分段列表);
-    const firstIncompleteSegment = firstIncompleteIndex >= 0 ? workingDataset.分段列表[firstIncompleteIndex] : null;
-    const 首个阻塞失败分段 = firstIncompleteSegment?.处理状态 === '失败'
-        ? firstIncompleteSegment
-        : null;
-
-    if (首个阻塞失败分段) {
-        const failedDataset = 聚合小说拆分数据集(workingDataset);
-        const blockedIndex = 获取首个未完成分段索引(failedDataset.分段列表);
-        await 写入小说拆分数据集(failedDataset);
-        await 刷新数据集快照(failedDataset);
-        await 更新小说拆分任务进度(task.id, {
-            当前阶段: 'failed',
-            当前游标: blockedIndex >= 0 ? blockedIndex : failedDataset.分段列表.length,
-            已完成分段ID列表: failedDataset.分段列表.filter((item) => item.处理状态 === '已完成').map((item) => item.id),
-            失败分段ID列表: [首个阻塞失败分段.id],
-            最近错误: 首个阻塞失败分段.最近错误 || '存在待人工处理的失败分段',
-            进度: 计算任务进度(failedDataset, task)
-        });
-        return {
-            type: 'failed',
-            message: 附加接口身份(`任务“${task.名称}”在分段“${首个阻塞失败分段.标题 || `第 ${firstIncompleteIndex + 1} 段`}”失败后已停止；请人工校对并将该分段打回“待处理”后再继续。`)
-        };
-    }
+    const 自动重试次数 = 获取小说拆分自动重试次数(task?.自动重试次数);
+    const pendingIndexes = 获取小说拆分待处理索引(workingDataset.分段列表, 0, batchSize);
+    const firstIncompleteIndex = pendingIndexes[0] ?? -1;
 
     if (firstIncompleteIndex < 0) {
         const finalDataset = 聚合小说拆分数据集(workingDataset);
         await 写入小说拆分数据集(finalDataset);
         await 刷新数据集快照(finalDataset);
         await 更新小说拆分任务进度(task.id, {
-            当前阶段: 'completed',
+            当前阶段: finalDataset.分段列表.some((item) => item.处理状态 === '失败') ? 'failed' : 'completed',
             当前游标: finalDataset.分段列表.length,
             已完成分段ID列表: finalDataset.分段列表.filter((item) => item.处理状态 === '已完成').map((item) => item.id),
             失败分段ID列表: finalDataset.分段列表.filter((item) => item.处理状态 === '失败').map((item) => item.id),
@@ -335,10 +340,16 @@ const 默认小说拆分执行器 = async (params: {
                 百分比: 100
             })
         });
-        return {
-            type: 'completed',
-            message: 附加接口身份(`任务“${task.名称}”已完成，树状注入快照已刷新。`)
-        };
+        const failureSummary = 构建小说拆分失败汇总(finalDataset.分段列表);
+        return failureSummary
+            ? {
+                type: 'failed',
+                message: 附加接口身份(`任务“${task.名称}”已执行全部分段并刷新注入快照；${failureSummary}`)
+            }
+            : {
+                type: 'completed',
+                message: 附加接口身份(`任务“${task.名称}”已完成，树状注入快照已刷新。`)
+            };
     }
 
     await 更新小说拆分任务状态(task.id, 'running', { 当前阶段: 'processing', lastRunAt: Date.now() });
@@ -346,17 +357,9 @@ const 默认小说拆分执行器 = async (params: {
         segment: ReturnType<typeof 规范化小说拆分数据集>['分段列表'][number];
         index: number;
     }> = [];
-    for (let index = firstIncompleteIndex; index < workingDataset.分段列表.length; index += 1) {
+    for (const index of pendingIndexes) {
         const segment = workingDataset.分段列表[index];
-        if (!segment || segment.处理状态 === '已完成') {
-            if (index === firstIncompleteIndex) continue;
-            break;
-        }
-        if (segment.处理状态 === '失败') {
-            break;
-        }
-        batch.push({ segment, index });
-        if (batch.length >= batchSize) break;
+        if (segment) batch.push({ segment, index });
     }
     const nextSegments = [...workingDataset.分段列表];
     let batchStoppedByFailure = false;
@@ -522,7 +525,7 @@ const 默认小说拆分执行器 = async (params: {
                     message: 附加接口身份(`分段“${failedSegmentTitle}”处理失败：${error?.message || '未知错误'}`),
                     level: 'error'
                 });
-                break;
+                continue;
             }
         }
     } finally {
@@ -551,10 +554,10 @@ const 默认小说拆分执行器 = async (params: {
     const progress = 计算任务进度(workingDataset, task);
     const completedIds = workingDataset.分段列表.filter((item) => item.处理状态 === '已完成').map((item) => item.id);
     const failedIds = workingDataset.分段列表.filter((item) => item.处理状态 === '失败').map((item) => item.id);
-    const hasPending = workingDataset.分段列表.some((item) => item.处理状态 !== '已完成');
+    const hasPending = workingDataset.分段列表.some((item) => item.处理状态 === '待处理' || item.处理状态 === '处理中');
 
     await 更新小说拆分任务进度(task.id, {
-        当前阶段: hasPending ? 'processing' : 'completed',
+        当前阶段: hasPending ? 'processing' : (failedIds.length > 0 ? 'failed' : 'completed'),
         当前游标: progress.当前分段索引,
         已完成分段ID列表: completedIds,
         失败分段ID列表: failedIds,
@@ -571,7 +574,7 @@ const 默认小说拆分执行器 = async (params: {
         };
     }
 
-    if (!hasPending) {
+    if (!hasPending && failedIds.length <= 0) {
         小说拆分后台调度服务.reportProgress({
             taskId: task?.id,
             taskName: task?.名称,
@@ -585,17 +588,17 @@ const 默认小说拆分执行器 = async (params: {
         };
     }
 
-    if (batchStoppedByFailure) {
-        const latestError = workingDataset.分段列表.find((item) => item.处理状态 === '失败')?.最近错误 || '当前章节处理失败';
+    if (!hasPending && failedIds.length > 0) {
+        const failureSummary = 构建小说拆分失败汇总(workingDataset.分段列表);
         return {
             type: 'failed',
-            message: 附加接口身份(`任务“${task.名称}”在分段“${failedSegmentTitle}”失败后已停止，未继续后续章节；请先人工校对并将该分段打回“待处理”。当前进度 ${progress.已完成分段数}/${progress.总分段数}；最近错误：${latestError}`)
+            message: 附加接口身份(`任务“${task.名称}”已执行全部分段；${failureSummary}`)
         };
     }
 
     return {
         type: 'progress',
-        message: 附加接口身份(`任务“${task.名称}”本轮处理了 ${processedCount} 个分段，当前进度 ${progress.已完成分段数}/${progress.总分段数}。`)
+        message: 附加接口身份(`任务“${task.名称}”本轮完成 ${processedCount} 个分段${batchStoppedByFailure ? '，失败项已记录并将继续处理后续分段' : ''}，当前进度 ${progress.已完成分段数}/${progress.总分段数}。`)
     };
 };
 
