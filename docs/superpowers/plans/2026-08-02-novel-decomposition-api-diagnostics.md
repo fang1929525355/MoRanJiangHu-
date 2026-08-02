@@ -240,7 +240,7 @@ Start-Process -FilePath python -ArgumentList '-m','http.server','4173','-d','dis
 
 Run: `git diff --check`
 
-Run: `git diff | Select-String -Pattern 'apiKey|secret-key|Bearer' -Context 2,2`
+Run: `pwsh -NoProfile -Command "$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new(); git diff | Select-String -Pattern 'apiKey|secret-key|Bearer' -Context 2,2"`
 
 Expected: 无空白错误；只有字段名或测试占位值，没有真实密钥。
 

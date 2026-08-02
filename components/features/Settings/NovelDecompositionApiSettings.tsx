@@ -5,11 +5,14 @@ import ToggleSwitch from '../../ui/ToggleSwitch';
 import InlineSelect from '../../ui/InlineSelect';
 import {
     构建OpenAI兼容模型列表候选地址,
-    获取小说拆分接口配置,
     规范化Gemini模型资源ID,
     规范化接口设置
 } from '../../../utils/apiConfig';
-import { 测试小说拆分接口连接, type 小说拆分连接测试结果 } from '../../../services/novelDecompositionApiDiagnostics';
+import {
+    解析小说拆分连接测试草稿,
+    测试小说拆分接口连接,
+    type 小说拆分连接测试结果
+} from '../../../services/novelDecompositionApiDiagnostics';
 import StageApiModelSelector from './StageApiModelSelector';
 
 interface Props {
@@ -99,19 +102,15 @@ const NovelDecompositionApiSettings: React.FC<Props> = ({ settings, onSave }) =>
 
     const handleTestConnection = async () => {
         if (testingConnection) return;
-        const apiConfig = 获取小说拆分接口配置(规范化接口设置(form));
-        if (!apiConfig?.baseUrl || !apiConfig.apiKey || !apiConfig.model) {
-            setConnectionResult({
-                ok: false,
-                identity: `渠道：${apiConfig?.名称 || '小说分解独立接口'}｜模型：${apiConfig?.model || '未配置'}`,
-                detail: '测试失败：请先填写可用的 Base URL、API Key 与模型名称。'
-            });
+        const draft = 解析小说拆分连接测试草稿(form);
+        if (!draft.apiConfig) {
+            setConnectionResult(draft.failure || null);
             return;
         }
         setTestingConnection(true);
         setConnectionResult(null);
         try {
-            setConnectionResult(await 测试小说拆分接口连接(apiConfig));
+            setConnectionResult(await 测试小说拆分接口连接(draft.apiConfig));
         } finally {
             setTestingConnection(false);
         }
@@ -246,7 +245,7 @@ const NovelDecompositionApiSettings: React.FC<Props> = ({ settings, onSave }) =>
                     <GameButton
                         onClick={() => { void handleTestConnection(); }}
                         variant="primary"
-                        className="px-4 py-2 text-xs"
+                        className={`px-4 py-2 text-xs ${testingConnection ? '!bg-amber-100/85 !text-amber-950 !border-amber-500' : ''}`}
                         disabled={testingConnection || !独立模型开启}
                     >
                         {testingConnection ? '测试中...' : '测试连接'}

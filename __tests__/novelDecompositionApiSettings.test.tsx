@@ -1,8 +1,10 @@
 import React from 'react';
+import fs from 'node:fs';
+import path from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import NovelDecompositionApiSettings from '../components/features/Settings/NovelDecompositionApiSettings';
-import { 测试小说拆分接口连接 } from '../services/novelDecompositionApiDiagnostics';
+import { 解析小说拆分连接测试草稿, 测试小说拆分接口连接 } from '../services/novelDecompositionApiDiagnostics';
 import { 规范化接口设置 } from '../utils/apiConfig';
 
 const apiConfig = {
@@ -54,7 +56,38 @@ describe('小说分解接口设置', () => {
 
         expect(result.ok).toBe(false);
         expect(result.identity).toBe('渠道：自建 Gemini2API｜模型：gemini-2.5-flash');
+        expect(result.detail).toMatch(/^耗时：\d+ms\n/);
         expect(result.detail).toContain('404 Requested entity was not found');
         expect(result.detail).not.toContain('secret-key');
+    });
+
+    it('独立草稿缺少密钥时不回退到已保存渠道密钥', () => {
+        const settings = 规范化接口设置({
+            configs: [apiConfig],
+            activeConfigId: apiConfig.id,
+            功能模型占位: {
+                小说拆分功能启用: true,
+                小说拆分独立模型开关: true,
+                小说拆分渠道ID: apiConfig.id,
+                小说拆分API地址: 'https://draft.example.test/v1',
+                小说拆分API密钥: '',
+                小说拆分使用模型: 'models/gemini-2.5-pro'
+            }
+        } as any);
+
+        const draft = 解析小说拆分连接测试草稿(settings);
+
+        expect(draft.apiConfig).toBeNull();
+        expect(draft.failure?.identity).toBe('渠道：自建 Gemini2API｜模型：gemini-2.5-pro');
+        expect(draft.failure?.detail).toContain('API Key');
+    });
+
+    it('测试中按钮使用暖色表面而不是近黑背景', () => {
+        const source = fs.readFileSync(
+            path.join(process.cwd(), 'components/features/Settings/NovelDecompositionApiSettings.tsx'),
+            'utf8'
+        );
+
+        expect(source).toContain("testingConnection ? '!bg-amber-100/85");
     });
 });
