@@ -137,7 +137,7 @@ const 计算任务进度 = (dataset: ReturnType<typeof 规范化小说拆分数�
         已完成分段数: completedSegments.length,
         失败分段数: failedSegments.length,
         当前分段索引: currentIndex,
-        百分比: total > 0 ? Math.round((completedSegments.length / total) * 100) : 0
+        百分比: total > 0 ? Math.round(((completedSegments.length + failedSegments.length) / total) * 100) : 0
     });
 };
 
@@ -222,7 +222,7 @@ const 构建前一组参考文本 = (
     return '';
 };
 
-const 默认小说拆分执行器 = async (params: {
+export const 默认小说拆分执行器 = async (params: {
     task: any;
     dataset?: any;
 }): Promise<小说拆分执行器结果> => {

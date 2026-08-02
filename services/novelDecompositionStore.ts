@@ -440,7 +440,7 @@ export const 规范化小说拆分任务进度 = (raw: any): 小说拆分任务�
     const 失败分段数 = Math.max(0, Math.floor(读取数字(raw?.失败分段数, 0)));
     const 当前分段索引 = Math.max(0, Math.floor(读取数字(raw?.当前分段索引, 0)));
     const 百分比 = 总分段数 > 0
-        ? Math.max(0, Math.min(100, Math.round((已完成分段数 / 总分段数) * 100)))
+        ? Math.max(0, Math.min(100, Math.round(((已完成分段数 + 失败分段数) / 总分段数) * 100)))
         : Math.max(0, Math.min(100, Math.floor(读取数字(raw?.百分比, 0))));
 
     return {
