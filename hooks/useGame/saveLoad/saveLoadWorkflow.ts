@@ -23,6 +23,8 @@ import { 执行手动存档, 执行自动存档, 执行读取存档 } from '../s
 import type { 自动存档快照结构 } from '../saveCoordinator';
 import { buildSaveDebugSummary, recordSaveLoadTrace } from '../../../utils/saveLoadTrace';
 
+type 存档读取协调依赖 = Parameters<typeof 执行读取存档>[1];
+
 type 存档编排工作流依赖 = {
     存档格式版本: number;
     自动存档最小间隔毫秒: number;
@@ -106,6 +108,7 @@ type 存档编排工作流依赖 = {
     设置历史记录: (value: 聊天记录结构[]) => void;
     设置叙事平静值: (value: 叙事状态结构) => void;
     清空重Roll快照: () => void;
+    推入重Roll快照: NonNullable<存档读取协调依赖['推入重Roll快照']>;
     重置自动存档状态: () => void;
     切换生图存档作用域?: () => void;
     最近自动存档时间戳Ref: { current: number };
@@ -203,6 +206,7 @@ export const 创建存读档工作流 = (deps: 存档编排工作流依赖) => {
         设置历史记录: deps.设置历史记录,
         设置叙事平静值: deps.设置叙事平静值,
         清空重Roll快照: deps.清空重Roll快照,
+        推入重Roll快照: deps.推入重Roll快照,
         重置自动存档状态: deps.重置自动存档状态,
         切换生图存档作用域: deps.切换生图存档作用域,
         最近自动存档时间戳Ref: deps.最近自动存档时间戳Ref,

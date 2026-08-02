@@ -22,7 +22,7 @@ OpenList 中的“全栈云盘”挂载使用 WebDAV 驱动。现有文件的真
 
 全栈云盘使用以下目录：
 
-- `/全栈云盘/MoRanJiangHu/apk/latest.apk`
+- `/全栈云盘/MoRanJiangHu/releases/latest.apk`
 - `/全栈云盘/MoRanJiangHu/releases/MoRanJiangHu-v<versionName>.apk`
 
 发布脚本通过本机或云端已有的 `MORAN_OPENLIST_AUTH_TOKEN` 调用 OpenList 上传接口。令牌只从环境变量或本地环境文件读取，不写入代码、日志、清单或提交。

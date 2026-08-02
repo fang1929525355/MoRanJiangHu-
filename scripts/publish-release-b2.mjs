@@ -178,7 +178,7 @@ const openListUploadTimeoutMs = Math.max(1000, Number(readEnv('MORAN_OPENLIST_UP
 uploadApkFileToOpenListWithCurl({
   apkPath,
   versionName: currentVersionName,
-  targetRoot: '/夸克/MoRanJiangHu/releases',
+  targetRoot: '/Onedrive/MoRanJiangHu/releases',
   baseUrl: openListBaseUrl,
   authToken: openListAuthToken,
   timeoutMs: openListUploadTimeoutMs
@@ -186,7 +186,7 @@ uploadApkFileToOpenListWithCurl({
 await verifyOpenListApkFiles({
   versionName: currentVersionName,
   expectedSize: apkSize,
-  downloadRoot: '/夸克TV/MoRanJiangHu/releases',
+  downloadRoot: '/Onedrive/MoRanJiangHu/releases',
   baseUrl: openListBaseUrl,
   authToken: openListAuthToken
 });
@@ -226,6 +226,7 @@ const b2ManifestKey = normalizeKey(`${prefix}/latest.json`);
 const hi168VersionedKey = (versionName) => normalizeKey(`${s3Prefix}/${versionedFileName(versionName)}`);
 
 const providerApkUrls = {
+  fullstack: '',
   vps: `${String(process.env.MORAN_VPS_APK_BASE_URL || 'https://moranjianghu.bacon159.pp.ua').replace(/\/+$/, '')}/latest.apk`,
   quarkTv: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=quark-tv` : '',
   onedrive: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=onedrive` : '',
@@ -242,7 +243,7 @@ const githubRawAcceleratedApkUrl = githubRawAccelerator && /^https:\/\/[^/]+$/i.
 // VPS 和 GitHub Raw 只有通过远端完整性校验后才允许成为首选。
 // 如需强制其他通道，用环境变量 MORAN_RELEASE_PREFERRED_APK_PROVIDER 覆盖。
 const requestedPreferredApkProvider = readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'vps');
-const preferredApkProvider = await resolvePreferredApkProvider({
+const fallbackPreferredApkProvider = await resolvePreferredApkProvider({
   requestedProvider: requestedPreferredApkProvider,
   vpsUrl: providerApkUrls.vps,
   githubRawUrl: githubRawAcceleratedApkUrl || providerApkUrls.githubRawDirect,
@@ -250,17 +251,19 @@ const preferredApkProvider = await resolvePreferredApkProvider({
   apkSha256,
   timeoutMs: providerVerifyTimeoutMs
 });
-const orderedProviderUrls = preferredApkProvider === 'vps'
+const fallbackProviderUrls = fallbackPreferredApkProvider === 'vps'
   ? [providerApkUrls.vps, providerApkUrls.quarkTv, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, ...githubAcceleratedApkUrls, providerApkUrls.github, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.githubRawDirect, providerApkUrls.githubDirect].filter(Boolean)
-  : preferredApkProvider === 'github'
+  : fallbackPreferredApkProvider === 'github'
   ? [...githubAcceleratedApkUrls, providerApkUrls.github, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.quarkTv, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.githubDirect].filter(Boolean)
-  : preferredApkProvider === 'onedrive-direct'
+  : fallbackPreferredApkProvider === 'onedrive-direct'
     ? [providerApkUrls.onedriveDirect, providerApkUrls.onedrive, providerApkUrls.quarkTv, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.githubDirect].filter(Boolean)
-    : preferredApkProvider === 'onedrive'
+    : fallbackPreferredApkProvider === 'onedrive'
       ? [providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.quarkTv, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.githubDirect].filter(Boolean)
-      : preferredApkProvider === 'quark-tv'
+      : fallbackPreferredApkProvider === 'quark-tv'
         ? [providerApkUrls.quarkTv, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, ...githubAcceleratedApkUrls, providerApkUrls.github, githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.githubRawDirect, providerApkUrls.githubDirect].filter(Boolean)
         : [githubRawAcceleratedApkUrl, providerApkUrls.githubRaw, providerApkUrls.githubRawDirect, providerApkUrls.quarkTv, ...githubAcceleratedApkUrls, providerApkUrls.github, providerApkUrls.onedrive, providerApkUrls.onedriveDirect, providerApkUrls.githubDirect].filter(Boolean);
+const preferredApkProvider = fallbackPreferredApkProvider;
+const orderedProviderUrls = fallbackProviderUrls;
 
 const manifest = {
   latest: {
@@ -279,6 +282,7 @@ const manifest = {
     r2ApkUrl: '',
     hi168ApkUrl: '',
      b2ApkUrl: '',
+     fullstackApkUrl: providerApkUrls.fullstack,
      vpsApkUrl: providerApkUrls.vps,
      quarkTvApkUrl: providerApkUrls.quarkTv,
      oneDriveApkUrl: providerApkUrls.onedrive,
@@ -293,8 +297,8 @@ const manifest = {
     hi168DirectApkUrl: '',
     b2DirectApkUrl: '',
     apkUrls: [
-      `${websiteBaseUrl}/api/apk/latest.apk`,
-      ...orderedProviderUrls
+      ...orderedProviderUrls,
+      `${websiteBaseUrl}/api/apk/latest.apk`
     ].filter(Boolean),
     manifestUrl: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.json` : '',
     publishedAt: releaseInfo.releasePublishedAt || new Date().toISOString(),

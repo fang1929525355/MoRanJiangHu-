@@ -1,4 +1,5 @@
 import * as textAIService from '../../services/ai/text';
+import { 是否流式连接中断错误消息 } from '../../services/ai/chatCompletionClient';
 import { recordAiParseFailureDiagnostic } from '../../services/diagnosticContext';
 import { recordDiagnosticLog } from '../../services/diagnosticLog';
 import type { GameResponse, OpeningConfig, 聊天记录结构, 记忆系统结构, 角色数据结构, 剧情系统结构, 剧情规划结构, 女主剧情规划结构, 同人剧情规划结构, 同人女主剧情规划结构, 世界书结构, 内置提示词条目结构, 叙事状态结构, 叙事平静值配置结构 } from '../../types';
@@ -31,6 +32,7 @@ import { 对AI输出执行酒馆正则 } from '../../utils/tavernRegexEngine';
 import { 提取酒馆选项 } from '../../utils/tavernOptionRenderer';
 import { 获取预设已分类正则脚本 } from '../../utils/tavernPreset';
 import { 从文本解析推理块 } from '../../utils/tavernTemplateEngine';
+import type { 回合快照结构 } from './turnSnapshot';
 
 type 回忆检索进度 = {
     phase: 'start' | 'stream' | 'done' | 'error';
@@ -230,6 +232,37 @@ export const 提取自动重试原因文本 = (error: any): string => {
     }
     return '请求失败，正在重试';
 };
+
+/**
+ * 判断错误是否属于「流式输出被上游意外终止」：
+ * 典型场景是正文出现特定词汇（如“娼妇”）触发上游内容审核直接掐断流式通道，
+ * 也可能由代理断流或流式空闲超时引起。命中后外层重试应降级为非流式请求。
+ */
+export const 是否流式意外终止错误 = (error: any): boolean => {
+    if (!error || error?.name === 'AbortError') return false;
+    if (error?.流式意外终止 === true) return true;
+    const message = String(error?.message || '');
+    const detail = String(error?.detail || '');
+    if (是否流式连接中断错误消息(message) || 是否流式连接中断错误消息(detail)) return true;
+    if (message.includes('模型流式连接中途断开') || detail.includes('模型流式连接中途断开')) return true;
+    if (String(error?.name || '') === 'TimeoutError' && message.includes('流式输出空闲超时')) return true;
+    return false;
+};
+
+export const 判定主剧情重试流式策略 = (params: {
+    isStreaming: boolean;
+    fallbackToNonStreaming: boolean;
+    lastError?: any;
+}): { useStreaming: boolean; fallbackToNonStreaming: boolean } => {
+    const fallbackToNonStreaming = params.fallbackToNonStreaming
+        || (params.isStreaming && Boolean(params.lastError) && 是否流式意外终止错误(params.lastError));
+    return {
+        useStreaming: params.isStreaming && !fallbackToNonStreaming,
+        fallbackToNonStreaming
+    };
+};
+
+export const 流式意外终止降级提示 = '流式输出被上游中断（常见于触发上游内容审核或代理断流），已自动切换为非流式重新生成';
 
 export const 校验响应未命中女性姓名黑名单 = (
     response: GameResponse,
@@ -1124,33 +1157,6 @@ export type 发送结果 = {
     recoveryHint?: string;
 };
 
-type 回合快照结构 = {
-    玩家输入: string;
-    游戏时间: string;
-    回档前状态: {
-        角色: any;
-        环境: any;
-        社交: any[];
-        世界: any;
-        战斗: any;
-        玩家门派: any;
-        任务列表: any[];
-        约定列表: any[];
-        剧情: 剧情系统结构;
-        剧情规划: 剧情规划结构;
-        女主剧情规划?: 女主剧情规划结构;
-        同人剧情规划?: 同人剧情规划结构;
-        同人女主剧情规划?: 同人女主剧情规划结构;
-        记忆系统: 记忆系统结构;
-        叙事平静值?: 叙事状态结构;
-    };
-    回档前持久态: {
-        视觉设置: any;
-        场景图片档案: any;
-    };
-    回档前历史: 聊天记录结构[];
-};
-
 type 主剧情发送当前状态 = {
     历史记录: 聊天记录结构[];
     记忆系统: 记忆系统结构;
@@ -1203,7 +1209,7 @@ type 主剧情发送依赖 = {
         baseState?: Partial<响应命令处理状态>,
         options?: { applyState?: boolean }
     ) => 响应命令处理状态;
-    performAutoSave: (snapshot?: 自动存档快照结构) => Promise<void>;
+    performAutoSave: (snapshot?: 自动存档快照结构) => Promise<{ id?: number } | null>;
     执行NPC变量自动备份?: (socialList: any[], options?: { 标签?: string }) => void | Promise<void>;
     执行正文润色: (
         baseResponse: GameResponse,
@@ -1572,9 +1578,20 @@ export const 执行主剧情发送工作流 = async (
     const canonicalTime = 环境时间转标准串(currentState.环境);
     const currentGameTime = canonicalTime || '未知时间';
     const memBeforeSend = normalizedMemBeforeSend;
-    deps.推入重Roll快照({
+    let resolve自动存档完成: (id: number | null) => void = () => undefined;
+    let 自动存档完成已收束 = false;
+    const 自动存档完成 = new Promise<number | null>((resolve) => {
+        resolve自动存档完成 = resolve;
+    });
+    const 收束自动存档完成 = (id: number | null) => {
+        if (自动存档完成已收束) return;
+        自动存档完成已收束 = true;
+        resolve自动存档完成(id);
+    };
+    const 本回合重Roll快照: 回合快照结构 = {
         玩家输入: sendInput,
         游戏时间: currentGameTime,
+        自动存档完成,
         回档前状态: {
             角色: deps.深拷贝(currentState.角色),
             环境: deps.规范化环境信息(deps.深拷贝(currentState.环境)),
@@ -1597,7 +1614,8 @@ export const 执行主剧情发送工作流 = async (
             场景图片档案: deps.深拷贝(currentState.sceneImageArchive)
         },
         回档前历史: deps.深拷贝(historyBeforeSend)
-    });
+    };
+    deps.推入重Roll快照(本回合重Roll快照);
     void Promise.resolve(deps.执行NPC变量自动备份?.(currentState.社交, {
         标签: `回合发送前 · ${currentGameTime}`
     })).catch((error) => {
@@ -1712,6 +1730,9 @@ export const 执行主剧情发送工作流 = async (
     let 后台队列已启动 = false;
     let streamMarker = 0;
     let latestStreamDraftText = '';
+    // 流式输出被上游意外终止（如内容审核掐断、代理断流、流式空闲超时）后置为 true，
+    // 后续自动重试改用非流式请求，避免同一内容在流式通道上反复被掐断。
+    let 流式意外终止需降级非流式 = false;
 
     try {
         const recallContextActiveForMain = recallFeatureEnabled && Boolean(recallTag);
@@ -1811,20 +1832,31 @@ export const 执行主剧情发送工作流 = async (
         const aiResult = await deps.执行带自动重试的生成请求<textAIService.StoryResponseResult>({
             enabled: deps.游戏设置启用自动重试(runtimeGameConfig),
             onRetry: (attempt, maxAttempts, reason) => {
+                const 重试原因 = 流式意外终止需降级非流式 && isStreaming
+                    ? 流式意外终止降级提示
+                    : reason;
                 recordDiagnosticLog('warn', ['主剧情重试', {
                     attempt,
                     maxAttempts,
-                    reason: typeof reason === 'string' ? reason : reason?.message || '',
-                    errorName: reason?.name || '',
-                    streaming: isStreaming
+                    reason: 重试原因,
+                    streaming: isStreaming,
+                    降级非流式: 流式意外终止需降级非流式
                 }]);
                 if (isStreaming) {
-                    deps.设置历史记录(prev => deps.更新流式草稿为自动重试提示(prev, attempt, maxAttempts, reason));
+                    deps.设置历史记录(prev => deps.更新流式草稿为自动重试提示(prev, attempt, maxAttempts, 重试原因));
                 }
             },
             action: async (attempt, lastError) => {
                 const lastErrorIsBodyLengthShortage = 是否正文字数不足错误(lastError);
                 const lastErrorIsBodyQualityIssue = 是否正文质量审查错误(lastError);
+                // 上一次尝试若是流式被上游意外终止（含 storyTasks 标记的“流式意外终止”），本次起降级为非流式
+                const streamRetryStrategy = 判定主剧情重试流式策略({
+                    isStreaming,
+                    fallbackToNonStreaming: 流式意外终止需降级非流式,
+                    lastError
+                });
+                流式意外终止需降级非流式 = streamRetryStrategy.fallbackToNonStreaming;
+                const 本次使用流式 = streamRetryStrategy.useStreaming;
                 const protocolRetryPrompt = (
                     attempt > 1
                     && !lastErrorIsBodyLengthShortage
@@ -1868,7 +1900,7 @@ export const 执行主剧情发送工作流 = async (
                         '',
                         activeApi,
                         signal,
-                        isStreaming
+                        本次使用流式
                             ? {
                                 stream: true,
                                 onDelta: (_delta, accumulated) => {
@@ -1920,20 +1952,35 @@ export const 执行主剧情发送工作流 = async (
                         }
                     );
 
-                const storyResult = !isStreaming
-                    ? await requestStory(controller.signal)
-                    : await 执行主剧情流式请求带空闲超时(
-                        controller.signal,
-                        (signal, markStreamActivity) => requestStory(signal, markStreamActivity),
-                        () => 尝试解析完整主剧情流式草稿(latestStreamDraftText, {
-                            validateTagCompleteness: runtimeGameConfig.启用标签检测完整性 === true,
-                            enableTagRepair: runtimeGameConfig.启用标签修复 !== false,
-                            requireActionOptionsTag: runtimeGameConfig.启用行动选项 !== false,
-                            validateDialogueFormat: runtimeGameConfig.启用严格正文对白格式 !== false,
-                            knownSpeakers: knownDialogueSpeakers
-                        }),
-                        获取游玩请求超时毫秒(runtimeGameConfig.游玩请求超时设置)
-                    );
+                let storyResult: textAIService.StoryResponseResult;
+                try {
+                    storyResult = !本次使用流式
+                        ? await requestStory(controller.signal)
+                        : await 执行主剧情流式请求带空闲超时(
+                            controller.signal,
+                            (signal, markStreamActivity) => requestStory(signal, markStreamActivity),
+                            () => 尝试解析完整主剧情流式草稿(latestStreamDraftText, {
+                                validateTagCompleteness: runtimeGameConfig.启用标签检测完整性 === true,
+                                enableTagRepair: runtimeGameConfig.启用标签修复 !== false,
+                                requireActionOptionsTag: runtimeGameConfig.启用行动选项 !== false,
+                                validateDialogueFormat: runtimeGameConfig.启用严格正文对白格式 !== false,
+                                knownSpeakers: knownDialogueSpeakers
+                            }),
+                            获取游玩请求超时毫秒(runtimeGameConfig.游玩请求超时设置)
+                        );
+                } catch (streamError: any) {
+                    // 流式被上游意外终止时立即标记，让 onRetry 与下一次尝试切换到非流式
+                    if (本次使用流式 && !流式意外终止需降级非流式 && 是否流式意外终止错误(streamError)) {
+                        流式意外终止需降级非流式 = true;
+                        recordDiagnosticLog('warn', ['主剧情流式意外终止-降级非流式', {
+                            attempt,
+                            message: String(streamError?.message || ''),
+                            errorName: String(streamError?.name || ''),
+                            已被服务层标记: streamError?.流式意外终止 === true
+                        }]);
+                    }
+                    throw streamError;
+                }
                 const rawStoryText = deps.获取原始AI消息(storyResult.rawText);
                 const reviewedResponse = runtimeGameConfig.启用正文词汇审查 === false
                     ? storyResult.response
@@ -3082,27 +3129,41 @@ export const 执行主剧情发送工作流 = async (
                 deps.检查主角每回合生图(finalState.角色);
 
                 if (回合结束自动存档已开启) {
-                    await deps.performAutoSave({
-                        history: [...updatedDisplayHistory, queuedAiMsg],
-                        role: finalState.角色,
-                        env: finalState.环境,
-                        social: finalState.社交,
-                        world: finalState.世界,
-                        battle: finalState.战斗,
-                        sect: finalState.玩家门派,
-                        tasks: finalState.任务列表,
-                        agreements: finalState.约定列表,
-                        story: finalState.剧情,
-                        storyPlan: finalState.剧情规划,
-                        heroinePlan: finalState.女主剧情规划,
-                        fandomStoryPlan: finalState.同人剧情规划,
-                        fandomHeroinePlan: finalState.同人女主剧情规划,
-                        memory: nextMemory,
-                        叙事平静值: 本回合更新后的叙事平静值 || undefined,
-                        force: true
-                    });
+                    try {
+                        const saved = await deps.performAutoSave({
+                            history: [...updatedDisplayHistory, queuedAiMsg],
+                            role: finalState.角色,
+                            env: finalState.环境,
+                            social: finalState.社交,
+                            world: finalState.世界,
+                            battle: finalState.战斗,
+                            sect: finalState.玩家门派,
+                            tasks: finalState.任务列表,
+                            agreements: finalState.约定列表,
+                            story: finalState.剧情,
+                            storyPlan: finalState.剧情规划,
+                            heroinePlan: finalState.女主剧情规划,
+                            fandomStoryPlan: finalState.同人剧情规划,
+                            fandomHeroinePlan: finalState.同人女主剧情规划,
+                            memory: nextMemory,
+                            叙事平静值: 本回合更新后的叙事平静值 || undefined,
+                            force: true
+                        });
+                        const autoSaveId = Number(saved?.id);
+                        const validAutoSaveId = Number.isSafeInteger(autoSaveId) && autoSaveId > 0
+                            ? autoSaveId
+                            : null;
+                        if (validAutoSaveId !== null) {
+                            本回合重Roll快照.关联自动存档ID = validAutoSaveId;
+                        }
+                        收束自动存档完成(validAutoSaveId);
+                    } catch (autoSaveError) {
+                        收束自动存档完成(null);
+                        throw autoSaveError;
+                    }
                 }
             } catch (backgroundError: any) {
+                收束自动存档完成(null);
                 if (backgroundError?.name === "AbortError") {
                     options?.onPolishProgress?.({
                         phase: "cancelled",
@@ -3144,6 +3205,7 @@ export const 执行主剧情发送工作流 = async (
                     text: backgroundError?.message || "后台队列执行失败"
                 });
             } finally {
+                收束自动存档完成(null);
                 deps.set后台队列处理中(false);
                 if (deps.abortControllerRef.current === controller) {
                     deps.abortControllerRef.current = null;
@@ -3152,6 +3214,7 @@ export const 执行主剧情发送工作流 = async (
         })();
         return { attachedRecallPreview };
     } catch (error: any) {
+        收束自动存档完成(null);
         if (error.name === 'AbortError') {
             const snapshot = deps.弹出重Roll快照();
             if (snapshot) {
@@ -3181,9 +3244,6 @@ export const 执行主剧情发送工作流 = async (
                 detailPrefix: '主剧情解析失败'
             });
             deps.设置历史记录(preservedDraftHistory || historyBeforeSend);
-            if (preservedDraftHistory) {
-                void deps.performAutoSave({ history: preservedDraftHistory, force: true });
-            }
             const parseFailureGameConfig = 规范化游戏设置(currentState.gameConfig);
             const parseFailureApi = 获取主剧情接口配置(currentState.apiConfig);
             const parseErrorWithHint = 构建标签缺失补充提示({
@@ -3283,7 +3343,6 @@ export const 执行主剧情发送工作流 = async (
         const nextHistory = preservedDraftHistory || [...updatedDisplayHistory, errorMsg];
         deps.设置历史记录(nextHistory);
         if (preservedDraftHistory) {
-            void deps.performAutoSave({ history: preservedDraftHistory, force: true });
             return {
                 cancelled: true,
                 needRerollConfirm: true,
@@ -3300,6 +3359,9 @@ export const 执行主剧情发送工作流 = async (
             errorTitle: '请求失败'
         };
     } finally {
+        if (!后台队列已启动) {
+            收束自动存档完成(null);
+        }
         deps.setLoading(false);
         if (!后台队列已启动 && deps.abortControllerRef.current === controller) {
             deps.abortControllerRef.current = null;

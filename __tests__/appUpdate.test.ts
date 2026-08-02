@@ -102,28 +102,12 @@ describe('appUpdate native APK download', () => {
         expect(downloadAndInstallMock.mock.calls[1][0].url).toBe('https://msjh.bacon159.pp.ua/api/apk/latest.apk');
     });
 
-    it('chooses the fastest available APK source among GitHub accelerators, OneDrive and OneDrive direct', async () => {
-        const githubAcceleratedUrl = 'https://gh.ddlc.top/https://github.com/ypq123456789/MoRanJiangHu/releases/download/v1.0.289/MoRanJiangHu-v1.0.289.apk';
-        const oneDriveUrl = 'https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=onedrive';
-        const oneDriveDirectUrl = 'https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=onedrive-direct';
-
-        const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-        vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-            const url = String(input);
+    it('preserves manifest throughput order and falls back only after a download fails', async () => {
+        const fullstackUrl = 'https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=fullstack';
+        const fallbackUrl = 'https://msjh.bacon159.pp.ua/api/apk/latest.apk?provider=onedrive';
+        const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
             if (init?.method === 'HEAD') {
-                if (url === githubAcceleratedUrl) {
-                    await delay(160);
-                    return new Response(null, { status: 200 });
-                }
-                if (url === oneDriveUrl) {
-                    await delay(300);
-                    return new Response(null, { status: 200 });
-                }
-                if (url === oneDriveDirectUrl) {
-                    await delay(5);
-                    return new Response(null, { status: 200 });
-                }
-                return new Response(null, { status: 404 });
+                throw new Error(`Unexpected HEAD probe for ${String(input)}`);
             }
             return new Response(JSON.stringify({
                 latest: {
@@ -131,19 +115,24 @@ describe('appUpdate native APK download', () => {
                     versionName: '1.0.289',
                     apkSha256: 'new-sha',
                     apkSize: 123456,
-                    apkUrls: [githubAcceleratedUrl, oneDriveUrl, oneDriveDirectUrl],
+                    apkUrls: [fullstackUrl, fallbackUrl],
                     changes: ['测试更新']
                 }
             }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-        }));
-        downloadAndInstallMock.mockResolvedValueOnce({ filePath: '/tmp/onedrive-direct.apk', versionName: '1.0.289' });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        downloadAndInstallMock
+            .mockRejectedValueOnce(new Error('下载速度过慢'))
+            .mockResolvedValueOnce({ filePath: '/tmp/fallback.apk', versionName: '1.0.289' });
 
         const { checkForAppUpdate } = await import('../services/appUpdate');
         const result = await checkForAppUpdate();
 
         expect(result.opened).toBe(true);
-        expect(downloadAndInstallMock).toHaveBeenCalledTimes(1);
-        expect(downloadAndInstallMock.mock.calls[0][0].url).toBe(oneDriveDirectUrl);
+        expect(downloadAndInstallMock).toHaveBeenCalledTimes(2);
+        expect(downloadAndInstallMock.mock.calls[0][0].url).toBe(fullstackUrl);
+        expect(downloadAndInstallMock.mock.calls[1][0].url).toBe(fallbackUrl);
+        expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'HEAD')).toBe(false);
     });
 
     it('labels a Quark TV APK source in update progress', async () => {

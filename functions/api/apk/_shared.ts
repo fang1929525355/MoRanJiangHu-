@@ -334,6 +334,7 @@ export const buildB2ApkRedirect = async (
 const ONEDRIVE_APK_DIR = '/Onedrive/MoRanJiangHu/releases';
 const ONEDRIVE_APK_FILE = 'latest.apk';
 const QUARK_TV_APK_DIR = '/夸克TV/MoRanJiangHu/releases';
+const FULLSTACK_APK_ROOT = '/全栈云盘/MoRanJiangHu';
 const ONEDRIVE_SIGN_CACHE_CONTROL = 'public, max-age=3600';
 const DEFAULT_OPENLIST_PUBLIC_BASE_URL = 'https://openlist.bacon.de5.net';
 const DEFAULT_OPENLIST_DIRECT_BASE_URL = 'http://159.138.7.126:5244';
@@ -419,6 +420,34 @@ export const buildQuarkTvApkRedirect = async (
             'Cache-Control': cacheControl,
             'Content-Disposition': `attachment; filename="${downloadFileName}"`,
             'X-Moran-Apk-Source': 'quark-tv',
+            ...APK_CORS_HEADERS
+        }
+    });
+};
+
+export const buildFullstackApkRedirect = async (
+    env: any,
+    storageFileName: string,
+    downloadFileName: string,
+    cacheControl = APK_LATEST_CACHE_CONTROL
+): Promise<Response | null> => {
+    const directory = `${FULLSTACK_APK_ROOT}/releases`;
+    const sign = await fetchOpenListFileSign(env, directory, storageFileName);
+    if (!sign) return null;
+    const encodedPath = directory
+        .split('/')
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join('/');
+    const baseUrl = readOpenListPublicBaseUrl(env);
+    return new Response(null, {
+        status: 302,
+        headers: {
+            Location: `${baseUrl}/d/${encodedPath}/${encodeURIComponent(storageFileName)}?sign=${encodeURIComponent(sign)}`,
+            'Content-Type': 'application/vnd.android.package-archive',
+            'Cache-Control': cacheControl,
+            'Content-Disposition': `attachment; filename="${downloadFileName}"`,
+            'X-Moran-Apk-Source': 'fullstack',
             ...APK_CORS_HEADERS
         }
     });

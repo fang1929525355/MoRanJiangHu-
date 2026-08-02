@@ -173,9 +173,9 @@ public class ApkUpdaterPlugin extends Plugin {
     }
 
     // 速度监控常量：连续低于此速度超过阈值秒数则判定为限速，自动取消切换到下一个 provider
-    private static final long MIN_SPEED_BYTES_PER_SEC = 30L * 1024L; // 30 KB/s
+    private static final long MIN_SPEED_BYTES_PER_SEC = 128L * 1024L; // 128 KB/s
     private static final long SPEED_CHECK_INTERVAL_MS = 5000L;       // 每 5 秒检查一次
-    private static final int  MAX_SLOW_CHECKS = 3;                   // 连续 3 次低于阈值（即 15 秒）则取消
+    private static final int  MAX_SLOW_CHECKS = 2;                   // 连续 2 次低于阈值（即 10 秒）则取消
 
     private File downloadApk(String urlString, String versionName, String expectedSha256, Long expectedSize) throws Exception {
         HttpURLConnection connection = null;

@@ -187,8 +187,8 @@ export const 构建主剧情请求参数 = (
     const messageEntries: 主剧情消息条目[] = [];
 
 	    if (tavernPresetModeEnabled) {
-	        // 酒馆模式：外部预设主导叙事提示词；玩家设置的最低字数作为硬约束例外保留。
-	        // 其他项目风格、格式和免责声明仍不混入。
+	        // 酒馆模式：外部预设主导叙事提示词；玩家显式开启的最低字数与严格旁白/对白格式
+	        // 作为硬约束例外保留。其他项目风格和免责声明仍不混入。
 	        const tavernMessages = 构建酒馆预设消息链({
 	            config: runtimeGameConfig,
 	            context: params.builtContext,
@@ -217,6 +217,20 @@ export const 构建主剧情请求参数 = (
                 content: trimmed
             });
         });
+        const strictFormatPrompt = runtimeGameConfig.启用严格正文对白格式 !== false
+            ? params.builtContext.contextPieces.格式提示词.trim()
+            : '';
+        const formatAlreadyInjected = Boolean(strictFormatPrompt)
+            && tavernMessages.some((message) => (message?.content || '').includes(strictFormatPrompt));
+        if (strictFormatPrompt && !formatAlreadyInjected) {
+            messageEntries.push({
+                id: 'tavern_format_requirement',
+                title: '酒馆严格旁白/对白格式',
+                category: '系统',
+                role: 'system',
+                content: strictFormatPrompt
+            });
+        }
         if (lengthRequirementPrompt.trim()) {
             messageEntries.push({
                 id: 'tavern_length_requirement',

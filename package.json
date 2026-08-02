@@ -1,7 +1,7 @@
 {
   "name": "墨色江湖---无尽武林",
   "private": true,
-  "version": "1.0.633",
+  "version": "1.0.635",
   "type": "module",
   "scripts": {
     "cnb:sync": "node scripts/cnb-image-backend-sync.mjs",
@@ -22,6 +22,7 @@
     "release:github-raw": "node scripts/publish-apk-github-raw.mjs",
     "release:benchmark-apk": "node scripts/benchmark-apk-providers.mjs",
     "release:quark": "node scripts/upload-apk-quark.mjs",
+    "release:fullstack": "node scripts/upload-apk-fullstack.mjs",
     "db:migrate:apk-downloads": "wrangler d1 execute moranjianghu-db --remote --file migrations/2026-07-24-apk-download-daily.sql",
     "apk:downloads": "node scripts/report-apk-downloads.mjs",
     "signing:upload": "node scripts/sync-android-signing-bundle.mjs upload",

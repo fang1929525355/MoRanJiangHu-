@@ -572,5 +572,11 @@ describe('主剧情质量审查自动重试端到端', () => {
         expect(result.cancelled).not.toBe(true);
         expect(vi.mocked(deps.执行世界演变更新).mock.calls.at(-1)?.[0]).toMatchObject({ playerInput });
         expect(vi.mocked(deps.后台执行统一规划分析).mock.calls.at(-1)?.[0]).toMatchObject({ playerInput });
+        const snapshot = vi.mocked(deps.推入重Roll快照).mock.calls[0]?.[0] as any;
+        expect(snapshot?.自动存档完成).toBeInstanceOf(Promise);
+        await expect(Promise.race([
+            snapshot.自动存档完成,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('自动存档完成 Promise 未收束')), 100))
+        ])).resolves.toBeNull();
     });
 });
