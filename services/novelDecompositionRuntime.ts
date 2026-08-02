@@ -17,6 +17,7 @@ import { 获取小说拆分接口配置, 规范化接口设置, 接口配置是�
 import { 规范化游戏设置 } from '../utils/gameSettings';
 import { 构建运行时额外提示词 } from '../prompts/runtime/nsfw';
 import { 构建小说拆分AI角色声明提示词 } from '../prompts/runtime/novelDecomposition';
+import { 构建小说拆分接口日志文本 } from './novelDecompositionApiDiagnostics';
 
 let 已初始化小说拆分运行时 = false;
 let 小说拆分限流队列: Promise<void> = Promise.resolve();
@@ -217,11 +218,12 @@ const 默认小说拆分执行器 = async (params: {
     const 小说拆分GPT模式 = gameSettings.独立APIGPT模式?.小说拆分 === true;
     const 小说拆分角色声明提示词 = 构建小说拆分AI角色声明提示词();
     const 小说拆分运行时额外提示词 = 构建运行时额外提示词(gameSettings.额外提示词 || '', gameSettings);
+    const 附加接口身份 = (message: string): string => 构建小说拆分接口日志文本(resolvedApiConfig, message);
 
     if (!接口配置是否可用(resolvedApiConfig)) {
         return {
             type: 'failed',
-            message: '小说拆分接口未配置可用的 baseUrl / apiKey / model，任务已停止，不再执行本地回退拆解。'
+            message: 附加接口身份('小说拆分接口未配置可用的 baseUrl / apiKey / model，任务已停止，不再执行本地回退拆解。')
         };
     }
 
@@ -229,7 +231,7 @@ const 默认小说拆分执行器 = async (params: {
         taskId: task?.id,
         taskName: task?.名称,
         stageText: '检查拆分任务上下文',
-        message: `已接入任务“${task?.名称 || '未命名任务'}”，准备检查章节与分段。`
+        message: 附加接口身份(`已接入任务“${task?.名称 || '未命名任务'}”，准备检查章节与分段。`)
     });
 
     if ((!workingDataset.章节列表 || workingDataset.章节列表.length <= 0) && (workingDataset.原始文本 || '').trim()) {
@@ -237,7 +239,7 @@ const 默认小说拆分执行器 = async (params: {
             taskId: task?.id,
             taskName: task?.名称,
             stageText: '自动拆章中',
-            message: '检测到当前数据集尚未拆章，正在根据原文生成章节列表。'
+            message: 附加接口身份('检测到当前数据集尚未拆章，正在根据原文生成章节列表。')
         });
         const chapters = 从原始文本提取章节(workingDataset);
         workingDataset = 聚合小说拆分数据集(规范化小说拆分数据集({
@@ -254,7 +256,7 @@ const 默认小说拆分执行器 = async (params: {
             taskId: task?.id,
             taskName: task?.名称,
             stageText: '生成分段中',
-            message: `章节已准备完成，正在按每批 ${Math.max(1, Number(workingDataset?.每批章数) || 1)} 章生成分段列表。`
+            message: 附加接口身份(`章节已准备完成，正在按每批 ${Math.max(1, Number(workingDataset?.每批章数) || 1)} 章生成分段列表。`)
         });
         const segments = 根据章节生成分段列表(workingDataset, workingDataset.章节列表);
         workingDataset = 聚合小说拆分数据集(规范化小说拆分数据集({
@@ -278,14 +280,14 @@ const 默认小说拆分执行器 = async (params: {
         if (!(workingDataset.原始文本 || '').trim()) {
             return {
                 type: 'failed',
-                message: `任务“${task.名称}”没有原始文本，也没有可继续处理的分段。`
+                message: 附加接口身份(`任务“${task.名称}”没有原始文本，也没有可继续处理的分段。`)
             };
         }
 
         await 刷新数据集快照(workingDataset);
         return {
             type: 'completed',
-            message: `任务“${task.名称}”当前没有可处理分段，已刷新注入快照。`
+            message: 附加接口身份(`任务“${task.名称}”当前没有可处理分段，已刷新注入快照。`)
         };
     }
 
@@ -312,7 +314,7 @@ const 默认小说拆分执行器 = async (params: {
         });
         return {
             type: 'failed',
-            message: `任务“${task.名称}”在分段“${首个阻塞失败分段.标题 || `第 ${firstIncompleteIndex + 1} 段`}”失败后已停止；请人工校对并将该分段打回“待处理”后再继续。`
+            message: 附加接口身份(`任务“${task.名称}”在分段“${首个阻塞失败分段.标题 || `第 ${firstIncompleteIndex + 1} 段`}”失败后已停止；请人工校对并将该分段打回“待处理”后再继续。`)
         };
     }
 
@@ -335,7 +337,7 @@ const 默认小说拆分执行器 = async (params: {
         });
         return {
             type: 'completed',
-            message: `任务“${task.名称}”已完成，树状注入快照已刷新。`
+            message: 附加接口身份(`任务“${task.名称}”已完成，树状注入快照已刷新。`)
         };
     }
 
@@ -377,7 +379,7 @@ const 默认小说拆分执行器 = async (params: {
                 taskId: task?.id,
                 taskName: task?.名称,
                 stageText: `正在解析分段 ${index + 1}/${workingDataset.分段列表.length}`,
-                message: `开始处理分段“${segment.标题 || `第 ${index + 1} 段`}”。`,
+                message: 附加接口身份(`开始处理分段“${segment.标题 || `第 ${index + 1} 段`}”。`),
                 streamText: '',
                 resetStream: true
             });
@@ -405,7 +407,7 @@ const 默认小说拆分执行器 = async (params: {
                             taskId: task?.id,
                             taskName: task?.名称,
                             stageText: `分段 ${index + 1}/${workingDataset.分段列表.length} 重试中`,
-                            message: `分段“${segment.标题 || `第 ${index + 1} 段`}”第 ${当前尝试次数} 次尝试开始。`,
+                            message: 附加接口身份(`分段“${segment.标题 || `第 ${index + 1} 段`}”第 ${当前尝试次数} 次尝试开始。`),
                             level: 'warning',
                             resetStream: true,
                             streamText: ''
@@ -459,7 +461,7 @@ const 默认小说拆分执行器 = async (params: {
                             taskId: task?.id,
                             taskName: task?.名称,
                             stageText: `分段 ${index + 1}/${workingDataset.分段列表.length} 重试准备`,
-                            message: `分段“${segment.标题 || `第 ${index + 1} 段`}”第 ${当前尝试次数} 次尝试失败：${error?.message || '未知错误'}；准备自动重试。`,
+                            message: 附加接口身份(`分段“${segment.标题 || `第 ${index + 1} 段`}”第 ${当前尝试次数} 次尝试失败：${error?.message || '未知错误'}；准备自动重试。`),
                             level: 'warning'
                         });
                     }
@@ -480,7 +482,7 @@ const 默认小说拆分执行器 = async (params: {
                     taskId: task?.id,
                     taskName: task?.名称,
                     stageText: `分段 ${index + 1}/${workingDataset.分段列表.length} 已完成`,
-                    message: `分段“${segment.标题 || `第 ${index + 1} 段`}”解析完成。`
+                    message: 附加接口身份(`分段“${segment.标题 || `第 ${index + 1} 段`}”解析完成。`)
                 });
             } catch (error: any) {
                 if (是小说拆分中断错误(error)) {
@@ -496,9 +498,9 @@ const 默认小说拆分执行器 = async (params: {
                         taskId: task?.id,
                         taskName: task?.名称,
                         stageText: interruptMode === 'paused' ? '任务暂停中' : '任务取消中',
-                        message: interruptMode === 'paused'
+                        message: 附加接口身份(interruptMode === 'paused'
                             ? `分段“${segment.标题 || `第 ${index + 1} 段`}”已响应暂停请求，正在回写当前进度。`
-                            : `分段“${segment.标题 || `第 ${index + 1} 段`}”已响应取消请求，正在回写当前进度。`,
+                            : `分段“${segment.标题 || `第 ${index + 1} 段`}”已响应取消请求，正在回写当前进度。`),
                         level: 'warning',
                         resetStream: true
                     });
@@ -508,7 +510,7 @@ const 默认小说拆分执行器 = async (params: {
                 nextSegments[index] = {
                     ...nextSegments[index],
                     处理状态: '失败',
-                    最近错误: error?.message || '未知错误',
+                    最近错误: 附加接口身份(error?.message || '未知错误'),
                     updatedAt: Date.now()
                 };
                 batchStoppedByFailure = true;
@@ -517,7 +519,7 @@ const 默认小说拆分执行器 = async (params: {
                     taskId: task?.id,
                     taskName: task?.名称,
                     stageText: `分段 ${index + 1}/${workingDataset.分段列表.length} 失败`,
-                    message: `分段“${failedSegmentTitle}”处理失败：${error?.message || '未知错误'}`,
+                    message: 附加接口身份(`分段“${failedSegmentTitle}”处理失败：${error?.message || '未知错误'}`),
                     level: 'error'
                 });
                 break;
@@ -539,7 +541,7 @@ const 默认小说拆分执行器 = async (params: {
         taskId: task?.id,
         taskName: task?.名称,
         stageText: batchInterrupted ? '处理中断收尾' : '刷新注入快照中',
-        message: batchInterrupted ? '已中断当前请求，正在保留已完成进度并刷新注入快照。' : '分段写回完成，正在重建注入快照。'
+        message: 附加接口身份(batchInterrupted ? '已中断当前请求，正在保留已完成进度并刷新注入快照。' : '分段写回完成，正在重建注入快照。')
     });
     if (!batchInterrupted) {
         await 更新小说拆分任务状态(task.id, 'running', { 当前阶段: 'snapshotting', lastRunAt: Date.now() });
@@ -563,9 +565,9 @@ const 默认小说拆分执行器 = async (params: {
     if (batchInterrupted) {
         return {
             type: interruptMode === 'paused' ? 'paused' : 'skipped',
-            message: interruptMode === 'paused'
+            message: 附加接口身份(interruptMode === 'paused'
                 ? `任务“${task.名称}”已暂停，进行中的请求已中断并保留当前进度。当前进度 ${progress.已完成分段数}/${progress.总分段数}。`
-                : `任务“${task.名称}”已取消，进行中的请求已中断并保留已完成进度。当前进度 ${progress.已完成分段数}/${progress.总分段数}。`
+                : `任务“${task.名称}”已取消，进行中的请求已中断并保留已完成进度。当前进度 ${progress.已完成分段数}/${progress.总分段数}。`)
         };
     }
 
@@ -574,12 +576,12 @@ const 默认小说拆分执行器 = async (params: {
             taskId: task?.id,
             taskName: task?.名称,
             stageText: '任务已完成',
-            message: `任务“${task.名称}”全部分段已完成并刷新注入快照。`,
+            message: 附加接口身份(`任务“${task.名称}”全部分段已完成并刷新注入快照。`),
             level: 'success'
         });
         return {
             type: 'completed',
-            message: `任务“${task.名称}”已完成 ${progress.已完成分段数}/${progress.总分段数} 个分段，并刷新了注入快照。`
+            message: 附加接口身份(`任务“${task.名称}”已完成 ${progress.已完成分段数}/${progress.总分段数} 个分段，并刷新了注入快照。`)
         };
     }
 
@@ -587,13 +589,13 @@ const 默认小说拆分执行器 = async (params: {
         const latestError = workingDataset.分段列表.find((item) => item.处理状态 === '失败')?.最近错误 || '当前章节处理失败';
         return {
             type: 'failed',
-            message: `任务“${task.名称}”在分段“${failedSegmentTitle}”失败后已停止，未继续后续章节；请先人工校对并将该分段打回“待处理”。当前进度 ${progress.已完成分段数}/${progress.总分段数}；最近错误：${latestError}`
+            message: 附加接口身份(`任务“${task.名称}”在分段“${failedSegmentTitle}”失败后已停止，未继续后续章节；请先人工校对并将该分段打回“待处理”。当前进度 ${progress.已完成分段数}/${progress.总分段数}；最近错误：${latestError}`)
         };
     }
 
     return {
         type: 'progress',
-        message: `任务“${task.名称}”本轮处理了 ${processedCount} 个分段，当前进度 ${progress.已完成分段数}/${progress.总分段数}。`
+        message: 附加接口身份(`任务“${task.名称}”本轮处理了 ${processedCount} 个分段，当前进度 ${progress.已完成分段数}/${progress.总分段数}。`)
     };
 };
 

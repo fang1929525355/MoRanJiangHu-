@@ -19,6 +19,14 @@ const 隐藏接口密钥 = (text: string, apiKey: string): string => {
     return secret ? text.split(secret).join('[已隐藏]') : text;
 };
 
+export const 构建小说拆分接口日志文本 = (
+    apiConfig: 当前可用接口结构 | null | undefined,
+    message: string
+): string => 隐藏接口密钥(
+    `${(message || '').trim()}（${格式化小说拆分接口身份(apiConfig)}）`,
+    apiConfig?.apiKey || ''
+);
+
 export const 测试小说拆分接口连接 = async (
     apiConfig: 当前可用接口结构,
     requester: 小说拆分连接测试请求器 = 请求模型文本
