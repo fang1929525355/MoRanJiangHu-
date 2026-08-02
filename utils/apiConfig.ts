@@ -988,6 +988,20 @@ const 读取字符串 = (value: unknown, fallback = ''): string => {
     return typeof value === 'string' ? value : fallback;
 };
 
+export const 规范化Gemini模型资源ID = (value: unknown): string => (
+    读取字符串(value).trim().replace(/^models\//i, '')
+);
+
+export const 格式化小说拆分接口身份 = (
+    apiConfig: 当前可用接口结构 | null | undefined
+): string => {
+    const channel = 读取字符串(apiConfig?.名称).trim()
+        || 读取字符串(apiConfig?.供应商).trim()
+        || '小说分解独立接口';
+    const model = 读取字符串(apiConfig?.model).trim() || '未配置';
+    return `渠道：${channel}｜模型：${model}`;
+};
+
 const 是否旧默认无独立负面ComfyUI工作流 = (value: string): boolean => {
     const text = (value || '').trim();
     if (!text) return false;
@@ -2234,7 +2248,7 @@ export const 获取小说拆分接口配置 = (settings: 接口设置结构): �
     const feature = (settings as any)?.功能模型占位;
     const baseUrl = 读取字符串(feature?.小说拆分API地址).trim();
     const apiKey = 读取字符串(feature?.小说拆分API密钥).trim();
-    const dedicatedModel = 读取字符串(feature?.小说拆分使用模型).trim();
+    const dedicatedModel = 规范化Gemini模型资源ID(feature?.小说拆分使用模型);
     const 小说拆分最大输出Token = 32_768;
     const selected = 获取指定渠道接口配置(settings, feature?.小说拆分渠道ID);
 
@@ -2256,9 +2270,9 @@ export const 获取小说拆分接口配置 = (settings: 接口设置结构): �
     if (!current) return null;
 
     const enabled = Boolean(feature?.小说拆分独立模型开关);
-    const model = enabled
+    const model = 规范化Gemini模型资源ID(enabled
         ? dedicatedModel
-        : 读取字符串(current.model || feature?.主剧情使用模型).trim();
+        : 读取字符串(current.model || feature?.主剧情使用模型).trim());
     if (!model) return null;
     const supplier = baseUrl ? 推断供应商(baseUrl) : current.供应商;
 
