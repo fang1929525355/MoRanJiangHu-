@@ -4391,9 +4391,14 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                         </div>
 
                                         {task.最近错误 && (
-                                            <div className="mt-3 p-2.5 rounded bg-red-950/20 border border-red-900/30 text-[10px] text-red-400 line-clamp-4" title={task.最近错误}>
-                                                {task.最近错误}
-                                            </div>
+                                            <details className="mt-3 rounded bg-red-950/20 border border-red-900/30 text-[10px] text-red-400">
+                                                <summary className="cursor-pointer list-none p-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60">
+                                                    <div className="line-clamp-4">{task.最近错误}</div>
+                                                </summary>
+                                                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words border-t border-red-900/30 p-2.5 font-sans">
+                                                    {task.最近错误}
+                                                </pre>
+                                            </details>
                                         )}
                                     </div>
                                 ))}

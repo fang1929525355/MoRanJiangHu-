@@ -149,7 +149,7 @@ export const 判断小说拆分渠道永久故障 = (error: unknown): boolean =>
     const status = Number((error as any)?.status || (error as any)?.statusCode || (error as any)?.code);
     if ([401, 403, 404].includes(status)) return true;
     const message = String((error as any)?.message || error || '').toLowerCase();
-    return /(?:\b401\b|\b403\b|\b404\b|unauthori[sz]ed|forbidden|requested entity was not found|invalid (?:api|model)|unknown model|model not found|insufficient_quota|billing account|required quota|余额不足|永久配额)/i.test(message);
+    return /(?:unauthori[sz]ed|forbidden|(?:http|status(?:code)?)[^\d]{0,10}\b40[134]\b|requested entity was not found|invalid (?:api|model)|unknown model|model not found|insufficient_quota|billing account|required quota|余额不足|永久配额)/i.test(message);
 };
 
 export const 获取小说拆分补漏退避毫秒 = (round: unknown): number => {
@@ -562,10 +562,12 @@ export const 默认小说拆分执行器 = async (params: {
 
     if (channelFailure) {
         const progress = 计算任务进度(workingDataset, task);
+        const completedIds = workingDataset.分段列表.filter((item) => item.处理状态 === '已完成').map((item) => item.id);
         const failedIds = workingDataset.分段列表.filter((item) => item.处理状态 === '失败').map((item) => item.id);
         await 更新小说拆分任务进度(task.id, {
             当前阶段: 'failed',
             当前补漏轮次,
+            已完成分段ID列表: completedIds,
             失败分段ID列表: failedIds,
             最近错误: 附加接口身份(channelFailure?.message || '渠道故障'),
             进度: progress

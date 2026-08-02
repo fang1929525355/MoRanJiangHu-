@@ -106,6 +106,16 @@ describe('小说分解失败续跑', () => {
         }).百分比).toBe(100);
     });
 
+    it('调用方提供合法百分比时保留显式值', () => {
+        expect(规范化小说拆分任务进度({
+            总分段数: 10,
+            已完成分段数: 9,
+            失败分段数: 1,
+            当前分段索引: 0,
+            百分比: 90
+        }).百分比).toBe(90);
+    });
+
     it('只把明确不可恢复的接口配置与鉴权错误判为渠道永久故障', () => {
         expect(判断小说拆分渠道永久故障(Object.assign(new Error('Unauthorized'), { status: 401 }))).toBe(true);
         expect(判断小说拆分渠道永久故障(Object.assign(new Error('Forbidden'), { status: 403 }))).toBe(true);
@@ -115,6 +125,8 @@ describe('小说分解失败续跑', () => {
         expect(判断小说拆分渠道永久故障(Object.assign(new Error('service unavailable'), { status: 503 }))).toBe(false);
         expect(判断小说拆分渠道永久故障(new Error('缺少信息可见性标注'))).toBe(false);
         expect(判断小说拆分渠道永久故障(new Error('stream request timeout'))).toBe(false);
+        expect(判断小说拆分渠道永久故障(new Error('分段“序幕篇”返回组号 404，与任务组号 1 不一致。'))).toBe(false);
+        expect(判断小说拆分渠道永久故障(new Error('HTTP status 404: route missing'))).toBe(true);
     });
 
     it('补漏轮次使用有上限的非阻塞退避', () => {
@@ -171,7 +183,8 @@ describe('小说分解失败续跑', () => {
         expect(runtimeMocks.updateTaskProgress).toHaveBeenLastCalledWith('task-runtime-retry', expect.objectContaining({
             当前阶段: 'processing',
             当前补漏轮次: 2,
-            失败分段ID列表: ['segment-1']
+            失败分段ID列表: ['segment-1'],
+            进度: expect.objectContaining({ 百分比: 50 })
         }));
 
         runtimeMocks.parseSegment.mockResolvedValueOnce({
@@ -210,7 +223,13 @@ describe('小说分解失败续跑', () => {
             ] as any
         });
         const channelError = Object.assign(new Error('Requested entity was not found: invalid model'), { status: 404 });
-        runtimeMocks.parseSegment.mockRejectedValue(channelError);
+        runtimeMocks.parseSegment
+            .mockResolvedValueOnce({
+                ...dataset.分段列表[0],
+                本组概括: '首段完成',
+                处理状态: '已完成'
+            })
+            .mockRejectedValueOnce(channelError);
 
         const result = await 默认小说拆分执行器({
             task: {
@@ -226,8 +245,12 @@ describe('小说分解失败续跑', () => {
 
         expect(result.type).toBe('failed');
         expect(result.message).toContain('渠道故障');
-        expect(runtimeMocks.parseSegment).toHaveBeenCalledTimes(1);
+        expect(runtimeMocks.parseSegment).toHaveBeenCalledTimes(2);
         const failedDataset = runtimeMocks.writeDataset.mock.calls.at(-1)?.[0];
-        expect(failedDataset.分段列表.map((item: any) => item.处理状态)).toEqual(['失败', '待处理']);
+        expect(failedDataset.分段列表.map((item: any) => item.处理状态)).toEqual(['已完成', '失败']);
+        expect(runtimeMocks.updateTaskProgress).toHaveBeenLastCalledWith('task-channel-failure', expect.objectContaining({
+            已完成分段ID列表: ['segment-channel'],
+            失败分段ID列表: ['segment-after']
+        }));
     });
 });

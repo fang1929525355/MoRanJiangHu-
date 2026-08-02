@@ -156,7 +156,9 @@ class 小说拆分后台调度器 {
                 读取小说拆分任务列表(),
                 读取小说拆分数据集列表()
             ]);
+            const now = Date.now();
             const resumableTasks = 筛选可后台续跑任务(tasks)
+                .filter((task) => !task.下次补漏时间 || task.下次补漏时间 <= now)
                 .sort((a, b) => {
                     const priorityDiff = 获取小说拆分任务排序分值(b) - 获取小说拆分任务排序分值(a);
                     if (priorityDiff !== 0) return priorityDiff;
