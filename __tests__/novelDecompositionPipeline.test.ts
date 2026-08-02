@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as textAIService from '../services/ai/text';
-import { 解析小说拆分分段 } from '../services/novelDecompositionPipeline';
+import { 从原始文本提取章节, 解析小说拆分分段 } from '../services/novelDecompositionPipeline';
 import { 创建空小说拆分数据集 } from '../services/novelDecompositionStore';
 import type { 小说拆分分段结构 } from '../types';
 
@@ -55,6 +55,22 @@ const 创建分段 = (patch: Partial<小说拆分分段结构>): 小说拆分分
 describe('novelDecompositionPipeline', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    it('叙事残句不会被识别为卷标题并污染后续章节标题', () => {
+        const chapters = 从原始文本提取章节(创建空小说拆分数据集({
+            id: 'dataset-heading-pollution',
+            原始文本: [
+                '第一部分：命运。就是命运。毁灭也好，反击也罢，最终是命运。智能生物的命运。｜天石',
+                '这是上一段正文。',
+                '',
+                '第311章 青葡',
+                '这是青葡章节正文。'
+            ].join('\n')
+        }));
+
+        expect(chapters.map((chapter) => chapter.标题)).toContain('第311章 青葡');
+        expect(chapters.every((chapter) => !chapter.标题.includes('命运。就是命运'))).toBe(true);
     });
 
     it('补齐关键事件缺失的最早和最迟开始时间，避免长任务停在同一分段', async () => {
@@ -125,6 +141,34 @@ describe('novelDecompositionPipeline', () => {
             最迟开始时间: '0001:02:12:08:00',
             结束时间: '0001:02:12:12:00'
         });
+    });
+
+    it('补漏请求把上一次校验错误转成定向结构纠错要求', async () => {
+        vi.mocked(textAIService.generateNovelDecomposition).mockResolvedValueOnce({
+            groupNumber: 1,
+            chapterRange: '第一章',
+            chapterTitles: ['第一章'],
+            isOpeningGroup: true,
+            summary: '完成纠错。',
+            openingFacts: [], continuationFacts: [], endStates: [], nextGroupReferences: [],
+            hardConstraints: [], foreshadowing: [], keyEvents: [], characterProgressions: [],
+            appearingCharacters: [], characterProfiles: [], factionProfiles: [], locationProfiles: [], itemProfiles: [],
+            worldRules: [], worldBoundaryRules: [], characterRelations: [], factionRelations: [],
+            foreshadowingThreads: [], payoffPoints: [], chapterRhythm: [],
+            timelineStart: '0001:01:01:00:00', timelineEnd: '0001:01:01:01:00', rawText: ''
+        });
+
+        await 解析小说拆分分段({
+            dataset: 创建空小说拆分数据集({ id: 'dataset-correction' }),
+            segment: 创建分段({ id: 'segment-correction', 组号: 1 }),
+            segmentIndex: 0,
+            apiConfig: { apiKey: 'test-key' } as any,
+            retryCorrection: '原著硬约束 #1 缺少信息可见性标注'
+        } as any);
+
+        expect(vi.mocked(textAIService.generateNovelDecomposition).mock.calls[0][0].extraPrompt).toContain('上一次失败原因');
+        expect(vi.mocked(textAIService.generateNovelDecomposition).mock.calls[0][0].extraPrompt).toContain('谁知道');
+        expect(vi.mocked(textAIService.generateNovelDecomposition).mock.calls[0][0].extraPrompt).toContain('不能拼进“内容”');
     });
 
     it('按真实时间顺序比较四位和五位年份，避免误判两万年早于六千五百年', async () => {

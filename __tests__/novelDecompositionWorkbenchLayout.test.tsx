@@ -117,4 +117,29 @@ describe('小说分解工作台布局', () => {
         expect(match?.[1]).toBeDefined();
         expect(Number(match?.[1])).toBeLessThan(200);
     });
+
+    it('任务管理页在宽屏使用更大的内容区和可读的监控栏', () => {
+        const source = fs.readFileSync(
+            path.join(process.cwd(), 'components/features/Settings/NovelDecompositionSettings.tsx'),
+            'utf8'
+        );
+
+        const taskBranchAnchor = "mobileTab === 'tasks'";
+        const taskBranchStart = source.indexOf(taskBranchAnchor);
+
+        expect(taskBranchStart).toBeGreaterThan(-1);
+
+        const taskBranch = source.slice(taskBranchStart);
+        expect(taskBranch).toContain('novel-task-management-layout');
+        expect(taskBranch).toContain('max-w-[1800px]');
+        expect(taskBranch).toContain('xl:grid-cols-[minmax(0,1.45fr)_minmax(420px,0.9fr)]');
+        expect(taskBranch).not.toContain('lg:grid-cols-[1fr_320px]');
+        expect(taskBranch).toContain('<details');
+        expect(taskBranch).toContain('<summary');
+        expect(taskBranch).toContain('line-clamp-4');
+        expect(taskBranch).toContain('novel-chapter-progress-grid');
+        expect(taskBranch).toContain('grid-cols-[repeat(auto-fit,minmax(8rem,1fr))]');
+        expect(taskBranch).toContain('novel-task-summary-grid');
+        expect(taskBranch).toContain('grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]');
+    });
 });

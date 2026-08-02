@@ -439,9 +439,12 @@ export const 规范化小说拆分任务进度 = (raw: any): 小说拆分任务�
     const 已完成分段数 = Math.max(0, Math.floor(读取数字(raw?.已完成分段数, 0)));
     const 失败分段数 = Math.max(0, Math.floor(读取数字(raw?.失败分段数, 0)));
     const 当前分段索引 = Math.max(0, Math.floor(读取数字(raw?.当前分段索引, 0)));
-    const 百分比 = 总分段数 > 0
-        ? Math.max(0, Math.min(100, Math.round(((已完成分段数 + 失败分段数) / 总分段数) * 100)))
-        : Math.max(0, Math.min(100, Math.floor(读取数字(raw?.百分比, 0))));
+    const hasExplicitPercentage = typeof raw?.百分比 === 'number' && Number.isFinite(raw.百分比);
+    const 百分比 = hasExplicitPercentage
+        ? Math.max(0, Math.min(100, Math.floor(raw.百分比)))
+        : (总分段数 > 0
+            ? Math.max(0, Math.min(100, Math.round(((已完成分段数 + 失败分段数) / 总分段数) * 100)))
+            : 0);
 
     return {
         总分段数,
@@ -466,6 +469,8 @@ export const 规范化小说拆分任务 = (raw: any): 小说拆分任务结构 
         自动续跑: 读取布尔(raw?.自动续跑, true),
         单次处理批量: Math.max(1, Math.floor(读取数字(raw?.单次处理批量, 1))),
         自动重试次数: Math.max(0, Math.floor(读取数字(raw?.自动重试次数, 0))),
+        当前补漏轮次: Math.max(1, Math.floor(读取数字(raw?.当前补漏轮次, 1))),
+        下次补漏时间: raw?.下次补漏时间 ? Math.floor(读取数字(raw?.下次补漏时间, 0)) : undefined,
         当前游标: Math.max(0, Math.floor(读取数字(raw?.当前游标, 0))),
         已完成分段ID列表: Array.isArray(raw?.已完成分段ID列表) ? raw.已完成分段ID列表.map((item: unknown) => 读取文本(item).trim()).filter(Boolean) : [],
         失败分段ID列表: Array.isArray(raw?.失败分段ID列表) ? raw.失败分段ID列表.map((item: unknown) => 读取文本(item).trim()).filter(Boolean) : [],
@@ -583,6 +588,7 @@ export const 创建小说拆分任务 = (params: {
         自动续跑: params.自动续跑 !== false,
         单次处理批量: params.单次处理批量 || 1,
         自动重试次数: Math.max(0, params.自动重试次数 || 0),
+        当前补漏轮次: 1,
         当前游标: 0,
         已完成分段ID列表: [],
         失败分段ID列表: [],

@@ -223,6 +223,8 @@ export interface 小说拆分任务结构 {
     自动续跑: boolean;
     单次处理批量: number;
     自动重试次数: number;
+    当前补漏轮次: number;
+    下次补漏时间?: number;
     当前游标: number;
     已完成分段ID列表: string[];
     失败分段ID列表: string[];

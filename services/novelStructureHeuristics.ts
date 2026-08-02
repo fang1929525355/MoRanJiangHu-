@@ -100,6 +100,11 @@ const 去掉单段标题前缀 = (value: string): string => {
     return current.trim();
 };
 
+const 是叙事句式标题候选 = (value: string): boolean => {
+    const prosePunctuationCount = (value.match(/[。！？!?]/gu) || []).length;
+    return prosePunctuationCount >= 2;
+};
+
 export const 规范化标题 = (title: string): string => {
     const normalized = 规范化标题候选行(title);
     if (!normalized) return '';
@@ -129,7 +134,7 @@ export const 识别TXT章节标题行 = (
         };
     }
 
-    if (强卷标题规则.some((rule) => rule.test(标题))) {
+    if (!是叙事句式标题候选(标题) && 强卷标题规则.some((rule) => rule.test(标题))) {
         return {
             标题,
             原始标题,

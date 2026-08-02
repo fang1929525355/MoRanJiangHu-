@@ -145,6 +145,18 @@ export const 获取小说拆分自动重试次数 = (configuredRetries: unknown)
     Math.max(3, Math.floor(Number(configuredRetries) || 0))
 );
 
+export const 判断小说拆分渠道永久故障 = (error: unknown): boolean => {
+    const status = Number((error as any)?.status || (error as any)?.statusCode || (error as any)?.code);
+    if ([401, 403, 404].includes(status)) return true;
+    const message = String((error as any)?.message || error || '').toLowerCase();
+    return /(?:unauthori[sz]ed|forbidden|(?:http|status(?:code)?)[^\d]{0,10}\b40[134]\b|requested entity was not found|invalid (?:api|model)|unknown model|model not found|insufficient_quota|billing account|required quota|余额不足|永久配额)/i.test(message);
+};
+
+export const 获取小说拆分补漏退避毫秒 = (round: unknown): number => {
+    const normalizedRound = Math.max(2, Math.floor(Number(round) || 2));
+    return Math.min(30_000, 2_000 * (2 ** Math.max(0, normalizedRound - 3)));
+};
+
 export const 获取小说拆分待处理索引 = (
     segments: Array<{ 处理状态?: string }> | null | undefined,
     startIndex = 0,
@@ -320,6 +332,7 @@ export const 默认小说拆分执行器 = async (params: {
 
     const batchSize = Math.max(1, Number(task?.单次处理批量) || 1);
     const 自动重试次数 = 获取小说拆分自动重试次数(task?.自动重试次数);
+    const 当前补漏轮次 = Math.max(1, Math.floor(Number(task?.当前补漏轮次) || 1));
     const pendingIndexes = 获取小说拆分待处理索引(workingDataset.分段列表, 0, batchSize);
     const firstIncompleteIndex = pendingIndexes[0] ?? -1;
 
@@ -366,6 +379,7 @@ export const 默认小说拆分执行器 = async (params: {
     let batchInterrupted = false;
     let interruptMode: 小说拆分中断模式 | null = null;
     let failedSegmentTitle = '';
+    let channelFailure: any = null;
     let processedCount = 0;
     const executionController = new AbortController();
 
@@ -437,6 +451,7 @@ export const 默认小说拆分执行器 = async (params: {
                             nextChapterTitles,
                             leadingSystemPrompt: 小说拆分角色声明提示词,
                             extraPrompt: 小说拆分运行时额外提示词,
+                            retryCorrection: 当前补漏轮次 > 1 ? nextSegments[index]?.最近错误 || '' : '',
                             apiConfig: resolvedApiConfig,
                             gptMode: 小说拆分GPT模式,
                             signal: executionController.signal,
@@ -457,6 +472,10 @@ export const 默认小说拆分执行器 = async (params: {
                             throw error;
                         }
                         lastProcessingError = error;
+                        if (判断小说拆分渠道永久故障(error)) {
+                            channelFailure = error;
+                            throw error;
+                        }
                         if (当前尝试次数 >= 最大尝试次数) {
                             throw error;
                         }
@@ -525,6 +544,7 @@ export const 默认小说拆分执行器 = async (params: {
                     message: 附加接口身份(`分段“${failedSegmentTitle}”处理失败：${error?.message || '未知错误'}`),
                     level: 'error'
                 });
+                if (channelFailure) break;
                 continue;
             }
         }
@@ -539,6 +559,24 @@ export const 默认小说拆分执行器 = async (params: {
         分段列表: nextSegments
     }));
     await 写入小说拆分数据集(workingDataset);
+
+    if (channelFailure) {
+        const progress = 计算任务进度(workingDataset, task);
+        const completedIds = workingDataset.分段列表.filter((item) => item.处理状态 === '已完成').map((item) => item.id);
+        const failedIds = workingDataset.分段列表.filter((item) => item.处理状态 === '失败').map((item) => item.id);
+        await 更新小说拆分任务进度(task.id, {
+            当前阶段: 'failed',
+            当前补漏轮次,
+            已完成分段ID列表: completedIds,
+            失败分段ID列表: failedIds,
+            最近错误: 附加接口身份(channelFailure?.message || '渠道故障'),
+            进度: progress
+        });
+        return {
+            type: 'failed',
+            message: 附加接口身份(`任务“${task.名称}”检测到不可恢复的渠道故障，已立即停止：${channelFailure?.message || '未知渠道错误'}`)
+        };
+    }
 
     小说拆分后台调度服务.reportProgress({
         taskId: task?.id,
@@ -589,10 +627,37 @@ export const 默认小说拆分执行器 = async (params: {
     }
 
     if (!hasPending && failedIds.length > 0) {
-        const failureSummary = 构建小说拆分失败汇总(workingDataset.分段列表);
+        const nextRound = 当前补漏轮次 + 1;
+        const nextRetryAt = Date.now() + 获取小说拆分补漏退避毫秒(nextRound);
+        const retrySegments = workingDataset.分段列表.map((item) => item.处理状态 === '失败'
+            ? { ...item, 处理状态: '待处理' as const, updatedAt: Date.now() }
+            : item);
+        workingDataset = 聚合小说拆分数据集(规范化小说拆分数据集({
+            ...workingDataset,
+            分段列表: retrySegments
+        }));
+        await 写入小说拆分数据集(workingDataset);
+        await 更新小说拆分任务进度(task.id, {
+            当前阶段: 'processing',
+            当前补漏轮次: nextRound,
+            下次补漏时间: nextRetryAt,
+            当前游标: 0,
+            已完成分段ID列表: completedIds,
+            失败分段ID列表: failedIds,
+            最近错误: workingDataset.分段列表.find((item) => failedIds.includes(item.id))?.最近错误 || '',
+            进度: 规范化小说拆分任务进度({
+                总分段数: workingDataset.分段列表.length,
+                已完成分段数: completedIds.length,
+                失败分段数: failedIds.length,
+                当前分段索引: 0,
+                百分比: workingDataset.分段列表.length > 0
+                    ? Math.round((completedIds.length / workingDataset.分段列表.length) * 100)
+                    : 0
+            })
+        });
         return {
-            type: 'failed',
-            message: 附加接口身份(`任务“${task.名称}”已执行全部分段；${failureSummary}`)
+            type: 'progress',
+            message: 附加接口身份(`任务“${task.名称}”第 ${当前补漏轮次} 轮已完成，剩余 ${failedIds.length} 个失败分段；已自动排入第 ${nextRound} 轮补漏。`)
         };
     }
 
