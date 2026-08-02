@@ -4244,7 +4244,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
             )}
 
             {mobileTab === 'tasks' && (
-            <div className="space-y-6 max-w-5xl mx-auto">
+            <div className="novel-task-management-layout space-y-6 w-full max-w-[1800px] mx-auto">
                 <div className="rounded-xl border border-white/5 bg-gradient-to-b from-black/40 to-black/20 backdrop-blur-md p-6 shadow-xl space-y-6">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-white/5 pb-6">
                         <div className="flex-1">
@@ -4296,7 +4296,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                    <div className="novel-task-summary-grid grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
                         <div className="rounded-lg border border-white/5 bg-black/30 p-4">
                             <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">数据集</div>
                             <div className="text-lg font-bold text-gray-200">{datasetsCount}</div>
@@ -4324,7 +4324,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(420px,0.9fr)] gap-6">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <h5 className="text-sm font-medium text-gray-300 px-1">任务队列</h5>
@@ -4391,7 +4391,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                         </div>
 
                                         {task.最近错误 && (
-                                            <div className="mt-3 p-2.5 rounded bg-red-950/20 border border-red-900/30 text-[10px] text-red-400">
+                                            <div className="mt-3 p-2.5 rounded bg-red-950/20 border border-red-900/30 text-[10px] text-red-400 line-clamp-4" title={task.最近错误}>
                                                 {task.最近错误}
                                             </div>
                                         )}
@@ -4426,7 +4426,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                         </div>
 
                         {showLiveMonitor && (
-                            <div className="flex flex-col md:flex-row gap-4 h-[360px] shrink-0">
+                            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 h-[420px] shrink-0">
                                 <div className="flex-1 flex flex-col rounded-xl border border-cyan-500/20 bg-black/40 overflow-hidden relative h-full">
                                     <div className="px-3 py-2 bg-cyan-950/30 border-b border-cyan-500/20 flex justify-between items-center absolute top-0 left-0 right-0 z-10 backdrop-blur-sm">
                                         <span className="text-[10px] font-medium text-cyan-300 uppercase tracking-wider">模型流式输出</span>
@@ -4442,7 +4442,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                         {schedulerState.liveStreamText || '>> 等待模型响应...'}
                                     </pre>
                                 </div>
-                                <div className="flex-1 md:max-w-md flex flex-col rounded-xl border border-white/5 bg-black/30 overflow-hidden h-full">
+                                <div className="min-w-0 flex flex-col rounded-xl border border-white/5 bg-black/30 overflow-hidden h-full">
                                     <div className="px-3 py-2 bg-black/40 border-b border-white/5">
                                         <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">最近日志</span>
                                     </div>
@@ -4473,7 +4473,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             <h5 className="text-sm font-medium text-gray-300">当前数据集处理进度纵览</h5>
                             <div className="text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded">共 {chapterProgressSummary.total} 章</div>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                        <div className="novel-chapter-progress-grid grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-2">
                             {chapterProgressList.map(({ chapter, status }) => (
                                 <div key={`progress_${chapter.id}`} className={`p-2 rounded border ${
                                     status === '已完成' ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400' :

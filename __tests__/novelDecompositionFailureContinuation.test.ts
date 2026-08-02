@@ -54,6 +54,8 @@ vi.mock('../utils/gameSettings', async () => {
 import {
     构建小说拆分失败汇总,
     默认小说拆分执行器,
+    判断小说拆分渠道永久故障,
+    获取小说拆分补漏退避毫秒,
     获取小说拆分自动重试次数,
     获取小说拆分待处理索引
 } from '../services/novelDecompositionRuntime';
@@ -104,7 +106,24 @@ describe('小说分解失败续跑', () => {
         }).百分比).toBe(100);
     });
 
-    it('真实执行链在首段重试耗尽后继续第二段并最终汇总失败', async () => {
+    it('只把明确不可恢复的接口配置与鉴权错误判为渠道永久故障', () => {
+        expect(判断小说拆分渠道永久故障(Object.assign(new Error('Unauthorized'), { status: 401 }))).toBe(true);
+        expect(判断小说拆分渠道永久故障(Object.assign(new Error('Forbidden'), { status: 403 }))).toBe(true);
+        expect(判断小说拆分渠道永久故障(new Error('404 Requested entity was not found: unknown model'))).toBe(true);
+        expect(判断小说拆分渠道永久故障(new Error('insufficient_quota: billing account required'))).toBe(true);
+        expect(判断小说拆分渠道永久故障(Object.assign(new Error('rate limit'), { status: 429 }))).toBe(false);
+        expect(判断小说拆分渠道永久故障(Object.assign(new Error('service unavailable'), { status: 503 }))).toBe(false);
+        expect(判断小说拆分渠道永久故障(new Error('缺少信息可见性标注'))).toBe(false);
+        expect(判断小说拆分渠道永久故障(new Error('stream request timeout'))).toBe(false);
+    });
+
+    it('补漏轮次使用有上限的非阻塞退避', () => {
+        expect(获取小说拆分补漏退避毫秒(2)).toBe(2_000);
+        expect(获取小说拆分补漏退避毫秒(5)).toBe(8_000);
+        expect(获取小说拆分补漏退避毫秒(99)).toBe(30_000);
+    });
+
+    it('第一轮失败后自动排入第二轮且只重跑失败分段', async () => {
         const dataset = 创建空小说拆分数据集({
             id: 'dataset-runtime-retry',
             标题: '续跑测试',
@@ -125,12 +144,13 @@ describe('小说分解失败续跑', () => {
                 处理状态: '已完成'
             }));
 
-        const result = await 默认小说拆分执行器({
+        const firstResult = await 默认小说拆分执行器({
             task: {
                 id: 'task-runtime-retry',
                 名称: '续跑测试',
                 单次处理批量: 2,
                 自动重试次数: 0,
+                当前补漏轮次: 1,
                 进度: {}
             },
             dataset
@@ -140,16 +160,74 @@ describe('小说分解失败续跑', () => {
         expect(runtimeMocks.parseSegment.mock.calls.map((call) => call[0].segment.id)).toEqual([
             'segment-1', 'segment-1', 'segment-1', 'segment-1', 'segment-2'
         ]);
-        expect(result.type).toBe('failed');
-        expect(result.message).toContain('已执行全部分段');
-        expect(result.message).toContain('失败段：');
+        expect(firstResult.type).toBe('progress');
+        expect(firstResult.message).toContain('第 1 轮已完成');
+        expect(firstResult.message).toContain('第 2 轮补漏');
+        expect(firstResult.message).toContain('剩余 1 个失败分段');
 
-        const finalDataset = runtimeMocks.writeDataset.mock.calls.at(-1)?.[0];
-        expect(finalDataset.分段列表.map((item: any) => item.处理状态)).toEqual(['失败', '已完成']);
+        const retryDataset = runtimeMocks.writeDataset.mock.calls.at(-1)?.[0];
+        expect(retryDataset.分段列表.map((item: any) => item.处理状态)).toEqual(['待处理', '已完成']);
+        expect(retryDataset.分段列表[0].最近错误).toContain('格式错误');
         expect(runtimeMocks.updateTaskProgress).toHaveBeenLastCalledWith('task-runtime-retry', expect.objectContaining({
-            当前阶段: 'failed',
-            当前游标: 2,
-            进度: expect.objectContaining({ 百分比: 100 })
+            当前阶段: 'processing',
+            当前补漏轮次: 2,
+            失败分段ID列表: ['segment-1']
         }));
+
+        runtimeMocks.parseSegment.mockResolvedValueOnce({
+            ...retryDataset.分段列表[0],
+            本组概括: '第一段补漏完成',
+            处理状态: '已完成'
+        });
+        const secondResult = await 默认小说拆分执行器({
+            task: {
+                id: 'task-runtime-retry',
+                名称: '续跑测试',
+                单次处理批量: 2,
+                自动重试次数: 0,
+                当前补漏轮次: 2,
+                下次补漏时间: 0,
+                进度: {}
+            },
+            dataset: retryDataset
+        });
+
+        expect(secondResult.type).toBe('completed');
+        expect(runtimeMocks.parseSegment).toHaveBeenCalledTimes(6);
+        expect(runtimeMocks.parseSegment.mock.calls[5][0]).toEqual(expect.objectContaining({
+            segment: expect.objectContaining({ id: 'segment-1' }),
+            retryCorrection: expect.stringContaining('格式错误')
+        }));
+    });
+
+    it('明确渠道故障立即停止且不进入下一轮', async () => {
+        const dataset = 创建空小说拆分数据集({
+            id: 'dataset-channel-failure',
+            标题: '渠道故障测试',
+            分段列表: [
+                { id: 'segment-channel', 数据集ID: 'dataset-channel-failure', 组号: 1, 标题: '渠道失败段', 原文内容: '原文', 处理状态: '待处理' },
+                { id: 'segment-after', 数据集ID: 'dataset-channel-failure', 组号: 2, 标题: '后续段', 原文内容: '原文', 处理状态: '待处理' }
+            ] as any
+        });
+        const channelError = Object.assign(new Error('Requested entity was not found: invalid model'), { status: 404 });
+        runtimeMocks.parseSegment.mockRejectedValue(channelError);
+
+        const result = await 默认小说拆分执行器({
+            task: {
+                id: 'task-channel-failure',
+                名称: '渠道故障测试',
+                单次处理批量: 2,
+                自动重试次数: 0,
+                当前补漏轮次: 1,
+                进度: {}
+            },
+            dataset
+        });
+
+        expect(result.type).toBe('failed');
+        expect(result.message).toContain('渠道故障');
+        expect(runtimeMocks.parseSegment).toHaveBeenCalledTimes(1);
+        const failedDataset = runtimeMocks.writeDataset.mock.calls.at(-1)?.[0];
+        expect(failedDataset.分段列表.map((item: any) => item.处理状态)).toEqual(['失败', '待处理']);
     });
 });

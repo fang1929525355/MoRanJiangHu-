@@ -939,6 +939,7 @@ export const 解析小说拆分分段 = async (params: {
     nextChapterTitles?: string[];
     leadingSystemPrompt?: string;
     extraPrompt?: string;
+    retryCorrection?: string;
     apiConfig?: 当前可用接口结构 | null;
     gptMode?: boolean;
     signal?: AbortSignal;
@@ -947,6 +948,18 @@ export const 解析小说拆分分段 = async (params: {
     if (!params.apiConfig) {
         throw new Error('小说拆分接口未配置或不可用');
     }
+
+    const retryCorrection = 去空白(params.retryCorrection || '');
+    const correctionPrompt = retryCorrection
+        ? [
+            '【补漏定向结构纠错】',
+            `上一次失败原因：${retryCorrection}`,
+            '请完整重输本分段的全部结构，不要只返回修补字段。',
+            '信息可见性必须作为独立对象输出，明确包含“谁知道”“谁不知道”“是否仅读者视角可见”，不能拼进“内容”字符串。',
+            '若失败涉及时间线，请按事件真实先后重新排列，并保证开始时间、最早开始时间、最迟开始时间、结束时间完整且单调。'
+        ].join('\n')
+        : '';
+    const mergedExtraPrompt = [params.extraPrompt, correctionPrompt].filter(Boolean).join('\n\n');
 
     const result = await textAIService.generateNovelDecomposition({
         text: params.segment.原文内容,
@@ -957,7 +970,7 @@ export const 解析小说拆分分段 = async (params: {
         previousTimelineEnd: params.previousTimelineEnd,
         nextChapterTitles: params.nextChapterTitles,
         leadingSystemPrompt: params.leadingSystemPrompt,
-        extraPrompt: params.extraPrompt,
+        extraPrompt: mergedExtraPrompt || undefined,
         gptMode: params.gptMode === true
     }, params.apiConfig, params.signal, params.onStreamDelta
         ? {

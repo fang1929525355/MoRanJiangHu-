@@ -117,4 +117,22 @@ describe('小说分解工作台布局', () => {
         expect(match?.[1]).toBeDefined();
         expect(Number(match?.[1])).toBeLessThan(200);
     });
+
+    it('任务管理页在宽屏使用更大的内容区和可读的监控栏', () => {
+        const source = fs.readFileSync(
+            path.join(process.cwd(), 'components/features/Settings/NovelDecompositionSettings.tsx'),
+            'utf8'
+        );
+
+        expect(source).toContain('novel-task-management-layout');
+        expect(source).toContain('max-w-[1800px]');
+        expect(source).toContain('xl:grid-cols-[minmax(0,1.45fr)_minmax(420px,0.9fr)]');
+        expect(source).not.toContain('lg:grid-cols-[1fr_320px]');
+        expect(source).toContain('line-clamp-4');
+        expect(source).toContain('novel-chapter-progress-grid');
+        expect(source).toContain('grid-cols-[repeat(auto-fit,minmax(8rem,1fr))]');
+        expect(source).toContain('novel-task-summary-grid');
+        expect(source).toContain('grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]');
+        expect(source.indexOf('novel-task-management-layout')).toBeGreaterThan(source.indexOf("mobileTab === 'tasks'"));
+    });
 });
