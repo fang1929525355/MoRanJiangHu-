@@ -3,7 +3,16 @@ import { 接口设置结构, 单接口配置结构, 功能模型占位配置结�
 import GameButton from '../../ui/GameButton';
 import ToggleSwitch from '../../ui/ToggleSwitch';
 import InlineSelect from '../../ui/InlineSelect';
-import { 构建OpenAI兼容模型列表候选地址, 规范化接口设置 } from '../../../utils/apiConfig';
+import {
+    构建OpenAI兼容模型列表候选地址,
+    规范化Gemini模型资源ID,
+    规范化接口设置
+} from '../../../utils/apiConfig';
+import {
+    解析小说拆分连接测试草稿,
+    测试小说拆分接口连接,
+    type 小说拆分连接测试结果
+} from '../../../services/novelDecompositionApiDiagnostics';
 import StageApiModelSelector from './StageApiModelSelector';
 
 interface Props {
@@ -17,11 +26,14 @@ const NovelDecompositionApiSettings: React.FC<Props> = ({ settings, onSave }) =>
     const [loadingModels, setLoadingModels] = useState(false);
     const [message, setMessage] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
+    const [testingConnection, setTestingConnection] = useState(false);
+    const [connectionResult, setConnectionResult] = useState<小说拆分连接测试结果 | null>(null);
 
     useEffect(() => {
         const normalized = 规范化接口设置(settings);
         setForm(normalized);
         setModelOptions([]);
+        setConnectionResult(null);
     }, [settings]);
 
     const activeConfig = useMemo<单接口配置结构 | null>(() => {
@@ -64,7 +76,9 @@ const NovelDecompositionApiSettings: React.FC<Props> = ({ settings, onSave }) =>
                 if (!res.ok) continue;
                 const data = await res.json();
                 if (data && Array.isArray(data.data)) {
-                    return data.data.map((m: any) => m?.id).filter(Boolean);
+                    return Array.from(new Set(data.data
+                        .map((m: any) => 规范化Gemini模型资源ID(m?.id))
+                        .filter(Boolean)));
                 }
             }
             setMessage('获取失败：返回格式错误。');
@@ -84,6 +98,22 @@ const NovelDecompositionApiSettings: React.FC<Props> = ({ settings, onSave }) =>
             setMessage('小说分解模型列表获取成功。');
         }
         setLoadingModels(false);
+    };
+
+    const handleTestConnection = async () => {
+        if (testingConnection) return;
+        const draft = 解析小说拆分连接测试草稿(form);
+        if (!draft.apiConfig) {
+            setConnectionResult(draft.failure || null);
+            return;
+        }
+        setTestingConnection(true);
+        setConnectionResult(null);
+        try {
+            setConnectionResult(await 测试小说拆分接口连接(draft.apiConfig));
+        } finally {
+            setTestingConnection(false);
+        }
     };
 
     const handleSave = () => {
@@ -201,6 +231,36 @@ const NovelDecompositionApiSettings: React.FC<Props> = ({ settings, onSave }) =>
 
                 <div className="rounded border border-amber-500/20 bg-amber-950/10 px-3 py-3 text-[11px] leading-6 text-amber-100">
                     首页“小说分解”入口现在会优先要求这里完成独立 API 配置。建议使用独立模型，避免长篇拆分任务占用主剧情接口。
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <GameButton
+                        onClick={() => { void handleFetchModels(); }}
+                        variant="secondary"
+                        className="px-4 py-2 text-xs"
+                        disabled={loadingModels || !独立模型开启}
+                    >
+                        {loadingModels ? '刷新中...' : '刷新模型列表'}
+                    </GameButton>
+                    <GameButton
+                        onClick={() => { void handleTestConnection(); }}
+                        variant="primary"
+                        className={`px-4 py-2 text-xs ${testingConnection ? '!bg-amber-100/85 !text-amber-950 !border-amber-500' : ''}`}
+                        disabled={testingConnection || !独立模型开启}
+                    >
+                        {testingConnection ? '测试中...' : '测试连接'}
+                    </GameButton>
+                </div>
+
+                <div
+                    className={`novel-api-connection-result min-h-12 whitespace-pre-wrap break-words rounded border px-3 py-2 text-xs leading-6 ${connectionResult?.ok
+                        ? 'border-emerald-500/30 bg-emerald-950/15 text-emerald-100'
+                        : 'border-amber-500/25 bg-amber-950/10 text-amber-100'}`}
+                    aria-live="polite"
+                >
+                    {connectionResult
+                        ? `${connectionResult.identity}\n${connectionResult.ok ? '测试成功' : '测试失败'}：${connectionResult.detail}`
+                        : '连接测试结果会在这里显示，并明确标注当前渠道与模型。'}
                 </div>
             </div>
 
