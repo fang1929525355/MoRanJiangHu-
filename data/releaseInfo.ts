@@ -693,7 +693,7 @@ export const RELEASE_INFO = {
         "备用站：https://msjh.bacon.de5.net/"
     ],
     "notes": "小说分解现在会先完整处理所有分段，再自动开启后续补漏轮次，只重跑失败章节，直到全部完成。\n普通格式、时间线、信息可见性、超时和临时服务错误不再中断整部小说；只有鉴权、模型不存在等明确渠道故障才会停止。\n任务页会显示当前渠道与模型，补漏中的真实完成比例不会误显示为 100%，长错误可展开查看和复制。\n优化章节标题识别和宽屏任务管理布局，减少叙事残句被误当卷标题，并提升大屏信息利用率。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-    "releasePublishedAt": "2026-08-03T19:47:09+08:00"
+    "releasePublishedAt": "2026-08-04T00:21:15+08:00"
 } as const;
 
 export type ReleaseInfo = typeof RELEASE_INFO;
