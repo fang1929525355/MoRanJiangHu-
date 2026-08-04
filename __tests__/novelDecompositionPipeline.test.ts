@@ -314,4 +314,87 @@ describe('novelDecompositionPipeline', () => {
         expect(segment.时间线起点).toBe('6500:01:01:00:00');
         expect(segment.时间线终点).toBe('20000:01:01:00:00');
     });
+
+    it('将晚间起点后的同日凌晨终点恢复为次日', async () => {
+        vi.mocked(textAIService.generateNovelDecomposition).mockResolvedValueOnce({
+            groupNumber: 45,
+            chapterRange: '夜战', chapterTitles: ['夜战'], isOpeningGroup: false,
+            summary: '战斗从深夜持续到次日凌晨。',
+            openingFacts: [], continuationFacts: [], endStates: [], nextGroupReferences: [],
+            hardConstraints: [], foreshadowing: [], keyEvents: [], characterProgressions: [],
+            appearingCharacters: [], characterProfiles: [], factionProfiles: [], locationProfiles: [], itemProfiles: [],
+            worldRules: [], worldBoundaryRules: [], characterRelations: [], factionRelations: [],
+            foreshadowingThreads: [], payoffPoints: [], chapterRhythm: [],
+            timelineStart: '0003:02:28:23:59', timelineEnd: '0003:02:28:04:00', rawText: ''
+        });
+
+        const segment = await 解析小说拆分分段({
+            dataset: 创建空小说拆分数据集({ id: 'dataset-midnight-end' }),
+            segment: 创建分段({ id: 'segment-midnight-end', 组号: 45 }),
+            segmentIndex: 44,
+            previousTimelineEnd: '0003:02:28:23:59',
+            apiConfig: { apiKey: 'test-key' } as any
+        });
+
+        expect(segment.时间线终点).toBe('0003:03:01:04:00');
+    });
+
+    it('将晚间参考点后的关键事件凌晨时间窗整体恢复为次日', async () => {
+        vi.mocked(textAIService.generateNovelDecomposition).mockResolvedValueOnce({
+            groupNumber: 46,
+            chapterRange: '夜战', chapterTitles: ['夜战'], isOpeningGroup: false,
+            summary: '战斗从深夜持续到次日凌晨。',
+            openingFacts: [], continuationFacts: [], endStates: [], nextGroupReferences: [],
+            hardConstraints: [], foreshadowing: [], characterProgressions: [],
+            appearingCharacters: ['程宗扬'], characterProfiles: [], factionProfiles: [], locationProfiles: [], itemProfiles: [],
+            worldRules: [], worldBoundaryRules: [], characterRelations: [], factionRelations: [],
+            foreshadowingThreads: [], payoffPoints: [], chapterRhythm: [],
+            timelineStart: '0003:02:28:23:59', timelineEnd: '0003:02:28:04:00',
+            keyEvents: [{
+                事件名: '夜战', 事件说明: '程宗扬迎战强敌。',
+                开始时间: '0003:02:28:01:00', 最早开始时间: '0003:02:28:01:00',
+                最迟开始时间: '0003:02:28:02:00', 结束时间: '0003:02:28:04:00',
+                前置条件: [], 触发条件: [], 阻断条件: [], 事件结果: [], 对下一组影响: [],
+                信息可见性: { 谁知道: ['程宗扬'], 谁不知道: [], 是否仅读者视角可见: false }
+            }],
+            rawText: ''
+        });
+
+        const segment = await 解析小说拆分分段({
+            dataset: 创建空小说拆分数据集({ id: 'dataset-midnight-event' }),
+            segment: 创建分段({ id: 'segment-midnight-event', 组号: 46 }),
+            segmentIndex: 45,
+            previousTimelineEnd: '0003:02:28:23:59',
+            apiConfig: { apiKey: 'test-key' } as any
+        });
+
+        expect(segment.关键事件[0]).toMatchObject({
+            开始时间: '0003:03:01:01:00',
+            最早开始时间: '0003:03:01:01:00',
+            最迟开始时间: '0003:03:01:02:00',
+            结束时间: '0003:03:01:04:00'
+        });
+    });
+
+    it('不会把白天开始的普通倒序误判为跨午夜', async () => {
+        vi.mocked(textAIService.generateNovelDecomposition).mockResolvedValueOnce({
+            groupNumber: 47,
+            chapterRange: '倒序', chapterTitles: ['倒序'], isOpeningGroup: false,
+            summary: '模型返回了错误的倒序时间。',
+            openingFacts: [], continuationFacts: [], endStates: [], nextGroupReferences: [],
+            hardConstraints: [], foreshadowing: [], keyEvents: [], characterProgressions: [],
+            appearingCharacters: [], characterProfiles: [], factionProfiles: [], locationProfiles: [], itemProfiles: [],
+            worldRules: [], worldBoundaryRules: [], characterRelations: [], factionRelations: [],
+            foreshadowingThreads: [], payoffPoints: [], chapterRhythm: [],
+            timelineStart: '0003:02:28:12:00', timelineEnd: '0003:02:28:04:00', rawText: ''
+        });
+
+        await expect(解析小说拆分分段({
+            dataset: 创建空小说拆分数据集({ id: 'dataset-daytime-reversal' }),
+            segment: 创建分段({ id: 'segment-daytime-reversal', 组号: 47 }),
+            segmentIndex: 46,
+            previousTimelineEnd: '0003:02:28:12:00',
+            apiConfig: { apiKey: 'test-key' } as any
+        })).rejects.toThrow('早于起始时间');
+    });
 });
