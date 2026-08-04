@@ -22,6 +22,43 @@ const 规范化信息可见性 = (value: any) => ({
     是否仅读者视角可见: value?.是否仅读者视角可见 === true
 });
 
+const 从内容恢复信息可见性 = (value: unknown): {
+    内容: string;
+    信息可见性: ReturnType<typeof 规范化信息可见性>;
+    已识别读者视角: boolean;
+} => {
+    const raw = 读取文本(value).trim();
+    const labelPattern = /(?:谁知道|谁不知道|是否仅读者视角可见)\s*[:：]/gu;
+    const firstLabel = labelPattern.exec(raw);
+    if (!firstLabel) {
+        return {
+            内容: raw,
+            信息可见性: 规范化信息可见性(undefined),
+            已识别读者视角: false
+        };
+    }
+
+    const 读取字段 = (label: string): string => {
+        const match = raw.match(new RegExp(`${label}\\s*[:：]\\s*([^/\\n）)]*)`, 'u'));
+        return match?.[1]?.trim() || '';
+    };
+    const 拆分人员 = (text: string): string[] => 去重文本列表(
+        text.split(/[、，,；;]/u).map((item) => item.trim()).filter(Boolean),
+        12
+    );
+    const readerOnlyText = 读取字段('是否仅读者视角可见');
+
+    return {
+        内容: raw.slice(0, firstLabel.index).replace(/[\\/\s（(]+$/u, '').trim(),
+        信息可见性: {
+            谁知道: 拆分人员(读取字段('谁知道')),
+            谁不知道: 拆分人员(读取字段('谁不知道')),
+            是否仅读者视角可见: /^(?:是|true)$/iu.test(readerOnlyText)
+        },
+        已识别读者视角: /^(?:是|否|true|false)$/iu.test(readerOnlyText)
+    };
+};
+
 const 合并信息可见性 = (
     left: 小说拆分分段结构['关键事件'][number]['信息可见性'],
     right: 小说拆分分段结构['关键事件'][number]['信息可见性']
@@ -31,10 +68,21 @@ const 合并信息可见性 = (
     是否仅读者视角可见: left?.是否仅读者视角可见 === true || right?.是否仅读者视角可见 === true
 });
 
-const 规范化可见信息条目 = (value: any): 小说拆分分段结构['原著硬约束'][number] => ({
-    内容: 清理章节编号文本(读取文本(value?.内容).trim()),
-    信息可见性: 规范化信息可见性(value?.信息可见性)
-});
+const 规范化可见信息条目 = (value: any): 小说拆分分段结构['原著硬约束'][number] => {
+    const recovered = 从内容恢复信息可见性(value?.内容);
+    const structured = 规范化信息可见性(value?.信息可见性);
+    const hasStructuredReaderOnly = typeof value?.信息可见性?.是否仅读者视角可见 === 'boolean';
+    return {
+        内容: 清理章节编号文本(recovered.内容),
+        信息可见性: {
+            谁知道: structured.谁知道.length > 0 ? structured.谁知道 : recovered.信息可见性.谁知道,
+            谁不知道: structured.谁不知道.length > 0 ? structured.谁不知道 : recovered.信息可见性.谁不知道,
+            是否仅读者视角可见: hasStructuredReaderOnly
+                ? structured.是否仅读者视角可见
+                : recovered.已识别读者视角 && recovered.信息可见性.是否仅读者视角可见
+        }
+    };
+};
 
 const 去重可见信息条目 = (
     items: 小说拆分分段结构['原著硬约束'],

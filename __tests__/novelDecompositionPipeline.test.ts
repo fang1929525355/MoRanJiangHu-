@@ -191,6 +191,78 @@ describe('novelDecompositionPipeline', () => {
         expect(vi.mocked(textAIService.generateNovelDecomposition).mock.calls[0][0].extraPrompt).toContain('不能拼进“内容”');
     });
 
+    it('从原著硬约束内容尾注恢复缺失的信息可见性', async () => {
+        vi.mocked(textAIService.generateNovelDecomposition).mockResolvedValueOnce({
+            groupNumber: 1,
+            chapterRange: '第一章',
+            chapterTitles: ['第一章'],
+            isOpeningGroup: true,
+            summary: '李辅国准备在子时夺舍新君。',
+            openingFacts: [], continuationFacts: [], endStates: [], nextGroupReferences: [],
+            hardConstraints: [{
+                内容: '李辅国夺舍新君必须在子时进行 / 谁知道：李辅国、读者 / 谁不知道：程宗扬、杨玉环 / 是否仅读者视角可见：否',
+                信息可见性: { 谁知道: [], 谁不知道: [], 是否仅读者视角可见: false }
+            }],
+            foreshadowing: [], keyEvents: [], characterProgressions: [],
+            appearingCharacters: [], characterProfiles: [], factionProfiles: [], locationProfiles: [], itemProfiles: [],
+            worldRules: [], worldBoundaryRules: [], characterRelations: [], factionRelations: [],
+            foreshadowingThreads: [], payoffPoints: [], chapterRhythm: [],
+            timelineStart: '0001:01:01:00:00', timelineEnd: '0001:01:01:01:00', rawText: ''
+        });
+
+        const segment = await 解析小说拆分分段({
+            dataset: 创建空小说拆分数据集({ id: 'dataset-inline-visibility' }),
+            segment: 创建分段({ id: 'segment-inline-visibility', 组号: 1 }),
+            segmentIndex: 0,
+            apiConfig: { apiKey: 'test-key' } as any
+        });
+
+        expect(segment.原著硬约束[0]).toEqual({
+            内容: '李辅国夺舍新君必须在子时进行',
+            信息可见性: {
+                谁知道: ['李辅国', '读者'],
+                谁不知道: ['程宗扬', '杨玉环'],
+                是否仅读者视角可见: false
+            }
+        });
+    });
+
+    it('清理信息可见性文本尾注并优先保留正式结构化值', async () => {
+        vi.mocked(textAIService.generateNovelDecomposition).mockResolvedValueOnce({
+            groupNumber: 1,
+            chapterRange: '第一章',
+            chapterTitles: ['第一章'],
+            isOpeningGroup: true,
+            summary: '李辅国准备在子时夺舍新君。',
+            openingFacts: [], continuationFacts: [], endStates: [], nextGroupReferences: [],
+            hardConstraints: [{
+                内容: '李辅国夺舍新君必须在子时进行（谁知道: 李辅国、读者 / 谁不知道: 程宗扬 / 是否仅读者视角可见: false）',
+                信息可见性: { 谁知道: ['鱼玄机'], 谁不知道: [], 是否仅读者视角可见: true }
+            }],
+            foreshadowing: [], keyEvents: [], characterProgressions: [],
+            appearingCharacters: [], characterProfiles: [], factionProfiles: [], locationProfiles: [], itemProfiles: [],
+            worldRules: [], worldBoundaryRules: [], characterRelations: [], factionRelations: [],
+            foreshadowingThreads: [], payoffPoints: [], chapterRhythm: [],
+            timelineStart: '0001:01:01:00:00', timelineEnd: '0001:01:01:01:00', rawText: ''
+        });
+
+        const segment = await 解析小说拆分分段({
+            dataset: 创建空小说拆分数据集({ id: 'dataset-structured-visibility' }),
+            segment: 创建分段({ id: 'segment-structured-visibility', 组号: 1 }),
+            segmentIndex: 0,
+            apiConfig: { apiKey: 'test-key' } as any
+        });
+
+        expect(segment.原著硬约束[0]).toEqual({
+            内容: '李辅国夺舍新君必须在子时进行',
+            信息可见性: {
+                谁知道: ['鱼玄机'],
+                谁不知道: ['程宗扬'],
+                是否仅读者视角可见: true
+            }
+        });
+    });
+
     it('按真实时间顺序比较四位和五位年份，避免误判两万年早于六千五百年', async () => {
         vi.mocked(textAIService.generateNovelDecomposition).mockResolvedValueOnce({
             groupNumber: 44,
