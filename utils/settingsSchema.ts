@@ -27,6 +27,7 @@ export const 设置键 = {
     对象存储同步配置: 'object_storage_sync_settings',
     NPC变量备份: 'npc_variable_backups',
     NPC变量自动备份: 'npc_variable_auto_backup',
+    开局提示词基线: 'opening_prompt_baseline',
     图片资源迁移版本: 'image_asset_migration_v2'
 } as const;
 

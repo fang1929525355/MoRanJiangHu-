@@ -21,6 +21,9 @@ type 快速重开模式 = 'world_only' | 'opening_only' | 'all';
 
 type 世界生成选项 = {
     清空前端变量?: boolean;
+    // [修复] 快速重开/重 roll 时置 true：先恢复开局前的提示词池/世界书基线再生成，
+    // 避免沿用上一局 AI 写入的 core_world/core_realm/core_cot（状态污染）
+    重开恢复基线?: boolean;
 };
 
 type 最近开局配置结构 = {
@@ -55,6 +58,8 @@ type 回合快照结构 = {
         视觉设置: any;
         场景图片档案: any;
     };
+    回档前提示词池?: 提示词结构[];
+    回档前世界书?: any[];
     回档前历史: any[];
 };
 
@@ -96,6 +101,10 @@ type 会话生命周期依赖 = {
     清空重Roll快照: () => void;
     推入重Roll快照: (snapshot: 回合快照结构) => void;
     重置自动存档状态: () => void;
+    捕获开局提示词基线: (promptPool?: 提示词结构[]) => Promise<void>;
+    恢复开局提示词基线: () => Promise<{ prompts: 提示词结构[]; worldbooks: any[]; capturedAt: number } | null>;
+    清除开局提示词基线: () => Promise<void>;
+    删除本局开局自动存档: () => Promise<void>;
     设置角色: (value: any) => void;
     设置环境: (value: any) => void;
     设置游戏初始时间: (value: string) => void;
@@ -190,6 +199,7 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
         deps.重置自动存档状态();
         清空当前存档生图隔离态();
         deps.设置最近开局配置(null);
+        void deps.清除开局提示词基线();
         deps.setLoading(false);
         deps.设置环境(deps.创建开场空白环境());
         deps.设置游戏初始时间('');
@@ -260,6 +270,10 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
                 视觉设置: deps.获取当前视觉设置快照(),
                 场景图片档案: deps.获取当前场景图片档案快照()
             },
+            // [修复] 携带开局前的提示词池/世界书，重 roll 开局时一并回滚，
+            // 防止上一局 AI 写入的 core_world/core_realm/core_cot 污染新开局
+            回档前提示词池: deps.深拷贝(effectivePromptSnapshot),
+            回档前世界书: deps.深拷贝(Array.isArray(deps.世界书列表) ? deps.世界书列表 : []),
             回档前历史: deps.深拷贝(Array.isArray(deps.历史记录) ? deps.历史记录 : [])
         });
         return 执行开场剧情生成工作流(
@@ -355,7 +369,15 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
         options?: 世界生成选项,
         activeModuleExtraRules?: string
     ) => {
-        const promptPool = (Array.isArray(deps.prompts) && deps.prompts.length > 0) ? deps.prompts : await deps.ensurePromptsLoaded();
+        // [修复] 快速重开/重 roll：先恢复开局前的提示词池/世界书基线；
+        // 新鲜开局：捕获当前池作为本局基线，供后续重 roll 恢复
+        const restoredBaseline = options?.重开恢复基线 ? await deps.恢复开局提示词基线() : null;
+        const promptPool = restoredBaseline
+            ? restoredBaseline.prompts
+            : (Array.isArray(deps.prompts) && deps.prompts.length > 0) ? deps.prompts : await deps.ensurePromptsLoaded();
+        if (!options?.重开恢复基线) {
+            void deps.捕获开局提示词基线(promptPool);
+        }
         deps.设置开局文章优化进度(null);
         deps.设置开局变量生成进度(null);
         deps.设置开局世界演变进度(null);
@@ -417,6 +439,7 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
     const handleReturnToHome = () => {
         deps.重置自动存档状态();
         deps.设置最近开局配置(null);
+        void deps.清除开局提示词基线();
         deps.设置开局配置(undefined);
         deps.清空NPC生图等待队列();
         deps.setView('home');
@@ -427,6 +450,9 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
         if (deps.loading || !deps.最近开局配置) return;
         deps.清空重Roll快照();
         deps.重置自动存档状态();
+        // [修复] 上一次开局的自动存档在本轮重开后即为废稿，删除以免多次 roll 的开头全部堆在存档列表里；
+        // 仅删除本局开场基态之后创建的 auto 存档，历史存档不受影响
+        await deps.删除本局开局自动存档();
         const worldConfig = deps.深拷贝(deps.最近开局配置.worldConfig);
         const charData = deps.深拷贝(deps.最近开局配置.charData);
         const openingConfig = deps.深拷贝(deps.最近开局配置.openingConfig);
@@ -472,7 +498,7 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
                 'step',
                 openingStreaming,
                 openingExtraPrompt,
-                { 清空前端变量: true },
+                { 清空前端变量: true, 重开恢复基线: true },
                 restoredRuntime.activeModuleExtraRules
             );
             return;
@@ -481,6 +507,8 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
         if (mode === 'opening_only') {
             deps.setLoading(true);
             try {
+                // 注意：opening_only 只重 roll 剧情、保留本局已生成的世界观，
+                // 这里直接用当前池（含本局世界），不能恢复向导期基线，否则会把本局世界冲掉
                 await generateOpeningStory(
                     openingBase,
                     deps.prompts,
@@ -512,7 +540,7 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
             'all',
             openingStreaming,
             openingExtraPrompt,
-            { 清空前端变量: true },
+            { 清空前端变量: true, 重开恢复基线: true },
             restoredRuntime.activeModuleExtraRules
         );
     };

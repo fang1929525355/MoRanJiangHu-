@@ -251,6 +251,7 @@ type 存档协调依赖 = {
     }) => void;
     重置自动存档状态: () => void;
     切换生图存档作用域?: () => void;
+    清除开局提示词基线?: () => Promise<void>;
     最近自动存档时间戳Ref: { current: number };
     最近自动存档签名Ref: { current: string };
 };
@@ -806,6 +807,8 @@ export const 执行读取存档 = async (
     deps.重置自动存档状态();
     deps.切换生图存档作用域?.();
     deps.设置最近开局配置(null);
+    // [修复] 读档后旧的“开局提示词基线”不再适用，避免快速重开误恢复到别的局的基线
+    void deps.清除开局提示词基线?.();
     trace('reset.done');
 
     const saveHistoryCount = Array.isArray(save.历史记录) ? save.历史记录.length : 0;

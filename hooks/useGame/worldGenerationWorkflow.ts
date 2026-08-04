@@ -20,6 +20,8 @@ import { 合并世界基底到开场状态 } from './storyState';
 
 type 世界生成选项 = {
     清空前端变量?: boolean;
+    // 快速重开/重 roll 标记：提示词池基线的恢复在 sessionLifecycle 包装层完成，此处仅透传
+    重开恢复基线?: boolean;
 };
 
 type 世界生成工作流依赖 = {
