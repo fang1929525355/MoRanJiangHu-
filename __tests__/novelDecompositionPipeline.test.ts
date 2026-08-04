@@ -200,8 +200,8 @@ describe('novelDecompositionPipeline', () => {
             summary: '李辅国准备在子时夺舍新君。',
             openingFacts: [], continuationFacts: [], endStates: [], nextGroupReferences: [],
             hardConstraints: [{
-                内容: '李辅国夺舍新君必须在子时进行 / 谁知道：李辅国、读者 / 谁不知道：程宗扬、杨玉环 / 是否仅读者视角可见：否',
-                信息可见性: { 谁知道: [], 谁不知道: [], 是否仅读者视角可见: false }
+                内容: '李辅国夺舍新君必须在子时进行 / 谁知道：李辅国/读者 / 谁不知道：程宗扬、杨玉环 / 是否仅读者视角可见：是',
+                信息可见性: { 谁知道: [], 谁不知道: [] } as any
             }],
             foreshadowing: [], keyEvents: [], characterProgressions: [],
             appearingCharacters: [], characterProfiles: [], factionProfiles: [], locationProfiles: [], itemProfiles: [],
@@ -222,7 +222,7 @@ describe('novelDecompositionPipeline', () => {
             信息可见性: {
                 谁知道: ['李辅国', '读者'],
                 谁不知道: ['程宗扬', '杨玉环'],
-                是否仅读者视角可见: false
+                是否仅读者视角可见: true
             }
         });
     });
@@ -396,5 +396,42 @@ describe('novelDecompositionPipeline', () => {
             previousTimelineEnd: '0003:02:28:12:00',
             apiConfig: { apiKey: 'test-key' } as any
         })).rejects.toThrow('早于起始时间');
+    });
+
+    it('按当前事件晚间起点推进同日凌晨时间窗，不受前一事件日期影响', async () => {
+        vi.mocked(textAIService.generateNovelDecomposition).mockResolvedValueOnce({
+            groupNumber: 48,
+            chapterRange: '连夜追击', chapterTitles: ['连夜追击'], isOpeningGroup: false,
+            summary: '前一夜结束后，次日晚间再次追击到凌晨。',
+            openingFacts: [], continuationFacts: [], endStates: [], nextGroupReferences: [],
+            hardConstraints: [], foreshadowing: [], characterProgressions: [],
+            appearingCharacters: ['程宗扬'], characterProfiles: [], factionProfiles: [], locationProfiles: [], itemProfiles: [],
+            worldRules: [], worldBoundaryRules: [], characterRelations: [], factionRelations: [],
+            foreshadowingThreads: [], payoffPoints: [], chapterRhythm: [],
+            timelineStart: '0003:02:27:23:00', timelineEnd: '0003:03:01:04:00',
+            keyEvents: [{
+                事件名: '次日晚间追击', 事件说明: '程宗扬在次日晚间重新追击。',
+                开始时间: '0003:02:28:23:00', 最早开始时间: '0003:02:28:01:00',
+                最迟开始时间: '0003:02:28:02:00', 结束时间: '0003:02:28:04:00',
+                前置条件: [], 触发条件: [], 阻断条件: [], 事件结果: [], 对下一组影响: [],
+                信息可见性: { 谁知道: ['程宗扬'], 谁不知道: [], 是否仅读者视角可见: false }
+            }],
+            rawText: ''
+        });
+
+        const segment = await 解析小说拆分分段({
+            dataset: 创建空小说拆分数据集({ id: 'dataset-event-local-midnight' }),
+            segment: 创建分段({ id: 'segment-event-local-midnight', 组号: 48 }),
+            segmentIndex: 47,
+            previousTimelineEnd: '0003:02:27:23:00',
+            apiConfig: { apiKey: 'test-key' } as any
+        });
+
+        expect(segment.关键事件[0]).toMatchObject({
+            开始时间: '0003:02:28:23:00',
+            最早开始时间: '0003:02:28:01:00',
+            最迟开始时间: '0003:03:01:02:00',
+            结束时间: '0003:03:01:04:00'
+        });
     });
 });

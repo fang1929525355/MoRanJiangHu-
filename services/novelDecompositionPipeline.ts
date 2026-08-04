@@ -60,12 +60,14 @@ const 从内容恢复信息可见性 = (value: unknown): {
         };
     }
 
-    const 读取字段 = (label: string): string => {
-        const match = raw.match(new RegExp(`${label}\\s*[:：]\\s*([^/\\n）)]*)`, 'u'));
-        return match?.[1]?.trim() || '';
-    };
+    const fieldPatterns = {
+        谁知道: /谁知道\s*[:：]\s*([\s\S]*?)(?=\s*(?:\/\s*(?:谁知道|谁不知道|是否仅读者视角可见)\s*[:：]|[\n）)])|\s*$)/u,
+        谁不知道: /谁不知道\s*[:：]\s*([\s\S]*?)(?=\s*(?:\/\s*(?:谁知道|谁不知道|是否仅读者视角可见)\s*[:：]|[\n）)])|\s*$)/u,
+        是否仅读者视角可见: /是否仅读者视角可见\s*[:：]\s*([\s\S]*?)(?=\s*(?:\/\s*(?:谁知道|谁不知道|是否仅读者视角可见)\s*[:：]|[\n）)])|\s*$)/u
+    } as const;
+    const 读取字段 = (label: keyof typeof fieldPatterns): string => raw.match(fieldPatterns[label])?.[1]?.trim() || '';
     const 拆分人员 = (text: string): string[] => 去重文本列表(
-        text.split(/[、，,；;]/u).map((item) => item.trim()).filter(Boolean),
+        text.split(/[、，,；;/]/u).map((item) => item.trim()).filter(Boolean),
         12
     );
     const readerOnlyText = 读取字段('是否仅读者视角可见');
@@ -742,22 +744,31 @@ const 规范化AI结果到分段 = (
         let 上一事件时间参考 = 时间线起点 || options.referenceStart;
         result.keyEvents.forEach((event) => {
             const 跨午夜参考 = 上一事件时间参考;
-            const 开始时间 = 修复明确跨午夜时间(
-                规范化AI时间锚点(event.开始时间, 跨午夜参考),
-                跨午夜参考
+            const 原始开始时间 = 规范化AI时间锚点(event.开始时间, 跨午夜参考);
+            const 开始时间 = 修复明确跨午夜时间(原始开始时间, 跨午夜参考);
+            const 开始时间已跨日 = 开始时间 !== 原始开始时间;
+            const 与原始开始同日 = (candidate: string): boolean => candidate.slice(0, candidate.lastIndexOf(':', candidate.lastIndexOf(':') - 1))
+                === 原始开始时间.slice(0, 原始开始时间.lastIndexOf(':', 原始开始时间.lastIndexOf(':') - 1));
+            const 同步开始时间跨日 = (candidate: string): string => (
+                开始时间已跨日 && candidate && 与原始开始同日(candidate)
+                    ? 增加小说时间线天数(candidate, 1)
+                    : candidate
             );
-            const 最早开始时间 = 修复明确跨午夜时间(
-                规范化AI时间锚点(event.最早开始时间, 开始时间 || 跨午夜参考),
-                跨午夜参考
+            const 最早开始时间 = 同步开始时间跨日(
+                规范化AI时间锚点(event.最早开始时间, 开始时间 || 跨午夜参考)
             );
-            const 最迟开始时间 = 修复明确跨午夜时间(
-                规范化AI时间锚点(event.最迟开始时间, 最早开始时间 || 开始时间 || 跨午夜参考),
-                跨午夜参考
+            const 最迟开始时间候选 = 同步开始时间跨日(
+                规范化AI时间锚点(event.最迟开始时间, 最早开始时间 || 开始时间 || 跨午夜参考)
             );
-            const 结束时间 = 修复明确跨午夜时间(
-                规范化AI时间锚点(event.结束时间, 最迟开始时间 || 开始时间 || 跨午夜参考),
-                跨午夜参考
+            const 最迟开始时间 = 开始时间已跨日
+                ? 最迟开始时间候选
+                : 修复明确跨午夜时间(最迟开始时间候选, 开始时间 || 跨午夜参考);
+            const 结束时间候选 = 同步开始时间跨日(
+                规范化AI时间锚点(event.结束时间, 最迟开始时间 || 开始时间 || 跨午夜参考)
             );
+            const 结束时间 = 开始时间已跨日
+                ? 结束时间候选
+                : 修复明确跨午夜时间(结束时间候选, 开始时间 || 跨午夜参考);
             const normalizedEvent = 补齐关键事件时间字段({
                 事件名: 清理章节编号文本(event.事件名 || ''),
                 事件说明: 清理章节编号文本(event.事件说明 || ''),

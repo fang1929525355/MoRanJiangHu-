@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: 恢复内嵌的信息可见性
+## Task 1: 恢复内嵌的信息可见性
 
 **Files:**
 - Modify: `services/novelDecompositionPipeline.ts`
@@ -86,7 +86,7 @@ git add services/novelDecompositionPipeline.ts __tests__/novelDecompositionPipel
 git commit -m "fix: 恢复小说分解内嵌信息可见性"
 ```
 
-### Task 2: 修复明确的跨午夜日期遗漏
+## Task 2: 修复明确的跨午夜日期遗漏
 
 **Files:**
 - Modify: `services/novelDecompositionPipeline.ts`
@@ -157,7 +157,7 @@ git add services/novelDecompositionPipeline.ts __tests__/novelDecompositionPipel
 git commit -m "fix: 修复小说分解跨午夜时间"
 ```
 
-### Task 3: 验证补漏链路与生产构建
+## Task 3: 验证补漏链路与生产构建
 
 **Files:**
 - Verify: `services/novelDecompositionRuntime.ts`
