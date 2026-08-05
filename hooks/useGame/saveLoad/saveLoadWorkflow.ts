@@ -111,6 +111,7 @@ type 存档编排工作流依赖 = {
     推入重Roll快照: NonNullable<存档读取协调依赖['推入重Roll快照']>;
     重置自动存档状态: () => void;
     切换生图存档作用域?: () => void;
+    清除开局提示词基线?: () => Promise<void>;
     最近自动存档时间戳Ref: { current: number };
     最近自动存档签名Ref: { current: string };
     读档前重置瞬态状态: () => void;
@@ -209,6 +210,7 @@ export const 创建存读档工作流 = (deps: 存档编排工作流依赖) => {
         推入重Roll快照: deps.推入重Roll快照,
         重置自动存档状态: deps.重置自动存档状态,
         切换生图存档作用域: deps.切换生图存档作用域,
+        清除开局提示词基线: deps.清除开局提示词基线,
         最近自动存档时间戳Ref: deps.最近自动存档时间戳Ref,
         最近自动存档签名Ref: deps.最近自动存档签名Ref
     });

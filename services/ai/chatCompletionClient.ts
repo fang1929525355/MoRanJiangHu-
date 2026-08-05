@@ -1099,14 +1099,32 @@ const 支持XHR流式请求 = (): boolean => {
     return typeof XMLHttpRequest !== 'undefined' && typeof window !== 'undefined';
 };
 
+// [修复] 旧包/异常包里原生插件未实现时，Capacitor 会抛 "plugin is not implemented"，
+// 记录后本会话不再尝试原生流式，后续请求直接走 XHR/fetch 流式
+let 原生流式插件判定不可用 = false;
+
 const 支持原生流式请求 = (): boolean => {
+    if (原生流式插件判定不可用) return false;
     if (!isNativeCapacitorEnvironment()) return false;
-    const runtimePlugin = typeof window !== 'undefined'
-        ? (window as any)?.Capacitor?.Plugins?.NativeChatStreamer
-        : undefined;
+    const capacitor = typeof window !== 'undefined' ? (window as any)?.Capacitor : undefined;
+    // [修复] registerPlugin 生成的 JS 代理自带方法桩，仅看方法是否存在会把
+    // “原生侧未实现”的旧包/异常包误判为可用；isPluginAvailable 才能反映原生注册情况
+    if (typeof capacitor?.isPluginAvailable === 'function' && !capacitor.isPluginAvailable('NativeChatStreamer')) {
+        return false;
+    }
+    const runtimePlugin = capacitor?.Plugins?.NativeChatStreamer;
     return typeof runtimePlugin?.streamChat === 'function'
         && typeof runtimePlugin?.addListener === 'function'
         && typeof runtimePlugin?.cancelStream === 'function';
+};
+
+const 错误疑似原生插件未实现 = (error: unknown): boolean => {
+    const message = 读取错误消息(error).toLowerCase();
+    if (!message) return false;
+    // 仅匹配 Capacitor 桥层报的“插件未实现”类错误（形如 `"NativeChatStreamer" plugin is not implemented on android`）。
+    // 不能只看 "not implemented"：请求一旦已到达模型服务，误判会导致同一请求经 XHR/fetch 重发，产生重复调用与费用。
+    return (message.includes('nativechatstreamer') || message.includes('plugin'))
+        && (message.includes('not implemented') || message.includes('unavailable') || message.includes('missing') || message.includes('not found'));
 };
 
 const 生成原生流请求ID = (): string => {
@@ -1685,17 +1703,26 @@ const 请求OpenAI家族文本 = async (
                 写入流式诊断日志('native stream failed', {
                     message: 读取错误消息(error)
                 });
-                if (!downgradedFromStream && 错误疑似不支持流式(error)) {
-                    useStream = false;
-                    downgradedFromStream = true;
-                    continue;
+                if (错误疑似原生插件未实现(error)) {
+                    // [修复] 原生插件未实现（旧包/异常包）：本会话停用原生流式，
+                    // 不中断当前请求，直接落到下面的 XHR/fetch 流式传输
+                    原生流式插件判定不可用 = true;
+                    写入流式诊断日志('native stream plugin unavailable, fallback to xhr/fetch stream', {
+                        message: 读取错误消息(error)
+                    });
+                } else {
+                    if (!downgradedFromStream && 错误疑似不支持流式(error)) {
+                        useStream = false;
+                        downgradedFromStream = true;
+                        continue;
+                    }
+                    if (usePrefixMode && 错误疑似不支持Prefix(error)) {
+                        usePrefixMode = false;
+                        requestMessages = requestMessages.map(msg => msg.prefix ? { role: msg.role, content: msg.content } : msg);
+                        continue;
+                    }
+                    throw error;
                 }
-                if (usePrefixMode && 错误疑似不支持Prefix(error)) {
-                    usePrefixMode = false;
-                    requestMessages = requestMessages.map(msg => msg.prefix ? { role: msg.role, content: msg.content } : msg);
-                    continue;
-                }
-                throw error;
             }
         }
 

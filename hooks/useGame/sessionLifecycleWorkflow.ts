@@ -21,6 +21,9 @@ type 快速重开模式 = 'world_only' | 'opening_only' | 'all';
 
 type 世界生成选项 = {
     清空前端变量?: boolean;
+    // [修复] 快速重开/重 roll 时置 true：先恢复开局前的提示词池/世界书基线再生成，
+    // 避免沿用上一局 AI 写入的 core_world/core_realm/core_cot（状态污染）
+    重开恢复基线?: boolean;
 };
 
 type 最近开局配置结构 = {
@@ -55,6 +58,8 @@ type 回合快照结构 = {
         视觉设置: any;
         场景图片档案: any;
     };
+    回档前提示词池?: 提示词结构[];
+    回档前世界书?: any[];
     回档前历史: any[];
 };
 
@@ -96,6 +101,10 @@ type 会话生命周期依赖 = {
     清空重Roll快照: () => void;
     推入重Roll快照: (snapshot: 回合快照结构) => void;
     重置自动存档状态: () => void;
+    捕获开局提示词基线: (promptPool?: 提示词结构[]) => Promise<void>;
+    恢复开局提示词基线: () => Promise<{ prompts: 提示词结构[]; worldbooks: any[]; capturedAt: number } | null>;
+    清除开局提示词基线: () => Promise<void>;
+    删除本局开局自动存档: () => Promise<void>;
     设置角色: (value: any) => void;
     设置环境: (value: any) => void;
     设置游戏初始时间: (value: string) => void;
@@ -190,6 +199,7 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
         deps.重置自动存档状态();
         清空当前存档生图隔离态();
         deps.设置最近开局配置(null);
+        void deps.清除开局提示词基线();
         deps.setLoading(false);
         deps.设置环境(deps.创建开场空白环境());
         deps.设置游戏初始时间('');
@@ -260,6 +270,10 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
                 视觉设置: deps.获取当前视觉设置快照(),
                 场景图片档案: deps.获取当前场景图片档案快照()
             },
+            // [修复] 携带开局前的提示词池/世界书，重 roll 开局时一并回滚，
+            // 防止上一局 AI 写入的 core_world/core_realm/core_cot 污染新开局
+            回档前提示词池: deps.深拷贝(effectivePromptSnapshot),
+            回档前世界书: deps.深拷贝(Array.isArray(deps.世界书列表) ? deps.世界书列表 : []),
             回档前历史: deps.深拷贝(Array.isArray(deps.历史记录) ? deps.历史记录 : [])
         });
         return 执行开场剧情生成工作流(
@@ -355,7 +369,15 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
         options?: 世界生成选项,
         activeModuleExtraRules?: string
     ) => {
-        const promptPool = (Array.isArray(deps.prompts) && deps.prompts.length > 0) ? deps.prompts : await deps.ensurePromptsLoaded();
+        // [修复] 快速重开/重 roll：先恢复开局前的提示词池/世界书基线；
+        // 新鲜开局：捕获当前池作为本局基线，供后续重 roll 恢复
+        const restoredBaseline = options?.重开恢复基线 ? await deps.恢复开局提示词基线() : null;
+        const promptPool = restoredBaseline
+            ? restoredBaseline.prompts
+            : (Array.isArray(deps.prompts) && deps.prompts.length > 0) ? deps.prompts : await deps.ensurePromptsLoaded();
+        if (!options?.重开恢复基线) {
+            void deps.捕获开局提示词基线(promptPool);
+        }
         deps.设置开局文章优化进度(null);
         deps.设置开局变量生成进度(null);
         deps.设置开局世界演变进度(null);
@@ -417,6 +439,7 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
     const handleReturnToHome = () => {
         deps.重置自动存档状态();
         deps.设置最近开局配置(null);
+        void deps.清除开局提示词基线();
         deps.设置开局配置(undefined);
         deps.清空NPC生图等待队列();
         deps.setView('home');
@@ -454,35 +477,49 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
             deps.setShowSettings(true);
             return;
         }
+        // [修复] 上一次开局的自动存档在本轮重开后即为废稿，删除以免多次 roll 的开头全部堆在存档列表里；
+        // 仅删除本局开场基态之后创建的 auto 存档，历史存档不受影响；
+        // 必须在 API 校验通过之后执行，否则配置不可用时会出现"存档已删但重开未开始"
+        await deps.删除本局开局自动存档();
         const openingBase = deps.创建开场基础状态(charData, worldConfig, openingConfig);
         const clearedOpeningBase = deps.构建前端清空开场状态(openingBase);
         const clearedCommandBase = deps.创建开场命令基态(openingBase);
-        清空当前存档生图隔离态();
         deps.设置开局配置(openingConfig ? deps.深拷贝(openingConfig) : undefined);
-        deps.应用开场基态(clearedOpeningBase);
-        if (deps.view !== 'game') {
-            deps.setView('game');
-        }
-
-        if (mode === 'world_only') {
-            await handleGenerateWorld(
-                worldConfig,
-                charData,
-                openingConfig,
-                'step',
-                openingStreaming,
-                openingExtraPrompt,
-                { 清空前端变量: true },
-                restoredRuntime.activeModuleExtraRules
-            );
-            return;
-        }
 
         if (mode === 'opening_only') {
+            // [修复] opening_only 只重 roll 剧情：必须保留世界生成阶段产出的世界/社交/门派等状态，
+            // 不能套用重建基态（那会把已生成的地图、势力、世界状态一并清掉，导致新开局"选择性无视"世界设定）；
+            // 仅清空历史/记忆等叙事痕迹，让新开头替换旧开头而不是叠加；
+            // 图片档案与角色锚点同样保留，仅切换生图作用域以取消旧任务
+            deps.切换生图存档作用域();
+            deps.设置历史记录([]);
+            deps.应用并同步记忆系统({ 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] }, { 静默总结提示: true });
+            deps.清空变量生成上下文缓存();
+            deps.setWorldEvents([]);
+            if (deps.view !== 'game') {
+                deps.setView('game');
+            }
+            const 当前状态开局上下文 = {
+                角色: deps.角色,
+                环境: deps.环境,
+                社交: deps.社交,
+                世界: deps.世界,
+                战斗: deps.战斗,
+                玩家门派: deps.玩家门派,
+                任务列表: deps.任务列表,
+                约定列表: deps.约定列表,
+                剧情: deps.剧情,
+                剧情规划: deps.剧情规划,
+                女主剧情规划: deps.女主剧情规划,
+                同人剧情规划: deps.同人剧情规划,
+                同人女主剧情规划: deps.同人女主剧情规划
+            };
             deps.setLoading(true);
             try {
+                // 注意：opening_only 直接用当前提示词池（含本局已生成世界），
+                // 不能恢复向导期基线，否则会把本局世界冲掉
                 await generateOpeningStory(
-                    openingBase,
+                    当前状态开局上下文,
                     deps.prompts,
                     openingStreaming,
                     currentApi,
@@ -505,6 +542,27 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
             return;
         }
 
+        deps.应用开场基态(clearedOpeningBase);
+        if (deps.view !== 'game') {
+            deps.setView('game');
+        }
+        // world_only / all 属于整体重建，清空图片档案与角色锚点等生图隔离态
+        清空当前存档生图隔离态();
+
+        if (mode === 'world_only') {
+            await handleGenerateWorld(
+                worldConfig,
+                charData,
+                openingConfig,
+                'step',
+                openingStreaming,
+                openingExtraPrompt,
+                { 清空前端变量: true, 重开恢复基线: true },
+                restoredRuntime.activeModuleExtraRules
+            );
+            return;
+        }
+
         await handleGenerateWorld(
             worldConfig,
             charData,
@@ -512,7 +570,7 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
             'all',
             openingStreaming,
             openingExtraPrompt,
-            { 清空前端变量: true },
+            { 清空前端变量: true, 重开恢复基线: true },
             restoredRuntime.activeModuleExtraRules
         );
     };

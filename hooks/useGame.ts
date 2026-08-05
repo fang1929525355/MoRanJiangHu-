@@ -662,6 +662,99 @@ export const useGame = () => {
             console.error('清理重ROLL自动存档失败', error);
         }
     };
+    // [修复] 开局提示词基线：新鲜开局生成前捕获提示词池+世界书，
+    // 快速重开/重 roll 时恢复，避免上一局 AI 写入的世界观/境界/思维链污染下一局
+    const 最近开场基态时间Ref = useRef<number>(0);
+    // worldbooks 为 null 表示捕获时世界书尚未加载完成，恢复时跳过世界书（绝不用空数组覆盖玩家世界书）
+    const 开局提示词基线Ref = useRef<{ prompts: 提示词结构[]; worldbooks: 世界书结构[] | null; capturedAt: number } | null>(null);
+    const 捕获开局提示词基线 = async (promptPool?: 提示词结构[]): Promise<void> => {
+        const baselinePool = Array.isArray(promptPool) && promptPool.length > 0 ? promptPool : prompts;
+        if (!Array.isArray(baselinePool) || baselinePool.length === 0) return;
+        // [修复] 世界书列表是异步加载的：state 为空时改从 db 读，仍为空则记 null（不捕获），
+        // 防止把"未加载的空数组"当成基线，恢复时误清玩家世界书
+        let baselineWorldbooks: 世界书结构[] | null = Array.isArray(世界书列表) && 世界书列表.length > 0
+            ? 深拷贝(世界书列表)
+            : null;
+        if (!baselineWorldbooks) {
+            try {
+                const storedWorldbooks = await dbService.读取设置(设置键.世界书列表);
+                if (Array.isArray(storedWorldbooks) && storedWorldbooks.length > 0) {
+                    baselineWorldbooks = 深拷贝(storedWorldbooks);
+                }
+            } catch (error) {
+                console.error('读取世界书基线来源失败', error);
+            }
+        }
+        const baseline = {
+            prompts: 深拷贝(baselinePool),
+            worldbooks: baselineWorldbooks,
+            capturedAt: Date.now()
+        };
+        开局提示词基线Ref.current = baseline;
+        try {
+            await dbService.保存设置(设置键.开局提示词基线, baseline);
+        } catch (error) {
+            console.error('保存开局提示词基线失败', error);
+        }
+    };
+    const 恢复开局提示词基线 = async (): Promise<{ prompts: 提示词结构[]; worldbooks: 世界书结构[] | null; capturedAt: number } | null> => {
+        let baseline = 开局提示词基线Ref.current;
+        if (!baseline) {
+            try {
+                const stored = await dbService.读取设置(设置键.开局提示词基线);
+                if (stored && Array.isArray((stored as any).prompts) && (stored as any).prompts.length > 0) {
+                    baseline = stored as typeof baseline;
+                }
+            } catch (error) {
+                console.error('读取开局提示词基线失败', error);
+            }
+        }
+        if (!baseline || !Array.isArray(baseline.prompts) || baseline.prompts.length === 0) return null;
+        开局提示词基线Ref.current = baseline;
+        const restoredPrompts = 深拷贝(baseline.prompts);
+        setPrompts(restoredPrompts);
+        try {
+            await dbService.保存设置(设置键.提示词池, restoredPrompts);
+        } catch (error) {
+            console.error('恢复提示词池基线失败', error);
+        }
+        if (Array.isArray(baseline.worldbooks) && baseline.worldbooks.length > 0) {
+            const restoredWorldbooks = 深拷贝(baseline.worldbooks);
+            set世界书列表(restoredWorldbooks);
+            try {
+                await dbService.保存设置(设置键.世界书列表, restoredWorldbooks);
+            } catch (error) {
+                console.error('恢复世界书基线失败', error);
+            }
+        }
+        return baseline;
+    };
+    const 清除开局提示词基线 = async (): Promise<void> => {
+        开局提示词基线Ref.current = null;
+        try {
+            await dbService.保存设置(设置键.开局提示词基线, null);
+        } catch (error) {
+            console.error('清除开局提示词基线失败', error);
+        }
+    };
+    // 仅当最近一条 auto 存档属于本局开局（开场基态应用之后创建）时才删除，
+    // 避免快速重开误删历史存档
+    const 删除本局开局自动存档 = async (): Promise<void> => {
+        try {
+            const latestAutoTimestamp = await dbService.读取最近自动存档时间戳();
+            if (latestAutoTimestamp > 0 && 最近开场基态时间Ref.current > 0 && latestAutoTimestamp >= 最近开场基态时间Ref.current) {
+                try {
+                    await dbService.删除最近自动存档();
+                } catch (error) {
+                    console.error('删除最近自动存档失败', error);
+                } finally {
+                    重置自动存档状态();
+                }
+            }
+        } catch (error) {
+            console.error('删除本局开局自动存档失败', error);
+        }
+    };
     const 推送右下角提示 = (toast: Omit<右下角提示结构, 'id'>) => {
         const nextId = `toast_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         set右下角提示列表(prev => [...prev, { id: nextId, ...toast }].slice(-4));
@@ -887,6 +980,23 @@ export const useGame = () => {
         设置同人女主剧情规划(规范化同人女主剧情规划状态(深拷贝(snapshot.回档前状态.同人女主剧情规划)));
         应用并同步记忆系统(深拷贝(snapshot.回档前状态.记忆系统));
         设置叙事平静值(深拷贝(snapshot.回档前状态.叙事平静值 || { 平静计数: 0, 情节事件记录: [] }));
+        // [修复] 快照携带提示词池/世界书时一并回滚并持久化，
+        // 防止上一局 AI 写入的 core_world/core_realm/core_cot 污染重 roll 后的生成
+        if (Array.isArray(snapshot.回档前提示词池) && snapshot.回档前提示词池.length > 0) {
+            const restoredPrompts = 深拷贝(snapshot.回档前提示词池);
+            setPrompts(restoredPrompts);
+            void dbService.保存设置(设置键.提示词池, restoredPrompts).catch((error) => {
+                console.error('回档恢复提示词池失败', error);
+            });
+        }
+        // 快照里的空数组视为“捕获时世界书未加载”，跳过恢复，绝不用空数组覆盖玩家世界书
+        if (Array.isArray(snapshot.回档前世界书) && snapshot.回档前世界书.length > 0) {
+            const restoredWorldbooks = 深拷贝(snapshot.回档前世界书);
+            set世界书列表(restoredWorldbooks);
+            void dbService.保存设置(设置键.世界书列表, restoredWorldbooks).catch((error) => {
+                console.error('回档恢复世界书列表失败', error);
+            });
+        }
         设置历史记录(深拷贝(snapshot.回档前历史));
         if (options?.保留图片状态 !== true) {
             应用视觉设置到状态(深拷贝(snapshot.回档前持久态?.视觉设置 || {}));
@@ -2953,6 +3063,7 @@ export const useGame = () => {
     }, [玩家门派, 历史记录]);
 
     const 应用开场基态 = (openingBase: ReturnType<typeof 创建开场基础状态>) => {
+        最近开场基态时间Ref.current = Date.now();
         设置角色(规范化角色物品容器映射(openingBase.角色, {
             启用饱腹口渴系统: gameConfig?.启用饱腹口渴系统,
             题材模式: 开局配置?.题材模式
@@ -3791,6 +3902,7 @@ export const useGame = () => {
         推入重Roll快照,
         重置自动存档状态,
         切换生图存档作用域,
+        清除开局提示词基线,
         最近自动存档时间戳Ref,
         最近自动存档签名Ref,
         读档前重置瞬态状态: 重置读档瞬态状态,
@@ -3842,6 +3954,10 @@ export const useGame = () => {
         清空重Roll快照,
         推入重Roll快照,
         重置自动存档状态,
+        捕获开局提示词基线,
+        恢复开局提示词基线,
+        清除开局提示词基线,
+        删除本局开局自动存档,
         设置角色,
         设置环境,
         设置游戏初始时间,

@@ -2738,6 +2738,32 @@ export const 清空存档数据 = async (): Promise<void> => {
     await 清理未引用图片资源();
 };
 
+// 只读探测：返回最近一条 auto 存档的时间戳（没有则返回 0）。
+// 用于快速重开时判断"最近自动存档是否属于本局开局"，避免误删历史存档。
+export const 读取最近自动存档时间戳 = async (): Promise<number> => {
+    const db = await 初始化数据库();
+    let latestAutoTimestamp = 0;
+    await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const cursorRequest = store.openCursor();
+        cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result;
+            if (!cursor) {
+                resolve();
+                return;
+            }
+            const save = cursor.value as 存档结构;
+            if (save.类型 === 'auto' && Number(save.时间戳 || 0) > latestAutoTimestamp) {
+                latestAutoTimestamp = Number(save.时间戳 || 0);
+            }
+            cursor.continue();
+        };
+        cursorRequest.onerror = () => reject(cursorRequest.error);
+    });
+    return latestAutoTimestamp;
+};
+
 export const 删除最近自动存档 = async (): Promise<void> => {
     if (await 读取存档保护状态()) {
         throw new Error('存档保护已开启，请先在”设置-数据存储”中关闭后再删除存档。');

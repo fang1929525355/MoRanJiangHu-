@@ -48,6 +48,9 @@ import {
 } from '../../../../utils/workshopEngine';
 import { 构建官方模式运行时配置, 规范化模式运行时配置 } from '../../../../utils/modeRuntimeProfile';
 import { 解析生效题材配置 } from '../../../../utils/effectiveTopicProfile';
+import { 构建题材显示摘要 } from '../../../../utils/topicModeDisplay';
+import { 获取主剧情接口配置, 接口配置是否可用 } from '../../../../utils/apiConfig';
+import { 请求模型文本 } from '../../../../services/ai/chatCompletionClient';
 import { 构建默认技艺 } from '../../../../utils/skillDefaults';
 import { 默认境界母板提示词 } from '../../../../prompts/runtime/fandom';
 import { 设置键 } from '../../../../utils/settingsSchema';
@@ -269,6 +272,13 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
     const [正在编辑开局预设ID, set正在编辑开局预设ID] = useState('');
     const [customPresetMeta, setCustomPresetMeta] = useState<自定义开局预设元信息>({ 名称: '', 简介: '' });
     const [openingExtraRequirement, setOpeningExtraRequirement] = useState('');
+    const [aiFrameworkStatus, setAiFrameworkStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ type: 'idle', message: '' });
+    // [修复] AI 补全请求序号：题材切换或发起新请求时递增，过期响应一律丢弃，不覆盖新表单
+    const aiFramework请求序号Ref = useRef(0);
+    useEffect(() => {
+        aiFramework请求序号Ref.current += 1;
+        setAiFrameworkStatus(prev => prev.type === 'loading' ? { type: 'idle', message: '' } : prev);
+    }, [openingConfig.题材模式]);
     const [显示世界观生成提示词, set显示世界观生成提示词] = useState(false);
     const [世界观生成提示词状态, set世界观生成提示词状态] = useState('');
     const 世界观请求模式 = worldConfig.worldExtraRequirement.trim() ? 'AI 细化世界观' : 'AI 生成世界观';
@@ -710,6 +720,9 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
         };
     };
     const 应用预设到表单 = (preset: 开局预设方案结构, options?: { 保持当前步骤?: boolean }) => {
+        // [修复] 套用预设会整体改写表单，作废进行中的 AI 补全请求，防止过期响应覆盖新表单
+        aiFramework请求序号Ref.current += 1;
+        setAiFrameworkStatus(prev => prev.type === 'loading' ? { type: 'idle', message: '' } : prev);
         const presetRestoreCatalog = 构建预设恢复候选池(preset);
         const restored = 构建预设表单恢复结果(preset, {
             ...presetRestoreCatalog,
@@ -790,6 +803,169 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
     const stepProgress = ((step + 1) / STEPS.length) * 100;
     const currentStepLabel = STEPS[step] || '创建';
     const 当前题材配置 = useMemo(() => 解析生效题材配置(openingConfig.题材模式, openingConfig.modeRuntimeProfile), [openingConfig.题材模式, openingConfig.modeRuntimeProfile]);
+    const 当前题材显示摘要 = useMemo(
+        () => 构建题材显示摘要(openingConfig.题材模式, openingConfig.modeRuntimeProfile),
+        [openingConfig.题材模式, openingConfig.modeRuntimeProfile]
+    );
+    const 当前主剧情接口配置 = useMemo(() => apiConfig ? 获取主剧情接口配置(apiConfig) : null, [apiConfig]);
+    const aiFrameworkAvailable = 接口配置是否可用(当前主剧情接口配置);
+    const 最终主角天赋列表 = useMemo(
+        () => 合并玩家与背景天赋({
+            玩家自选: selectedTalents,
+            背景: selectedBackground,
+            天赋目录: 全部天赋选项
+        }),
+        [selectedTalents, selectedBackground, 全部天赋选项]
+    );
+
+    const 解析AI框架JSON = (raw: string): any => {
+        const source = (raw || '').trim();
+        if (!source) throw new Error('AI 输出为空');
+        const fenced = source.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
+        const candidate = fenced || source.slice(source.indexOf('{'), source.lastIndexOf('}') + 1);
+        if (!candidate || !candidate.startsWith('{')) throw new Error('AI 没有返回可解析的 JSON');
+        return JSON.parse(candidate);
+    };
+
+    // 与桌面端 NewGameWizard 的“AI 补全框架”保持一致：根据当前表单让 AI 补全身份/天赋/伙伴/开局要求
+    const runAiFrameworkAssist = async () => {
+        if (!接口配置是否可用(当前主剧情接口配置)) {
+            setAiFrameworkStatus({ type: 'error', message: '请先在设置中配置可用的主剧情 API。' });
+            return;
+        }
+        const requestSeq = ++aiFramework请求序号Ref.current;
+        setAiFrameworkStatus({ type: 'loading', message: '正在让 AI 补全开局框架...' });
+        try {
+            const prompt = [
+                '你是文字冒险游戏的新开局框架助手。请根据当前表单，补全适合快速开局测试的角色身份、天赋、伙伴与玩家世界观草稿/细化要求。',
+                '必须只输出 JSON，不要输出 Markdown、解释或多余文本。',
+                'JSON 结构：',
+                '{"worldPatch":{"worldName":"","dynastySetting":"","tianjiaoSetting":"","worldExtraRequirement":""},"character":{"外貌":"","性格":"","背景":{"名称":"","描述":"","效果":""},"天赋列表":[{"名称":"","描述":"","效果":""}]},"partner":{"enabled":true,"姓名":"","性别":"","年龄":18,"外貌":"","性格":"","背景":{"名称":"","描述":"","效果":""},"天赋列表":[{"名称":"","描述":"","效果":""}],"关系":"","备注":""},"openingExtraRequirement":""}',
+                '要求：',
+                '- 背景和天赋必须能长期影响玩法，不要只写一句第一幕设定。',
+                '- 伙伴必须适合开局同行，并给出清楚关系，不要抢主角戏。',
+                `- 当前题材模式是“${当前题材显示摘要.label}”，必须严格沿用对应世界观、身份背景、天赋、交易和地图口径。`,
+                ...当前题材显示摘要.promptLines.map((line) => `- 题材核心边界：${line}`),
+                `- 开局边界：${当前题材显示摘要.promptBoundary}`,
+                `- 货币/交易口径：${当前题材显示摘要.currencyPrompt}`,
+                `- 统一换算口径：${当前题材显示摘要.currencyExchangePrompt}`,
+                `- 地图/势力口径：${当前题材显示摘要.mapPrompt}`,
+                `- 推荐背景方向：${当前题材显示摘要.backgroundSuggestions.join('、')}`,
+                `- 推荐天赋方向：${当前题材显示摘要.talentSuggestions.join('、')}`,
+                `- 预设物品方向：${当前题材显示摘要.presetItemKeywords.join('、')}`,
+                `当前世界配置：${JSON.stringify(worldConfig)}`,
+                `当前主角：${JSON.stringify({ 姓名: charName, 性别: charGender, 年龄: charAge, 外貌: charAppearance, 性格: charPersonality, 背景: selectedBackground, 玩家自选天赋: selectedTalents, 天赋列表: 最终主角天赋列表 })}`,
+                `说明：天赋列表含背景自带注入项；玩家选角不可见的隐藏自带仅在成角后写入角色。`,
+                `当前开局配置：${JSON.stringify(openingConfigEnabled ? openingConfig : null)}`,
+                `当前伙伴列表：${JSON.stringify(获取当前伙伴列表快照().map((partner) => ({ enabled: partner.enabled, 姓名: partner.姓名, 性别: partner.性别, 年龄: partner.年龄, 外貌: partner.外貌, 性格: partner.性格, 背景: { 名称: partner.背景名称, 描述: partner.背景描述, 效果: partner.背景效果 }, 天赋列表: partner.天赋列表, 关系: partner.关系, 备注: partner.备注 })))}`
+            ].join('\n\n');
+            const raw = await 请求模型文本(当前主剧情接口配置!, [
+                { role: 'system', content: '你只输出严格 JSON。' },
+                { role: 'user', content: prompt }
+            ], { temperature: 0.7, errorDetailLimit: Number.POSITIVE_INFINITY });
+            // [修复] 请求期间题材已切换或已发起新请求：丢弃过期响应，不覆盖当前表单
+            if (requestSeq !== aiFramework请求序号Ref.current) return;
+            const parsed = 解析AI框架JSON(raw);
+            const worldPatch = parsed?.worldPatch && typeof parsed.worldPatch === 'object' ? parsed.worldPatch : {};
+            setWorldConfig(prev => ({
+                ...prev,
+                worldName: typeof worldPatch.worldName === 'string' && worldPatch.worldName.trim() ? worldPatch.worldName.trim() : prev.worldName,
+                dynastySetting: typeof worldPatch.dynastySetting === 'string' && worldPatch.dynastySetting.trim() ? worldPatch.dynastySetting.trim() : prev.dynastySetting,
+                tianjiaoSetting: typeof worldPatch.tianjiaoSetting === 'string' && worldPatch.tianjiaoSetting.trim() ? worldPatch.tianjiaoSetting.trim() : prev.tianjiaoSetting,
+                worldExtraRequirement: [prev.worldExtraRequirement.trim(), typeof worldPatch.worldExtraRequirement === 'string' ? worldPatch.worldExtraRequirement.trim() : ''].filter(Boolean).join('\n\n')
+            }));
+
+            const nextBackground = 标准化背景(parsed?.character?.背景);
+            const nextTalents = Array.isArray(parsed?.character?.天赋列表)
+                ? parsed.character.天赋列表.map((item: 天赋结构) => 标准化天赋(item)).filter(Boolean) as 天赋结构[]
+                : [];
+            if (typeof parsed?.character?.外貌 === 'string' && parsed.character.外貌.trim()) setCharAppearance(parsed.character.外貌.trim());
+            if (typeof parsed?.character?.性格 === 'string' && parsed.character.性格.trim()) setCharPersonality(parsed.character.性格.trim());
+
+            const nextPartner = parsed?.partner && typeof parsed.partner === 'object' ? parsed.partner : {};
+            setPartnerEnabled(nextPartner.enabled !== false);
+            if (typeof nextPartner.姓名 === 'string' && nextPartner.姓名.trim()) setPartnerName(nextPartner.姓名.trim());
+            if (typeof nextPartner.性别 === 'string' && nextPartner.性别.trim()) setPartnerGender(nextPartner.性别.trim());
+            if (Number.isFinite(Number(nextPartner.年龄))) setPartnerAge(Math.max(1, Math.min(999, Math.round(Number(nextPartner.年龄)))));
+            if (typeof nextPartner.外貌 === 'string' && nextPartner.外貌.trim()) setPartnerAppearance(nextPartner.外貌.trim());
+            if (typeof nextPartner.性格 === 'string' && nextPartner.性格.trim()) setPartnerPersonality(nextPartner.性格.trim());
+            if (typeof nextPartner.关系 === 'string' && nextPartner.关系.trim()) setPartnerRelation(nextPartner.关系.trim());
+            if (typeof nextPartner.备注 === 'string' && nextPartner.备注.trim()) setPartnerNote(nextPartner.备注.trim());
+            const nextPartnerBackground = 标准化背景(nextPartner.背景);
+            const nextPartnerTalents = Array.isArray(nextPartner.天赋列表)
+                ? nextPartner.天赋列表.map((item: 天赋结构) => 标准化天赋(item)).filter(Boolean) as 天赋结构[]
+                : [];
+
+            // [修复] AI 生成的背景/天赋必须写回本地存储（复用手动新增的持久化口径），
+            // 否则页面刷新后丢失，自定义开局方案里的名称引用会回退或落空；
+            // 同名条目先解析到已有目录条目（预设/模式包/自定义），不新增遮蔽同名项
+            const newBackgrounds: 背景结构[] = [];
+            const newTalents: 天赋结构[] = [];
+            const 解析或登记背景 = (candidate: 背景结构 | null): 背景结构 | null => {
+                if (!candidate) return null;
+                const existing = 全部背景选项.find(item => item.名称 === candidate.名称)
+                    || newBackgrounds.find(item => item.名称 === candidate.名称);
+                if (existing) return existing;
+                newBackgrounds.push(candidate);
+                return candidate;
+            };
+            const 解析或登记天赋 = (candidate: 天赋结构): 天赋结构 => {
+                const existing = 全部天赋选项.find(item => item.名称 === candidate.名称)
+                    || newTalents.find(item => item.名称 === candidate.名称);
+                if (existing) return existing;
+                newTalents.push(candidate);
+                return candidate;
+            };
+            const resolvedBackground = 解析或登记背景(nextBackground);
+            const resolvedPartnerBackground = 解析或登记背景(nextPartnerBackground);
+            const resolvedTalents = nextTalents.map(解析或登记天赋);
+            const resolvedPartnerTalents = nextPartnerTalents.map(解析或登记天赋);
+            let nextBackgroundList = 自定义背景列表;
+            if (newBackgrounds.length > 0) {
+                nextBackgroundList = 合并去重背景([...自定义背景列表, ...newBackgrounds]);
+                设置自定义背景列表(nextBackgroundList);
+            }
+            if (resolvedBackground) setSelectedBackground(resolvedBackground);
+            if (resolvedPartnerBackground) setPartnerBackground(resolvedPartnerBackground);
+            let nextTalentList = 自定义天赋列表;
+            if (newTalents.length > 0) {
+                nextTalentList = 合并去重天赋([...自定义天赋列表, ...newTalents]);
+                设置自定义天赋列表(nextTalentList);
+            }
+            if (resolvedTalents.length > 0) setSelectedTalents(resolvedTalents.slice(0, 3));
+            if (resolvedPartnerTalents.length > 0) setPartnerTalents(resolvedPartnerTalents.slice(0, 3));
+
+            // [修复] 持久化与状态提示前再次核对请求序号：过期响应不写本地存储、不覆盖状态
+            if (requestSeq !== aiFramework请求序号Ref.current) return;
+            let persistFailed = false;
+            if (newBackgrounds.length > 0) {
+                try {
+                    await dbService.保存设置(自定义背景存储键, nextBackgroundList);
+                } catch (error) {
+                    persistFailed = true;
+                    console.error('AI 补全持久化自定义身份失败', error);
+                }
+            }
+            if (newTalents.length > 0) {
+                try {
+                    await dbService.保存设置(自定义天赋存储键, nextTalentList);
+                } catch (error) {
+                    persistFailed = true;
+                    console.error('AI 补全持久化自定义天赋失败', error);
+                }
+            }
+            if (requestSeq !== aiFramework请求序号Ref.current) return;
+            if (typeof parsed?.openingExtraRequirement === 'string' && parsed.openingExtraRequirement.trim()) {
+                setOpeningExtraRequirement(prev => [prev.trim(), parsed.openingExtraRequirement.trim()].filter(Boolean).join('\n\n'));
+            }
+            setAiFrameworkStatus(persistFailed
+                ? { type: 'error', message: 'AI 已补全表单，但自定义身份/天赋写入本地存储失败，刷新页面后可能丢失，请重试。' }
+                : { type: 'success', message: 'AI 已补全背景、天赋、伙伴与开局要求，可继续微调或直接生成。' });
+        } catch (error: any) {
+            if (requestSeq !== aiFramework请求序号Ref.current) return;
+            setAiFrameworkStatus({ type: 'error', message: `AI 补全失败：${error?.message || '未知错误'}` });
+        }
+    };
     const 当前难度设定 = useMemo(() => 获取题材化难度设定(worldConfig.difficulty, openingConfig.题材模式), [worldConfig.difficulty, openingConfig.题材模式]);
     const 当前开局配置文案 = useMemo(
         () => 获取题材开局配置文案(openingConfig.题材模式, openingConfig.modeRuntimeProfile),
@@ -940,6 +1116,9 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
     const 应用创意工坊模块到开局 = async (moduleKey: string) => {
         设置创意工坊注入状态('');
         if (!moduleKey) return;
+        // [修复] 套用创意工坊模块会改写题材与表单，作废进行中的 AI 补全请求
+        aiFramework请求序号Ref.current += 1;
+        setAiFrameworkStatus(prev => prev.type === 'loading' ? { type: 'idle', message: '' } : prev);
         const entry = 按键查找创意工坊模块(moduleKey);
         if (!entry) return;
         设置创意工坊注入中(true);
@@ -3347,8 +3526,31 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
 
                             <OrnateBorder className="w-full max-w-lg p-4">
                                 <div className="space-y-2">
-                                    <div className="text-xs text-gray-300 font-bold tracking-widest">开局额外要求（可选）</div>
-                                    <div className="text-[11px] text-gray-500">会随开局任务一起发送给模型，仅影响本次开局生成。</div>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div className="text-xs text-gray-300 font-bold tracking-widest">开局额外要求（可选）</div>
+                                            <div className="text-[11px] text-gray-500 mt-1">会随开局任务一起发送给模型，仅影响本次开局生成。</div>
+                                        </div>
+                                        <GameButton
+                                            onClick={() => { void runAiFrameworkAssist(); }}
+                                            variant="secondary"
+                                            disabled={!aiFrameworkAvailable || aiFrameworkStatus.type === 'loading'}
+                                            className="px-3 py-2 text-[11px] shrink-0"
+                                        >
+                                            {aiFrameworkStatus.type === 'loading' ? 'AI 补全中' : 'AI 补全框架'}
+                                        </GameButton>
+                                    </div>
+                                    {aiFrameworkStatus.message && (
+                                        <div className={`rounded-lg border px-3 py-2 text-[11px] leading-5 ${
+                                            aiFrameworkStatus.type === 'error'
+                                                ? 'border-red-500/35 bg-red-950/20 text-red-200'
+                                                : aiFrameworkStatus.type === 'success'
+                                                    ? 'border-emerald-500/35 bg-emerald-950/20 text-emerald-200'
+                                                    : 'border-wuxia-cyan/30 bg-wuxia-cyan/10 text-wuxia-cyan'
+                                        }`}>
+                                            {aiFrameworkStatus.message}
+                                        </div>
+                                    )}
                                     <textarea
                                         value={openingExtraRequirement}
                                         onChange={(e) => setOpeningExtraRequirement(e.target.value)}

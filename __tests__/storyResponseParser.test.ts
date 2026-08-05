@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseStoryRawText, StoryResponseParseError, 解析命令块 } from '../services/ai/storyResponseParser';
+import { parseStoryRawText, StoryResponseParseError, 解析命令块, 提取首尾思考区段 } from '../services/ai/storyResponseParser';
 import { 规范化可渲染对白日志 } from '../utils/dialogueLogNormalizer';
 import { 构建标签缺失补充提示 } from '../utils/parseErrorHints';
 
@@ -48,6 +48,87 @@ describe('storyResponseParser', () => {
         expect(parsed.logs).toEqual([
             { sender: '萧蒲童子', text: '（轻笑）“哈？”' },
             { sender: '旁白', text: '她抬手指向门外。\n风声从廊下掠过。' }
+        ]);
+    });
+
+    it('剥离闭合的 subtext 思维链注释块，正文不受影响', () => {
+        const result = 提取首尾思考区段([
+            '<thinking>',
+            '<!-- begin_of_Subtext_think -->',
+            '嘿嘿，我们来了呢。"你没急着回答"这句是对白残留。',
+            '<!-- end_of_Subtext_think -->',
+            '正式思考内容。',
+            '</thinking>',
+            '<正文>',
+            '【旁白】晨钟响起。',
+            '</正文>'
+        ].join('\n'));
+
+        expect(result.textWithoutThinking).toContain('<正文>');
+        expect(result.textWithoutThinking).not.toContain('begin_of_Subtext_think');
+        expect(result.textWithoutThinking).not.toContain('你没急着');
+        expect(result.thinking).toContain('你没急着');
+        expect(result.thinking).toContain('正式思考内容');
+    });
+
+    it('剥离无 <thinking> 包裹的 subtext 思维链注释块', () => {
+        const result = 提取首尾思考区段([
+            '<!-- begin_of_Subtext_think -->',
+            '嘿嘿，我们来了呢。她说："你没急着走。"',
+            '<!-- end_of_Subtext_think -->',
+            '<正文>',
+            '【旁白】晨钟响起。',
+            '</正文>'
+        ].join('\n'));
+
+        expect(result.textWithoutThinking).toContain('<正文>');
+        expect(result.textWithoutThinking).not.toContain('你没急着');
+        expect(result.thinking).toContain('你没急着');
+    });
+
+    it('subtext 注释块未闭合时截到下一个协议标签为止', () => {
+        const result = 提取首尾思考区段([
+            '<!-- begin_of_Subtext_think -->',
+            '思考内容："你没急着回答。"',
+            '<正文>',
+            '【旁白】晨钟响起。',
+            '</正文>'
+        ].join('\n'));
+
+        expect(result.textWithoutThinking).toContain('<正文>');
+        expect(result.textWithoutThinking).not.toContain('你没急着');
+        expect(result.thinking).toContain('你没急着');
+    });
+
+    it('subtext 注释块未闭合时不吞掉后续的短期记忆等状态块', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【旁白】晨钟响起，你和俞月荷走出杂役小院。',
+            '</正文>',
+            '<!-- begin_of_Subtext_think -->',
+            '未闭合的思维链残留："你没急着走。"',
+            '<短期记忆>主角与俞月荷准备前往执事堂。</短期记忆>'
+        ].join('\n'));
+
+        expect(parsed.logs).toEqual([
+            { sender: '旁白', text: '晨钟响起，你和俞月荷走出杂役小院。' }
+        ]);
+        expect(parsed.shortTerm).toContain('执事堂');
+    });
+
+    it('subtext 思维链残留不再触发正文对白格式误报', () => {
+        const parsed = parseStoryRawText([
+            '<!-- begin_of_Subtext_think -->',
+            '嘿嘿，我们来了呢。她说："你没急着走。"',
+            '<!-- end_of_Subtext_think -->',
+            '<正文>',
+            '【旁白】晨钟响起，你和俞月荷走出杂役小院。',
+            '</正文>',
+            '<短期记忆>主角与俞月荷准备前往执事堂。</短期记忆>'
+        ].join('\n'));
+
+        expect(parsed.logs).toEqual([
+            { sender: '旁白', text: '晨钟响起，你和俞月荷走出杂役小院。' }
         ]);
     });
 

@@ -14,6 +14,7 @@ import {
     核心_思维链_同人NTL女主规划版
 } from '../../prompts/core/cotHeroine';
 import { 写作_防止说话 } from '../../prompts/writing/noControl';
+import { 写作_冲突节奏 } from '../../prompts/writing/conflictPacing';
 import { 获取酒馆预设顺序, 获取预设已分类正则脚本 } from '../../utils/tavernPreset';
 import { 对世界书执行酒馆正则, 对用户输入执行酒馆正则 } from '../../utils/tavernRegexEngine';
 import {
@@ -667,6 +668,12 @@ export const 构建运行时提示词池 = (
         获取提示词源(promptPool, 写作_防止说话.id, 写作_防止说话),
         shouldInjectNoControl
     );
+
+    // 冲突节奏约束对所有难度档生效：旧存档的提示词池没有该条目时自动补注；
+    // 玩家池里已有该条目时保留其内容与启用状态（尊重玩家手动关闭/修改）
+    if (!effectivePromptPool.some((item) => item.id === 写作_冲突节奏.id)) {
+        effectivePromptPool = [...effectivePromptPool, { ...写作_冲突节奏 }];
+    }
 
     if (config.启用防止说话 === false) {
         effectivePromptPool = effectivePromptPool.map((item) => (

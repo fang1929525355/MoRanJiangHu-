@@ -633,8 +633,22 @@ const 清理GLMMath标签 = (text: string): string => {
 };
 
 export const 提取首尾思考区段 = (text: string): { thinking: string; textWithoutThinking: string; matched: boolean } => {
-    const source = typeof text === 'string' ? text : '';
+    let source = typeof text === 'string' ? text : '';
     if (!source) return { thinking: '', textWithoutThinking: '', matched: false };
+
+    // [修复] 兼容 SillyTavern 风格 subtext 思维链注释块（<!-- begin_of_Subtext_think --> ... -->）。
+    // 模型有时用它代替/包裹标准 <thinking> 标签；未闭合时截到下一个协议标签为止（边界覆盖全部协议标签，
+    // 避免吞掉后续 <短期记忆>/<命令> 等状态块），防止思维链内容（含引号对白）残留进正文触发格式误报。
+    const subtext思考片段: string[] = [];
+    const 协议标签边界分支 = ['think', ...协议标签列表].join('|');
+    source = source.replace(
+        new RegExp(`<!--\\s*begin_of_Subtext_think\\s*-->([\\s\\S]*?)(?:<!--\\s*end_of_Subtext_think\\s*-->|(?=<\\s*\\/?\\s*(?:${协议标签边界分支})(?:\\s|>))|$)`, 'gi'),
+        (_whole, inner: string) => {
+            if ((inner || '').trim()) subtext思考片段.push(inner.trim());
+            return '';
+        }
+    );
+    const subtextThinking = subtext思考片段.join('\n').trim();
 
     const thinkingCloseRegex = /<\s*\/\s*(thinking|think)\s*>/gi;
     let closeMatch: RegExpExecArray | null = null;
@@ -648,7 +662,11 @@ export const 提取首尾思考区段 = (text: string): { thinking: string; text
         const thinkingRaw = source.slice(0, splitIndex);
         const textWithoutThinking = source.slice(splitIndex);
         const thinking = thinkingRaw.replace(/<\s*\/?\s*(thinking|think)\s*>/gi, '').trim();
-        return { thinking, textWithoutThinking, matched: true };
+        return {
+            thinking: [subtextThinking, thinking].filter(Boolean).join('\n').trim(),
+            textWithoutThinking,
+            matched: true
+        };
     }
 
     const bodyOpenRegex = /<\s*正文\s*>/gi;
@@ -661,15 +679,23 @@ export const 提取首尾思考区段 = (text: string): { thinking: string; text
         const thinkingRaw = source.slice(0, lastBodyOpenMatch.index);
         const thinking = thinkingRaw.replace(/<\s*\/?\s*(thinking|think)\s*>/gi, '').trim();
         const textWithoutThinking = source.slice(lastBodyOpenMatch.index);
-        return { thinking, textWithoutThinking, matched: true };
+        return {
+            thinking: [subtextThinking, thinking].filter(Boolean).join('\n').trim(),
+            textWithoutThinking,
+            matched: true
+        };
     }
 
     if (!/<\s*(thinking|think)\s*>/i.test(source)) {
-        return { thinking: '', textWithoutThinking: source, matched: false };
+        return {
+            thinking: subtextThinking,
+            textWithoutThinking: source,
+            matched: subtextThinking.length > 0
+        };
     }
 
     return {
-        thinking: source.replace(/<\s*\/?\s*(thinking|think)\s*>/gi, '').trim(),
+        thinking: [subtextThinking, source.replace(/<\s*\/?\s*(thinking|think)\s*>/gi, '').trim()].filter(Boolean).join('\n').trim(),
         textWithoutThinking: '',
         matched: true
     };

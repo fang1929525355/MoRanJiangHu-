@@ -322,71 +322,18 @@ const 提取判定前缀名称 = (prefix?: string): string => {
     return match?.[1]?.trim() || normalized;
 };
 
-const 格式化旁白断行 = (value: string): string => {
-    const source = String(value || '').replace(/\r\n/g, '\n').trim();
-    if (!source) return '';
-    const protectBrackets = (text: string): { segments: Array<{ text: string; isBracket: boolean }> } => {
-        const segments: Array<{ text: string; isBracket: boolean }> = [];
-        let remaining = text;
-        const openers: Array<{ open: string; close: string }> = [
-            { open: '【', close: '】' },
-            { open: '"', close: '"' },
-            { open: '"', close: '"' },
-            { open: '「', close: '」' },
-            { open: '『', close: '』' },
-            { open: '（', close: '）' }
-        ];
-        while (remaining.length > 0) {
-            let earliest = -1;
-            let earliestPair: { open: string; close: string } | null = null;
-            for (const pair of openers) {
-                const idx = remaining.indexOf(pair.open);
-                if (idx !== -1 && (earliest === -1 || idx < earliest)) {
-                    earliest = idx;
-                    earliestPair = pair;
-                }
-            }
-            if (earliest === -1 || !earliestPair) {
-                if (remaining) segments.push({ text: remaining, isBracket: false });
-                break;
-            }
-            if (earliest > 0) segments.push({ text: remaining.slice(0, earliest), isBracket: false });
-            const end = remaining.indexOf(earliestPair.close, earliest + earliestPair.open.length);
-            if (end === -1) {
-                segments.push({ text: remaining.slice(earliest), isBracket: true });
-                break;
-            }
-            segments.push({ text: remaining.slice(earliest, end + earliestPair.close.length), isBracket: true });
-            remaining = remaining.slice(end + earliestPair.close.length);
-        }
-        return { segments };
-    };
-    return source
-        .split(/\n+/)
-        .flatMap((paragraph) => {
-            const text = paragraph.trim();
-            if (!text) return [];
-            const { segments } = protectBrackets(text);
-            const lines: string[] = [];
-            for (const seg of segments) {
-                if (seg.isBracket) {
-                    lines.push(seg.text);
-                } else {
-                    const split = seg.text.match(/[^。！？!?；;\n]+[。！？!?；;]?/g);
-                    if (split) {
-                        for (const line of split) {
-                            const trimmed = line.trim();
-                            if (trimmed) lines.push(trimmed);
-                        }
-                    } else if (seg.text.trim()) {
-                        lines.push(seg.text.trim());
-                    }
-                }
-            }
-            return lines.length > 0 ? lines : [text];
-        })
-        .join('\n');
-};
+// [修复] 旁白展示不再按句号/问号强行拆成一句一行：
+// 换行结构完全交给 AI 自己输出的正文行决定（每个【旁白】/【角色名】行即一个展示段落），
+// 代码只做空白规整，不再对正文做句子级重排，避免整段对白/旁白被拆成零散短句行。
+const 规整旁白换行 = (value: string): string => (
+    String(value || '')
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .map(line => line.trimEnd())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+);
 
 const 规范化物品引用文本 = (value: unknown): string => (
     typeof value === 'string'
@@ -618,7 +565,7 @@ export const NarratorRenderer: React.FC<{
     onOpenRawResponse?: () => void;
 }> = ({ text, visualConfig, inventoryItems, onOpenInventoryItem, socialList, playerProfile, onOpenNpcDetail, onOpenRawResponse }) => {
     const style = 构建区域文字样式(visualConfig, '旁白');
-    const displayText = useMemo(() => 格式化旁白断行(text).replace(/\n([”」』》）】])/g, '$1'), [text]);
+    const displayText = useMemo(() => 规整旁白换行(text), [text]);
     return (
         <div className="narrator-renderer w-full my-1 px-8 py-2 pr-12 bg-white/5 backdrop-blur-sm border-x-4 border-wuxia-gold/55 leading-relaxed relative overflow-hidden rounded-md shadow-lg transition-all duration-300" style={style}>
             <RawResponseDebugButton onOpen={onOpenRawResponse} className="absolute right-2 top-2 z-20" />
