@@ -1121,8 +1121,10 @@ const 支持原生流式请求 = (): boolean => {
 const 错误疑似原生插件未实现 = (error: unknown): boolean => {
     const message = 读取错误消息(error).toLowerCase();
     if (!message) return false;
-    return message.includes('not implemented')
-        || (message.includes('nativechatstreamer') && (message.includes('unavailable') || message.includes('missing') || message.includes('not found')));
+    // 仅匹配 Capacitor 桥层报的“插件未实现”类错误（形如 `"NativeChatStreamer" plugin is not implemented on android`）。
+    // 不能只看 "not implemented"：请求一旦已到达模型服务，误判会导致同一请求经 XHR/fetch 重发，产生重复调用与费用。
+    return (message.includes('nativechatstreamer') || message.includes('plugin'))
+        && (message.includes('not implemented') || message.includes('unavailable') || message.includes('missing') || message.includes('not found'));
 };
 
 const 生成原生流请求ID = (): string => {

@@ -665,13 +665,29 @@ export const useGame = () => {
     // [修复] 开局提示词基线：新鲜开局生成前捕获提示词池+世界书，
     // 快速重开/重 roll 时恢复，避免上一局 AI 写入的世界观/境界/思维链污染下一局
     const 最近开场基态时间Ref = useRef<number>(0);
-    const 开局提示词基线Ref = useRef<{ prompts: 提示词结构[]; worldbooks: 世界书结构[]; capturedAt: number } | null>(null);
+    // worldbooks 为 null 表示捕获时世界书尚未加载完成，恢复时跳过世界书（绝不用空数组覆盖玩家世界书）
+    const 开局提示词基线Ref = useRef<{ prompts: 提示词结构[]; worldbooks: 世界书结构[] | null; capturedAt: number } | null>(null);
     const 捕获开局提示词基线 = async (promptPool?: 提示词结构[]): Promise<void> => {
         const baselinePool = Array.isArray(promptPool) && promptPool.length > 0 ? promptPool : prompts;
         if (!Array.isArray(baselinePool) || baselinePool.length === 0) return;
+        // [修复] 世界书列表是异步加载的：state 为空时改从 db 读，仍为空则记 null（不捕获），
+        // 防止把"未加载的空数组"当成基线，恢复时误清玩家世界书
+        let baselineWorldbooks: 世界书结构[] | null = Array.isArray(世界书列表) && 世界书列表.length > 0
+            ? 深拷贝(世界书列表)
+            : null;
+        if (!baselineWorldbooks) {
+            try {
+                const storedWorldbooks = await dbService.读取设置(设置键.世界书列表);
+                if (Array.isArray(storedWorldbooks) && storedWorldbooks.length > 0) {
+                    baselineWorldbooks = 深拷贝(storedWorldbooks);
+                }
+            } catch (error) {
+                console.error('读取世界书基线来源失败', error);
+            }
+        }
         const baseline = {
             prompts: 深拷贝(baselinePool),
-            worldbooks: 深拷贝(Array.isArray(世界书列表) ? 世界书列表 : []),
+            worldbooks: baselineWorldbooks,
             capturedAt: Date.now()
         };
         开局提示词基线Ref.current = baseline;
@@ -681,7 +697,7 @@ export const useGame = () => {
             console.error('保存开局提示词基线失败', error);
         }
     };
-    const 恢复开局提示词基线 = async (): Promise<{ prompts: 提示词结构[]; worldbooks: 世界书结构[]; capturedAt: number } | null> => {
+    const 恢复开局提示词基线 = async (): Promise<{ prompts: 提示词结构[]; worldbooks: 世界书结构[] | null; capturedAt: number } | null> => {
         let baseline = 开局提示词基线Ref.current;
         if (!baseline) {
             try {
@@ -702,7 +718,7 @@ export const useGame = () => {
         } catch (error) {
             console.error('恢复提示词池基线失败', error);
         }
-        if (Array.isArray(baseline.worldbooks)) {
+        if (Array.isArray(baseline.worldbooks) && baseline.worldbooks.length > 0) {
             const restoredWorldbooks = 深拷贝(baseline.worldbooks);
             set世界书列表(restoredWorldbooks);
             try {
@@ -727,7 +743,13 @@ export const useGame = () => {
         try {
             const latestAutoTimestamp = await dbService.读取最近自动存档时间戳();
             if (latestAutoTimestamp > 0 && 最近开场基态时间Ref.current > 0 && latestAutoTimestamp >= 最近开场基态时间Ref.current) {
-                await 删除最近自动存档并重置状态();
+                try {
+                    await dbService.删除最近自动存档();
+                } catch (error) {
+                    console.error('删除最近自动存档失败', error);
+                } finally {
+                    重置自动存档状态();
+                }
             }
         } catch (error) {
             console.error('删除本局开局自动存档失败', error);
@@ -967,7 +989,8 @@ export const useGame = () => {
                 console.error('回档恢复提示词池失败', error);
             });
         }
-        if (Array.isArray(snapshot.回档前世界书)) {
+        // 快照里的空数组视为“捕获时世界书未加载”，跳过恢复，绝不用空数组覆盖玩家世界书
+        if (Array.isArray(snapshot.回档前世界书) && snapshot.回档前世界书.length > 0) {
             const restoredWorldbooks = 深拷贝(snapshot.回档前世界书);
             set世界书列表(restoredWorldbooks);
             void dbService.保存设置(设置键.世界书列表, restoredWorldbooks).catch((error) => {

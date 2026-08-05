@@ -100,6 +100,22 @@ describe('storyResponseParser', () => {
         expect(result.thinking).toContain('你没急着');
     });
 
+    it('subtext 注释块未闭合时不吞掉后续的短期记忆等状态块', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【旁白】晨钟响起，你和俞月荷走出杂役小院。',
+            '</正文>',
+            '<!-- begin_of_Subtext_think -->',
+            '未闭合的思维链残留："你没急着走。"',
+            '<短期记忆>主角与俞月荷准备前往执事堂。</短期记忆>'
+        ].join('\n'));
+
+        expect(parsed.logs).toEqual([
+            { sender: '旁白', text: '晨钟响起，你和俞月荷走出杂役小院。' }
+        ]);
+        expect(parsed.shortTerm).toContain('执事堂');
+    });
+
     it('subtext 思维链残留不再触发正文对白格式误报', () => {
         const parsed = parseStoryRawText([
             '<!-- begin_of_Subtext_think -->',

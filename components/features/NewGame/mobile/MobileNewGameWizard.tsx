@@ -273,6 +273,12 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
     const [customPresetMeta, setCustomPresetMeta] = useState<自定义开局预设元信息>({ 名称: '', 简介: '' });
     const [openingExtraRequirement, setOpeningExtraRequirement] = useState('');
     const [aiFrameworkStatus, setAiFrameworkStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ type: 'idle', message: '' });
+    // [修复] AI 补全请求序号：题材切换或发起新请求时递增，过期响应一律丢弃，不覆盖新表单
+    const aiFramework请求序号Ref = useRef(0);
+    useEffect(() => {
+        aiFramework请求序号Ref.current += 1;
+        setAiFrameworkStatus(prev => prev.type === 'loading' ? { type: 'idle', message: '' } : prev);
+    }, [openingConfig.题材模式]);
     const [显示世界观生成提示词, set显示世界观生成提示词] = useState(false);
     const [世界观生成提示词状态, set世界观生成提示词状态] = useState('');
     const 世界观请求模式 = worldConfig.worldExtraRequirement.trim() ? 'AI 细化世界观' : 'AI 生成世界观';
@@ -824,6 +830,7 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
             setAiFrameworkStatus({ type: 'error', message: '请先在设置中配置可用的主剧情 API。' });
             return;
         }
+        const requestSeq = ++aiFramework请求序号Ref.current;
         setAiFrameworkStatus({ type: 'loading', message: '正在让 AI 补全开局框架...' });
         try {
             const prompt = [
@@ -853,6 +860,8 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
                 { role: 'system', content: '你只输出严格 JSON。' },
                 { role: 'user', content: prompt }
             ], { temperature: 0.7, errorDetailLimit: Number.POSITIVE_INFINITY });
+            // [修复] 请求期间题材已切换或已发起新请求：丢弃过期响应，不覆盖当前表单
+            if (requestSeq !== aiFramework请求序号Ref.current) return;
             const parsed = 解析AI框架JSON(raw);
             const worldPatch = parsed?.worldPatch && typeof parsed.worldPatch === 'object' ? parsed.worldPatch : {};
             setWorldConfig(prev => ({
@@ -864,17 +873,9 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
             }));
 
             const nextBackground = 标准化背景(parsed?.character?.背景);
-            if (nextBackground) {
-                设置自定义背景列表(prev => 合并去重背景([...prev, nextBackground]));
-                setSelectedBackground(nextBackground);
-            }
             const nextTalents = Array.isArray(parsed?.character?.天赋列表)
                 ? parsed.character.天赋列表.map((item: 天赋结构) => 标准化天赋(item)).filter(Boolean) as 天赋结构[]
                 : [];
-            if (nextTalents.length > 0) {
-                设置自定义天赋列表(prev => 合并去重天赋([...prev, ...nextTalents]));
-                setSelectedTalents(nextTalents.slice(0, 3));
-            }
             if (typeof parsed?.character?.外貌 === 'string' && parsed.character.外貌.trim()) setCharAppearance(parsed.character.外貌.trim());
             if (typeof parsed?.character?.性格 === 'string' && parsed.character.性格.trim()) setCharPersonality(parsed.character.性格.trim());
 
@@ -888,21 +889,52 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
             if (typeof nextPartner.关系 === 'string' && nextPartner.关系.trim()) setPartnerRelation(nextPartner.关系.trim());
             if (typeof nextPartner.备注 === 'string' && nextPartner.备注.trim()) setPartnerNote(nextPartner.备注.trim());
             const nextPartnerBackground = 标准化背景(nextPartner.背景);
-            if (nextPartnerBackground) {
-                设置自定义背景列表(prev => 合并去重背景([...prev, nextPartnerBackground]));
-                setPartnerBackground(nextPartnerBackground);
-            }
             const nextPartnerTalents = Array.isArray(nextPartner.天赋列表)
                 ? nextPartner.天赋列表.map((item: 天赋结构) => 标准化天赋(item)).filter(Boolean) as 天赋结构[]
                 : [];
-            if (nextPartnerTalents.length > 0) {
-                设置自定义天赋列表(prev => 合并去重天赋([...prev, ...nextPartnerTalents]));
-                setPartnerTalents(nextPartnerTalents.slice(0, 3));
+
+            // [修复] AI 生成的背景/天赋必须写回本地存储（复用手动新增的持久化口径），
+            // 否则页面刷新后丢失，自定义开局方案里的名称引用会回退或落空
+            const newBackgrounds = [nextBackground, nextPartnerBackground].filter(Boolean) as 背景结构[];
+            let nextBackgroundList = 自定义背景列表;
+            if (newBackgrounds.length > 0) {
+                nextBackgroundList = 合并去重背景([...自定义背景列表, ...newBackgrounds]);
+                设置自定义背景列表(nextBackgroundList);
+            }
+            if (nextBackground) setSelectedBackground(nextBackground);
+            if (nextPartnerBackground) setPartnerBackground(nextPartnerBackground);
+            const newTalents = [...nextTalents, ...nextPartnerTalents];
+            let nextTalentList = 自定义天赋列表;
+            if (newTalents.length > 0) {
+                nextTalentList = 合并去重天赋([...自定义天赋列表, ...newTalents]);
+                设置自定义天赋列表(nextTalentList);
+            }
+            if (nextTalents.length > 0) setSelectedTalents(nextTalents.slice(0, 3));
+            if (nextPartnerTalents.length > 0) setPartnerTalents(nextPartnerTalents.slice(0, 3));
+
+            let persistFailed = false;
+            if (newBackgrounds.length > 0) {
+                try {
+                    await dbService.保存设置(自定义背景存储键, nextBackgroundList);
+                } catch (error) {
+                    persistFailed = true;
+                    console.error('AI 补全持久化自定义身份失败', error);
+                }
+            }
+            if (newTalents.length > 0) {
+                try {
+                    await dbService.保存设置(自定义天赋存储键, nextTalentList);
+                } catch (error) {
+                    persistFailed = true;
+                    console.error('AI 补全持久化自定义天赋失败', error);
+                }
             }
             if (typeof parsed?.openingExtraRequirement === 'string' && parsed.openingExtraRequirement.trim()) {
                 setOpeningExtraRequirement(prev => [prev.trim(), parsed.openingExtraRequirement.trim()].filter(Boolean).join('\n\n'));
             }
-            setAiFrameworkStatus({ type: 'success', message: 'AI 已补全背景、天赋、伙伴与开局要求，可继续微调或直接生成。' });
+            setAiFrameworkStatus(persistFailed
+                ? { type: 'error', message: 'AI 已补全表单，但自定义身份/天赋写入本地存储失败，刷新页面后可能丢失，请重试。' }
+                : { type: 'success', message: 'AI 已补全背景、天赋、伙伴与开局要求，可继续微调或直接生成。' });
         } catch (error: any) {
             setAiFrameworkStatus({ type: 'error', message: `AI 补全失败：${error?.message || '未知错误'}` });
         }
