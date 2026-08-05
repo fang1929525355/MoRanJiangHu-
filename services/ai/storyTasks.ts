@@ -2541,7 +2541,10 @@ const 解析小说模式包逐段补全JSON = (rawText: string): {
     conflictHints: string[];
 } => {
     const parsed = 解析AI补全JSON候选(rawText, 'AI 逐段完善输出无法解析为 JSON 对象');
-    const completion = 解析小说模式包补全JSON(JSON.stringify(parsed?.completion));
+    const completionCandidate = parsed?.completion && typeof parsed.completion === 'object' && !Array.isArray(parsed.completion)
+        ? parsed.completion
+        : parsed;
+    const completion = 解析小说模式包补全JSON(JSON.stringify(completionCandidate));
     const conflictHints = Array.isArray(parsed?.conflictHints)
         ? parsed.conflictHints.filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
         : [];

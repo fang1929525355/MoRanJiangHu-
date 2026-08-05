@@ -212,4 +212,24 @@ describe('novel mode pack completion', () => {
         }, apiConfig, { stream: false });
         expect(result.completion.economy?.primaryCurrency).toBe('银票');
     });
+
+    it('accepts a direct full draft when the model follows the legacy system-level JSON shape', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({
+                economy: { primaryCurrency: '银票' },
+                ability: { primaryAxis: '武学境界' }
+            }) } }]
+        }), { status: 200, headers: { 'content-type': 'application/json' } }));
+        const dataset = 创建空小说拆分数据集({ 标题: '测试小说' });
+        dataset.分段列表 = [{ id: 'seg-1', 标题: '第一段', 原文内容: '银票通行。' } as any];
+        const result = await generateNovelModePackSegmentCompletion({
+            dataset,
+            segmentIndex: 0,
+            baseMode: '武侠',
+            currentDraft: {},
+            confirmedFieldPaths: []
+        }, apiConfig, { stream: false });
+        expect(result.completion.economy?.primaryCurrency).toBe('银票');
+        expect(result.conflictHints).toEqual([]);
+    });
 });

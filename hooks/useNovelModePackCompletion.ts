@@ -25,6 +25,13 @@ export interface 小说模式包完善界面状态 {
     progressPercent: number;
 }
 
+export const 是否允许模式包完善运行回写 = (
+    activeTargetKey: string,
+    runTargetKey: string,
+    activeToken: number,
+    runToken: number
+): boolean => activeTargetKey === runTargetKey && activeToken === runToken;
+
 export const 计算小说模式包完善界面状态 = (
     record: 小说模式包完善记录 | null,
     running: boolean,
@@ -32,11 +39,13 @@ export const 计算小说模式包完善界面状态 = (
 ): 小说模式包完善界面状态 => {
     const total = record?.总分段数 || 0;
     const current = Math.min((record?.下一个分段索引 || 0) + 1, total);
-    const latestInput = record?.分段输入记录.at(-1);
+    const latestInput = record?.当前分段ID
+        ? record.分段输入记录.find((item) => item.分段ID === record.当前分段ID)
+        : undefined;
     const statusText = !record
         ? '尚未开始逐分段完善'
         : record.当前阶段 === 'finalize'
-            ? '正在进行最终一致性整理'
+            ? (record.状态 === 'finalizing' || running ? '正在进行最终一致性整理' : '最终一致性整理已暂停，可继续完善')
             : `正在完善第 ${current} / ${total} 分段${record.当前分段标题 ? `：${record.当前分段标题}` : ''}`;
     return {
         primaryAction: running
@@ -81,11 +90,24 @@ export const useNovelModePackCompletion = (params: {
     const [log, setLog] = useState('');
     const [fingerprintMatches, setFingerprintMatches] = useState(true);
     const abortRef = useRef<AbortController | null>(null);
+    const targetKey = dataset ? `${dataset.id}::${baseMode}` : '';
+    const targetKeyRef = useRef(targetKey);
+    targetKeyRef.current = targetKey;
+    const runTokenRef = useRef(0);
+    const recordRef = useRef<小说模式包完善记录 | null>(null);
+    const editSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+    const applyRecord = useCallback((next: 小说模式包完善记录 | null) => {
+        recordRef.current = next;
+        setRecord(next);
+    }, []);
 
     useEffect(() => {
         let active = true;
+        abortRef.current?.abort();
+        runTokenRef.current += 1;
+        setRunning(false);
         if (!dataset) {
-            setRecord(null);
+            applyRecord(null);
             setFingerprintMatches(true);
             return () => { active = false; };
         }
@@ -94,7 +116,7 @@ export const useNovelModePackCompletion = (params: {
             构建小说模式包数据集指纹(dataset)
         ]).then(([stored, fingerprint]) => {
             if (!active) return;
-            setRecord(stored);
+            applyRecord(stored);
             setFingerprintMatches(!stored || stored.数据集指纹 === fingerprint);
             if (stored && stored.数据集指纹 !== fingerprint) {
                 setLog('小说分段内容或顺序已变化，请从头重建模式包完善任务。');
@@ -106,12 +128,20 @@ export const useNovelModePackCompletion = (params: {
             setLog(error instanceof Error ? error.message : String(error));
         });
         return () => { active = false; };
-    }, [dataset, baseMode]);
+    }, [applyRecord, baseMode, dataset]);
 
     const execute = useCallback(async (initialRecord: 小说模式包完善记录 | null) => {
         if (!dataset || dataset.分段列表.length === 0) throw new Error('当前数据集没有可用于模式包完善的分段。');
         if (!apiConfig?.apiKey) throw new Error('请先配置小说分解 API。');
         const controller = new AbortController();
+        const runTargetKey = targetKey;
+        const runToken = ++runTokenRef.current;
+        const canWrite = () => 是否允许模式包完善运行回写(
+            targetKeyRef.current,
+            runTargetKey,
+            runTokenRef.current,
+            runToken
+        );
         abortRef.current = controller;
         setRunning(true);
         setLog(initialRecord ? '继续逐分段完善模式包…' : '开始逐分段完善模式包…');
@@ -130,7 +160,7 @@ export const useNovelModePackCompletion = (params: {
                         confirmedFieldPaths
                     }, apiConfig, {
                         stream: true,
-                        onDelta: (_delta, accumulated) => setLog(accumulated)
+                        onDelta: (_delta, accumulated) => { if (canWrite()) setLog(accumulated); }
                     }, signal)
                 ),
                 finalize: ({ dataset: currentDataset, baseMode: currentMode, currentDraft, conflictHints, confirmedFieldPaths, signal }) => (
@@ -142,16 +172,17 @@ export const useNovelModePackCompletion = (params: {
                         confirmedFieldPaths
                     }, apiConfig, {
                         stream: true,
-                        onDelta: (_delta, accumulated) => setLog(accumulated)
+                        onDelta: (_delta, accumulated) => { if (canWrite()) setLog(accumulated); }
                     }, signal)
                 ),
                 sanitize: 清洗小说模式包累积草稿,
                 save: async (nextRecord) => {
                     await 保存小说模式包完善记录(nextRecord);
-                    setRecord(nextRecord);
+                    if (canWrite()) applyRecord(nextRecord);
                 }
             });
-            setRecord(next);
+            if (!canWrite()) return;
+            applyRecord(next);
             setFingerprintMatches(true);
             setLog(next.状态 === 'completed' ? '全部分段和最终一致性整理已完成。' : (next.最近错误 || '任务已暂停。'));
             if (next.状态 === 'completed') {
@@ -159,13 +190,17 @@ export const useNovelModePackCompletion = (params: {
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            setLog(message);
-            onNotify?.({ title: '模式包完善失败', message, tone: 'error' });
+            if (canWrite()) {
+                setLog(message);
+                onNotify?.({ title: '模式包完善失败', message, tone: 'error' });
+            }
         } finally {
-            if (abortRef.current === controller) abortRef.current = null;
-            setRunning(false);
+            if (canWrite()) {
+                if (abortRef.current === controller) abortRef.current = null;
+                setRunning(false);
+            }
         }
-    }, [apiConfig, baseMode, dataset, onNotify]);
+    }, [apiConfig, applyRecord, baseMode, dataset, onNotify, targetKey]);
 
     const start = useCallback(async () => execute(null), [execute]);
 
@@ -178,27 +213,37 @@ export const useNovelModePackCompletion = (params: {
 
     const restart = useCallback(async () => {
         if (!dataset) return;
+        abortRef.current?.abort();
+        runTokenRef.current += 1;
         await 删除小说模式包完善记录(dataset.id, baseMode);
-        setRecord(null);
+        applyRecord(null);
         setFingerprintMatches(true);
         await execute(null);
-    }, [baseMode, dataset, execute]);
+    }, [applyRecord, baseMode, dataset, execute]);
 
     const updateDraft = useCallback(async (
         draft: Partial<ModeRuntimeProfile>,
         changedPaths: string[]
     ) => {
         if (running) throw new Error('AI 请求执行中不能编辑草稿，请先取消或等待当前分段完成。');
-        if (!record) throw new Error('尚无可编辑的模式包草稿。');
+        const currentRecord = recordRef.current;
+        if (!currentRecord) throw new Error('尚无可编辑的模式包草稿。');
         const next = {
-            ...record,
+            ...currentRecord,
             当前草稿: draft,
-            用户确认字段路径: Array.from(new Set([...record.用户确认字段路径, ...changedPaths.filter(Boolean)])),
+            用户确认字段路径: Array.from(new Set([...currentRecord.用户确认字段路径, ...changedPaths.filter(Boolean)])),
             updatedAt: Date.now()
         };
-        await 保存小说模式包完善记录(next);
-        setRecord(next);
-    }, [record, running]);
+        applyRecord(next);
+        const saveTargetKey = `${next.数据集ID}::${next.题材}`;
+        editSaveQueueRef.current = editSaveQueueRef.current
+            .catch(() => undefined)
+            .then(async () => {
+                await 保存小说模式包完善记录(next);
+                if (targetKeyRef.current !== saveTargetKey) return;
+            });
+        await editSaveQueueRef.current;
+    }, [applyRecord, running]);
 
     const cancel = useCallback(() => abortRef.current?.abort(), []);
     const uiState = useMemo(

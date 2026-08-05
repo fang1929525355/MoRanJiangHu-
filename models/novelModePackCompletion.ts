@@ -22,6 +22,7 @@ export interface 小说模式包完善记录 {
     下一个分段索引: number;
     最近失败分段索引?: number;
     最近错误?: string;
+    当前分段ID?: string;
     当前分段标题?: string;
     分段输入记录: 小说模式包分段输入记录[];
     待整理冲突提示: string[];

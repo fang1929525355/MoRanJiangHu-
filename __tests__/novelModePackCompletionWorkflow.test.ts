@@ -115,6 +115,35 @@ describe('小说模式包逐段完善工作流', () => {
         expect(result.当前草稿.economy?.primaryCurrency).toBe('用户银票');
     });
 
+    it('人工删除的确认字段在后续分段和最终整理中保持删除', async () => {
+        const dataset = 创建数据集();
+        const record = 标准化小说模式包完善记录({
+            id: `${dataset.id}::武侠`,
+            数据集ID: dataset.id,
+            题材: '武侠',
+            数据集指纹: 'fingerprint',
+            状态: 'paused',
+            当前阶段: 'segment',
+            总分段数: 3,
+            已完成分段数: 1,
+            下一个分段索引: 1,
+            当前草稿: {},
+            用户确认字段路径: ['economy']
+        });
+        const result = await 执行小说模式包逐段完善({
+            dataset,
+            baseMode: '武侠',
+            initialRecord: record,
+            signal: new AbortController().signal,
+            completeSegment: async () => aiResult({ economy: { primaryCurrency: '模型铜钱' } }, 'segment'),
+            finalize: async () => aiResult({ economy: { primaryCurrency: '最终金币' } }, 'final'),
+            sanitize: (_dataset, _mode, draft) => draft,
+            save: async () => undefined,
+            wait: async () => undefined
+        });
+        expect(result.当前草稿).not.toHaveProperty('economy');
+    });
+
     it('最终整理失败时只重试最终整理阶段', async () => {
         const dataset = 创建数据集();
         const finalizing = 标准化小说模式包完善记录({

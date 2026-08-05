@@ -58,6 +58,7 @@ export const 标准化小说模式包完善记录 = (raw: any): 小说模式包�
         下一个分段索引,
         最近失败分段索引: Number.isInteger(raw?.最近失败分段索引) ? raw.最近失败分段索引 : undefined,
         最近错误: typeof raw?.最近错误 === 'string' ? raw.最近错误 : undefined,
+        当前分段ID: typeof raw?.当前分段ID === 'string' ? raw.当前分段ID : undefined,
         当前分段标题: typeof raw?.当前分段标题 === 'string' ? raw.当前分段标题 : undefined,
         分段输入记录: 读取分段输入记录(raw?.分段输入记录),
         待整理冲突提示: 读取字符串列表(raw?.待整理冲突提示),
@@ -72,11 +73,41 @@ export const 标准化小说模式包完善记录 = (raw: any): 小说模式包�
 export const 构建小说模式包数据集指纹 = async (dataset: 小说拆分数据集结构): Promise<string> => {
     const source = JSON.stringify({
         id: dataset.id,
+        标题: dataset.标题,
+        作品名: dataset.作品名,
+        当前阶段概括: dataset.当前阶段概括,
+        核心角色摘要: dataset.核心角色摘要,
+        核心角色: dataset.核心角色,
+        角色档案: dataset.角色档案,
+        势力档案: dataset.势力档案,
+        地图地点档案: dataset.地图地点档案,
+        物品档案: dataset.物品档案,
+        世界观规则: dataset.世界观规则,
+        世界边界规则: dataset.世界边界规则,
+        人物关系: dataset.人物关系,
+        势力关系: dataset.势力关系,
+        伏笔线索: dataset.伏笔线索,
+        回收点: dataset.回收点,
+        章节节奏: dataset.章节节奏,
         segments: (dataset.分段列表 || []).map((segment) => ({
             id: segment.id,
-            title: segment.标题,
-            text: segment.原文内容,
-            updatedAt: segment.updatedAt
+            标题: segment.标题,
+            章节范围: segment.章节范围,
+            原文内容: segment.原文内容,
+            原文摘要: segment.原文摘要,
+            本组概括: segment.本组概括,
+            角色档案: segment.角色档案,
+            势力档案: segment.势力档案,
+            地图地点档案: segment.地图地点档案,
+            物品档案: segment.物品档案,
+            世界观规则: segment.世界观规则,
+            世界边界规则: segment.世界边界规则,
+            人物关系: segment.人物关系,
+            势力关系: segment.势力关系,
+            伏笔线索: segment.伏笔线索,
+            回收点: segment.回收点,
+            章节节奏: segment.章节节奏,
+            时间线: segment.时间线
         }))
     });
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
@@ -90,6 +121,20 @@ const 读取全部记录 = async (): Promise<小说模式包完善记录[]> => {
     return Array.isArray(raw) ? raw.map(标准化小说模式包完善记录) : [];
 };
 
+let 小说模式包记录写入队列: Promise<void> = Promise.resolve();
+
+const 串行修改全部记录 = async (
+    modify: (records: 小说模式包完善记录[]) => 小说模式包完善记录[]
+): Promise<void> => {
+    小说模式包记录写入队列 = 小说模式包记录写入队列
+        .catch(() => undefined)
+        .then(async () => {
+            const records = await 读取全部记录();
+            await 保存设置(设置键.小说模式包完善进度, modify(records));
+        });
+    await 小说模式包记录写入队列;
+};
+
 export const 读取小说模式包完善记录 = async (
     datasetId: string,
     topic: 题材模式类型
@@ -100,19 +145,17 @@ export const 读取小说模式包完善记录 = async (
 
 export const 保存小说模式包完善记录 = async (record: 小说模式包完善记录): Promise<void> => {
     const normalized = 标准化小说模式包完善记录(record);
-    const records = await 读取全部记录();
-    const next = records.filter((item) => item.数据集ID !== normalized.数据集ID || item.题材 !== normalized.题材);
-    next.push(normalized);
-    await 保存设置(设置键.小说模式包完善进度, next);
+    await 串行修改全部记录((records) => [
+        ...records.filter((item) => item.数据集ID !== normalized.数据集ID || item.题材 !== normalized.题材),
+        normalized
+    ]);
 };
 
 export const 删除小说模式包完善记录 = async (
     datasetId: string,
     topic: 题材模式类型
 ): Promise<void> => {
-    const records = await 读取全部记录();
-    await 保存设置(
-        设置键.小说模式包完善进度,
+    await 串行修改全部记录((records) => (
         records.filter((record) => record.数据集ID !== datasetId || record.题材 !== topic)
-    );
+    ));
 };
