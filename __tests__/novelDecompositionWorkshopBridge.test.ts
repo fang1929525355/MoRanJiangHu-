@@ -77,7 +77,7 @@ describe('novelDecompositionWorkshopBridge', () => {
             map: { locationTypes: ['感染区', '客栈'] },
             image: { visualStyle: '写实末日风' },
             time: { calendarName: '大梁历' }
-        });
+        } as any);
         expect(JSON.stringify(cleaned)).not.toMatch(/奖励点|感染区|写实末日风/u);
         expect(cleaned.time?.calendarName).toBe('大梁历');
     });

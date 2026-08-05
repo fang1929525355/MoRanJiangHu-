@@ -17,7 +17,7 @@ describe('小说模式包逐段完善提示词', () => {
                 原文内容: '后文确认通用货币是银票。',
                 世界观规则: ['银票通行天下。']
             } as any,
-            currentDraft: { economy: { primaryCurrency: '铜钱' } },
+            currentDraft: { economy: { primaryCurrency: '铜钱' } } as any,
             confirmedFieldPaths: ['economy.primaryCurrency']
         });
         expect(result.prompt).toContain('后文确认通用货币是银票');
@@ -36,7 +36,7 @@ describe('小说模式包逐段完善提示词', () => {
         const prompt = 构建小说模式包最终整理用户提示词({
             workName: '测试小说',
             baseMode: '武侠',
-            currentDraft: { economy: { primaryCurrency: '银票' } },
+            currentDraft: { economy: { primaryCurrency: '银票' } } as any,
             conflictHints: ['早期称为铜钱，后文明确改为银票'],
             confirmedFieldPaths: []
         });
