@@ -44,6 +44,8 @@ export const 计算小说模式包完善界面状态 = (
         : undefined;
     const statusText = !record
         ? '尚未开始逐分段完善'
+        : record.状态 === 'completed'
+            ? '全部分段和最终一致性整理已完成'
         : record.当前阶段 === 'finalize'
             ? (record.状态 === 'finalizing' || running ? '正在进行最终一致性整理' : '最终一致性整理已暂停，可继续完善')
             : `正在完善第 ${current} / ${total} 分段${record.当前分段标题 ? `：${record.当前分段标题}` : ''}`;
@@ -100,12 +102,15 @@ export const useNovelModePackCompletion = (params: {
         recordRef.current = next;
         setRecord(next);
     }, []);
+    const activeRecord = record?.数据集ID === dataset?.id && record.题材 === baseMode ? record : null;
 
     useEffect(() => {
         let active = true;
         abortRef.current?.abort();
         runTokenRef.current += 1;
         setRunning(false);
+        applyRecord(null);
+        setFingerprintMatches(false);
         if (!dataset) {
             applyRecord(null);
             setFingerprintMatches(true);
@@ -205,11 +210,11 @@ export const useNovelModePackCompletion = (params: {
     const start = useCallback(async () => execute(null), [execute]);
 
     const resume = useCallback(async () => {
-        if (!record) return execute(null);
+        if (!activeRecord) return execute(null);
         if (!fingerprintMatches) throw new Error('小说分段内容或顺序已变化，请从头重建。');
-        if (record.状态 === 'completed') return;
-        return execute(record);
-    }, [execute, fingerprintMatches, record]);
+        if (activeRecord.状态 === 'completed') return;
+        return execute(activeRecord);
+    }, [activeRecord, execute, fingerprintMatches]);
 
     const restart = useCallback(async () => {
         if (!dataset) return;
@@ -228,6 +233,9 @@ export const useNovelModePackCompletion = (params: {
         if (running) throw new Error('AI 请求执行中不能编辑草稿，请先取消或等待当前分段完成。');
         const currentRecord = recordRef.current;
         if (!currentRecord) throw new Error('尚无可编辑的模式包草稿。');
+        if (currentRecord.数据集ID !== dataset?.id || currentRecord.题材 !== baseMode) {
+            throw new Error('当前模式包完善记录仍在加载，请稍后重试。');
+        }
         const next = {
             ...currentRecord,
             当前草稿: draft,
@@ -243,17 +251,17 @@ export const useNovelModePackCompletion = (params: {
                 if (targetKeyRef.current !== saveTargetKey) return;
             });
         await editSaveQueueRef.current;
-    }, [applyRecord, running]);
+    }, [applyRecord, baseMode, dataset?.id, running]);
 
     const cancel = useCallback(() => abortRef.current?.abort(), []);
     const uiState = useMemo(
-        () => 计算小说模式包完善界面状态(record, running, fingerprintMatches),
-        [fingerprintMatches, record, running]
+        () => 计算小说模式包完善界面状态(activeRecord, running, fingerprintMatches),
+        [activeRecord, fingerprintMatches, running]
     );
 
     return {
-        record,
-        draft: record?.当前草稿 || null,
+        record: activeRecord,
+        draft: activeRecord?.当前草稿 || null,
         running,
         log,
         fingerprintMatches,

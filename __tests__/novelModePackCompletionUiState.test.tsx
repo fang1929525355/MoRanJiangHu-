@@ -63,7 +63,9 @@ describe('小说模式包完善界面状态', () => {
     });
 
     it('只有最终完成且指纹匹配时才能使用草稿', () => {
-        expect(计算小说模式包完善界面状态(record({ 状态: 'completed' }), false, true).canUseDraft).toBe(true);
+        const completed = 计算小说模式包完善界面状态(record({ 状态: 'completed', 当前阶段: 'finalize' }), false, true);
+        expect(completed.canUseDraft).toBe(true);
+        expect(completed.statusText).toContain('已完成');
         expect(计算小说模式包完善界面状态(record({ 状态: 'completed' }), false, false).canUseDraft).toBe(false);
     });
 });
