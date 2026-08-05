@@ -17,6 +17,13 @@ const record = (patch: Record<string, any>) => 标准化小说模式包完善记
 });
 
 describe('小说模式包完善界面状态', () => {
+    it('目标记录加载完成前禁用开始操作', () => {
+        const state = 计算小说模式包完善界面状态(null, false, false, false);
+        expect(state.primaryAction).toBe('none');
+        expect(state.statusText).toContain('正在加载');
+        expect(state.canUseDraft).toBe(false);
+    });
+
     it('暂停状态提供继续和从头重建，并阻止半成品发布', () => {
         const state = 计算小说模式包完善界面状态(record({ 状态: 'paused' }), false, true);
         expect(state.primaryAction).toBe('resume');
