@@ -484,13 +484,14 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
         const openingBase = deps.创建开场基础状态(charData, worldConfig, openingConfig);
         const clearedOpeningBase = deps.构建前端清空开场状态(openingBase);
         const clearedCommandBase = deps.创建开场命令基态(openingBase);
-        清空当前存档生图隔离态();
         deps.设置开局配置(openingConfig ? deps.深拷贝(openingConfig) : undefined);
 
         if (mode === 'opening_only') {
             // [修复] opening_only 只重 roll 剧情：必须保留世界生成阶段产出的世界/社交/门派等状态，
             // 不能套用重建基态（那会把已生成的地图、势力、世界状态一并清掉，导致新开局"选择性无视"世界设定）；
-            // 仅清空历史/记忆等叙事痕迹，让新开头替换旧开头而不是叠加
+            // 仅清空历史/记忆等叙事痕迹，让新开头替换旧开头而不是叠加；
+            // 图片档案与角色锚点同样保留，仅切换生图作用域以取消旧任务
+            deps.切换生图存档作用域();
             deps.设置历史记录([]);
             deps.应用并同步记忆系统({ 回忆档案: [], 即时记忆: [], 短期记忆: [], 中期记忆: [], 长期记忆: [] }, { 静默总结提示: true });
             deps.清空变量生成上下文缓存();
@@ -545,6 +546,8 @@ export const 创建会话生命周期工作流 = (deps: 会话生命周期依赖
         if (deps.view !== 'game') {
             deps.setView('game');
         }
+        // world_only / all 属于整体重建，清空图片档案与角色锚点等生图隔离态
+        清空当前存档生图隔离态();
 
         if (mode === 'world_only') {
             await handleGenerateWorld(

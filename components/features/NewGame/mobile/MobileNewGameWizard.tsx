@@ -720,6 +720,9 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
         };
     };
     const 应用预设到表单 = (preset: 开局预设方案结构, options?: { 保持当前步骤?: boolean }) => {
+        // [修复] 套用预设会整体改写表单，作废进行中的 AI 补全请求，防止过期响应覆盖新表单
+        aiFramework请求序号Ref.current += 1;
+        setAiFrameworkStatus(prev => prev.type === 'loading' ? { type: 'idle', message: '' } : prev);
         const presetRestoreCatalog = 构建预设恢复候选池(preset);
         const restored = 构建预设表单恢复结果(preset, {
             ...presetRestoreCatalog,
@@ -894,24 +897,46 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
                 : [];
 
             // [修复] AI 生成的背景/天赋必须写回本地存储（复用手动新增的持久化口径），
-            // 否则页面刷新后丢失，自定义开局方案里的名称引用会回退或落空
-            const newBackgrounds = [nextBackground, nextPartnerBackground].filter(Boolean) as 背景结构[];
+            // 否则页面刷新后丢失，自定义开局方案里的名称引用会回退或落空；
+            // 同名条目先解析到已有目录条目（预设/模式包/自定义），不新增遮蔽同名项
+            const newBackgrounds: 背景结构[] = [];
+            const newTalents: 天赋结构[] = [];
+            const 解析或登记背景 = (candidate: 背景结构 | null): 背景结构 | null => {
+                if (!candidate) return null;
+                const existing = 全部背景选项.find(item => item.名称 === candidate.名称)
+                    || newBackgrounds.find(item => item.名称 === candidate.名称);
+                if (existing) return existing;
+                newBackgrounds.push(candidate);
+                return candidate;
+            };
+            const 解析或登记天赋 = (candidate: 天赋结构): 天赋结构 => {
+                const existing = 全部天赋选项.find(item => item.名称 === candidate.名称)
+                    || newTalents.find(item => item.名称 === candidate.名称);
+                if (existing) return existing;
+                newTalents.push(candidate);
+                return candidate;
+            };
+            const resolvedBackground = 解析或登记背景(nextBackground);
+            const resolvedPartnerBackground = 解析或登记背景(nextPartnerBackground);
+            const resolvedTalents = nextTalents.map(解析或登记天赋);
+            const resolvedPartnerTalents = nextPartnerTalents.map(解析或登记天赋);
             let nextBackgroundList = 自定义背景列表;
             if (newBackgrounds.length > 0) {
                 nextBackgroundList = 合并去重背景([...自定义背景列表, ...newBackgrounds]);
                 设置自定义背景列表(nextBackgroundList);
             }
-            if (nextBackground) setSelectedBackground(nextBackground);
-            if (nextPartnerBackground) setPartnerBackground(nextPartnerBackground);
-            const newTalents = [...nextTalents, ...nextPartnerTalents];
+            if (resolvedBackground) setSelectedBackground(resolvedBackground);
+            if (resolvedPartnerBackground) setPartnerBackground(resolvedPartnerBackground);
             let nextTalentList = 自定义天赋列表;
             if (newTalents.length > 0) {
                 nextTalentList = 合并去重天赋([...自定义天赋列表, ...newTalents]);
                 设置自定义天赋列表(nextTalentList);
             }
-            if (nextTalents.length > 0) setSelectedTalents(nextTalents.slice(0, 3));
-            if (nextPartnerTalents.length > 0) setPartnerTalents(nextPartnerTalents.slice(0, 3));
+            if (resolvedTalents.length > 0) setSelectedTalents(resolvedTalents.slice(0, 3));
+            if (resolvedPartnerTalents.length > 0) setPartnerTalents(resolvedPartnerTalents.slice(0, 3));
 
+            // [修复] 持久化与状态提示前再次核对请求序号：过期响应不写本地存储、不覆盖状态
+            if (requestSeq !== aiFramework请求序号Ref.current) return;
             let persistFailed = false;
             if (newBackgrounds.length > 0) {
                 try {
@@ -929,6 +954,7 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
                     console.error('AI 补全持久化自定义天赋失败', error);
                 }
             }
+            if (requestSeq !== aiFramework请求序号Ref.current) return;
             if (typeof parsed?.openingExtraRequirement === 'string' && parsed.openingExtraRequirement.trim()) {
                 setOpeningExtraRequirement(prev => [prev.trim(), parsed.openingExtraRequirement.trim()].filter(Boolean).join('\n\n'));
             }
@@ -936,6 +962,7 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
                 ? { type: 'error', message: 'AI 已补全表单，但自定义身份/天赋写入本地存储失败，刷新页面后可能丢失，请重试。' }
                 : { type: 'success', message: 'AI 已补全背景、天赋、伙伴与开局要求，可继续微调或直接生成。' });
         } catch (error: any) {
+            if (requestSeq !== aiFramework请求序号Ref.current) return;
             setAiFrameworkStatus({ type: 'error', message: `AI 补全失败：${error?.message || '未知错误'}` });
         }
     };
@@ -1089,6 +1116,9 @@ const MobileNewGameWizard: React.FC<Props> = ({ onComplete, onCancel, loading, a
     const 应用创意工坊模块到开局 = async (moduleKey: string) => {
         设置创意工坊注入状态('');
         if (!moduleKey) return;
+        // [修复] 套用创意工坊模块会改写题材与表单，作废进行中的 AI 补全请求
+        aiFramework请求序号Ref.current += 1;
+        setAiFrameworkStatus(prev => prev.type === 'loading' ? { type: 'idle', message: '' } : prev);
         const entry = 按键查找创意工坊模块(moduleKey);
         if (!entry) return;
         设置创意工坊注入中(true);
