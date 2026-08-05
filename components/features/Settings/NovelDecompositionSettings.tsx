@@ -1973,6 +1973,10 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                 await modePackCompletion.resume();
                 return;
             }
+            if (modePackCompletion.uiState.primaryAction === 'retry') {
+                modePackCompletion.retryLoad();
+                return;
+            }
             await modePackCompletion.start();
         } catch (error: any) {
             推送错误提示(error?.message || '模式包逐分段完善启动失败。');
@@ -2904,6 +2908,8 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                 >
                                     {modePackCompletion.uiState.primaryAction === 'cancel'
                                         ? '取消'
+                                        : modePackCompletion.uiState.primaryAction === 'retry'
+                                            ? '重试加载进度'
                                         : modePackCompletion.uiState.primaryAction === 'resume'
                                             ? '继续完善'
                                             : modePackCompletion.uiState.primaryAction === 'none'
@@ -3070,6 +3076,8 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             >
                                 {modePackCompletion.uiState.primaryAction === 'cancel'
                                     ? '取消'
+                                    : modePackCompletion.uiState.primaryAction === 'retry'
+                                        ? '重试加载进度'
                                     : modePackCompletion.uiState.primaryAction === 'resume'
                                         ? '继续完善'
                                         : modePackCompletion.uiState.primaryAction === 'none'

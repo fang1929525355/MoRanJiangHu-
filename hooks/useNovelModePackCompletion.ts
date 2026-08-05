@@ -16,7 +16,7 @@ import { 清洗小说模式包累积草稿 } from '../services/novelDecompositio
 type Toast = { title: string; message: string; tone?: 'info' | 'success' | 'error' };
 
 export interface 小说模式包完善界面状态 {
-    primaryAction: 'start' | 'resume' | 'cancel' | 'none';
+    primaryAction: 'start' | 'resume' | 'cancel' | 'retry' | 'none';
     showRestart: boolean;
     canUseDraft: boolean;
     canEditDraft: boolean;
@@ -36,14 +36,17 @@ export const 计算小说模式包完善界面状态 = (
     record: 小说模式包完善记录 | null,
     running: boolean,
     fingerprintMatches: boolean,
-    targetReady = true
+    targetReady = true,
+    loadFailed = false
 ): 小说模式包完善界面状态 => {
     const total = record?.总分段数 || 0;
     const current = Math.min((record?.下一个分段索引 || 0) + 1, total);
     const latestInput = record?.当前分段ID
         ? record.分段输入记录.find((item) => item.分段ID === record.当前分段ID)
         : undefined;
-    const statusText = !targetReady
+    const statusText = loadFailed
+        ? '模式包完善进度加载失败，请重试'
+        : !targetReady
         ? '正在加载模式包完善进度…'
         : !record
         ? '尚未开始逐分段完善'
@@ -53,7 +56,9 @@ export const 计算小说模式包完善界面状态 = (
             ? (record.状态 === 'finalizing' || running ? '正在进行最终一致性整理' : '最终一致性整理已暂停，可继续完善')
             : `正在完善第 ${current} / ${total} 分段${record.当前分段标题 ? `：${record.当前分段标题}` : ''}`;
     return {
-        primaryAction: !targetReady
+        primaryAction: loadFailed
+            ? 'retry'
+            : !targetReady
             ? 'none'
             : running
             ? 'cancel'
@@ -81,6 +86,7 @@ export interface UseNovelModePackCompletionResult {
     start: () => Promise<void>;
     resume: () => Promise<void>;
     restart: () => Promise<void>;
+    retryLoad: () => void;
     updateDraft: (draft: Partial<ModeRuntimeProfile>, changedPaths: string[]) => Promise<void>;
     cancel: () => void;
 }
@@ -97,6 +103,8 @@ export const useNovelModePackCompletion = (params: {
     const [log, setLog] = useState('');
     const [fingerprintMatches, setFingerprintMatches] = useState(true);
     const [targetReady, setTargetReady] = useState(false);
+    const [loadFailed, setLoadFailed] = useState(false);
+    const [reloadToken, setReloadToken] = useState(0);
     const abortRef = useRef<AbortController | null>(null);
     const targetKey = dataset ? `${dataset.id}::${baseMode}` : '';
     const targetKeyRef = useRef(targetKey);
@@ -127,6 +135,7 @@ export const useNovelModePackCompletion = (params: {
         applyRecord(null);
         setFingerprintMatches(false);
         setTargetReady(false);
+        setLoadFailed(false);
         readyTargetKeyRef.current = '';
         readyDatasetRef.current = null;
         if (!dataset) {
@@ -145,6 +154,7 @@ export const useNovelModePackCompletion = (params: {
             readyTargetKeyRef.current = targetKey;
             readyDatasetRef.current = dataset;
             setTargetReady(true);
+            setLoadFailed(false);
             if (stored && stored.数据集指纹 !== fingerprint) {
                 setLog('小说分段内容或顺序已变化，请从头重建模式包完善任务。');
             } else {
@@ -153,9 +163,10 @@ export const useNovelModePackCompletion = (params: {
         }).catch((error) => {
             if (!active) return;
             setLog(error instanceof Error ? error.message : String(error));
+            setLoadFailed(true);
         });
         return () => { active = false; };
-    }, [applyRecord, baseMode, dataset, targetKey]);
+    }, [applyRecord, baseMode, dataset, reloadToken, targetKey]);
 
     const execute = useCallback(async (initialRecord: 小说模式包完善记录 | null) => {
         if (!dataset || dataset.分段列表.length === 0) throw new Error('当前数据集没有可用于模式包完善的分段。');
@@ -280,9 +291,10 @@ export const useNovelModePackCompletion = (params: {
     }, [applyRecord, baseMode, dataset?.id, running]);
 
     const cancel = useCallback(() => abortRef.current?.abort(), []);
+    const retryLoad = useCallback(() => setReloadToken((value) => value + 1), []);
     const uiState = useMemo(
-        () => 计算小说模式包完善界面状态(activeRecord, running, fingerprintMatches, currentTargetReady),
-        [activeRecord, currentTargetReady, fingerprintMatches, running]
+        () => 计算小说模式包完善界面状态(activeRecord, running, fingerprintMatches, currentTargetReady, loadFailed),
+        [activeRecord, currentTargetReady, fingerprintMatches, loadFailed, running]
     );
 
     return {
@@ -295,6 +307,7 @@ export const useNovelModePackCompletion = (params: {
         start,
         resume,
         restart,
+        retryLoad,
         updateDraft,
         cancel
     };

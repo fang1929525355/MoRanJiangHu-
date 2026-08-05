@@ -24,6 +24,12 @@ describe('小说模式包完善界面状态', () => {
         expect(state.canUseDraft).toBe(false);
     });
 
+    it('目标记录加载失败后提供重试操作', () => {
+        const state = 计算小说模式包完善界面状态(null, false, false, false, true);
+        expect(state.primaryAction).toBe('retry');
+        expect(state.statusText).toContain('加载失败');
+    });
+
     it('暂停状态提供继续和从头重建，并阻止半成品发布', () => {
         const state = 计算小说模式包完善界面状态(record({ 状态: 'paused' }), false, true);
         expect(state.primaryAction).toBe('resume');
