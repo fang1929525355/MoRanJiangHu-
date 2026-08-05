@@ -1,4 +1,5 @@
-import type { 小说拆分数据集结构 } from '../../models/novelDecomposition';
+import type { 小说拆分数据集结构, 小说拆分分段结构 } from '../../models/novelDecomposition';
+import type { ModeRuntimeProfile, 题材模式类型 } from '../../models/system';
 
 export const 小说模式包补全系统提示词 = `
 你是 WuXia 项目的小说分解模式包补全器。任务是只输出一段可被系统直接解析的 JSON 配置补丁。
@@ -159,3 +160,95 @@ export const 构建小说模式包补全用户提示词 = (dataset: 小说拆分
 
     return segments.join('\n');
 };
+
+export const 模式包单段原文最大字符数 = 24_000;
+
+export interface 小说模式包分段完善提示词参数 {
+    workName: string;
+    baseMode: 题材模式类型;
+    segmentIndex: number;
+    totalSegments: number;
+    segment: 小说拆分分段结构;
+    currentDraft: Partial<ModeRuntimeProfile>;
+    confirmedFieldPaths: string[];
+}
+
+export interface 小说模式包分段完善提示词结果 {
+    prompt: string;
+    inputStats: {
+        原文总字符数: number;
+        实际输入字符数: number;
+        是否完整输入: boolean;
+    };
+}
+
+const 构建当前分段证据 = (segment: 小说拆分分段结构) => ({
+    标题: segment.标题,
+    章节范围: segment.章节范围,
+    原文内容: (segment.原文内容 || '').slice(0, 模式包单段原文最大字符数),
+    原文摘要: segment.原文摘要,
+    本组概括: segment.本组概括,
+    角色档案: segment.角色档案,
+    势力档案: segment.势力档案,
+    地图地点档案: segment.地图地点档案,
+    物品档案: segment.物品档案,
+    世界观规则: segment.世界观规则,
+    世界边界规则: segment.世界边界规则,
+    人物关系: segment.人物关系,
+    势力关系: segment.势力关系,
+    时间线: segment.时间线
+});
+
+export const 构建小说模式包分段完善用户提示词 = (
+    params: 小说模式包分段完善提示词参数
+): 小说模式包分段完善提示词结果 => {
+    const 原文总字符数 = params.segment.原文内容?.length || 0;
+    const 实际输入字符数 = Math.min(原文总字符数, 模式包单段原文最大字符数);
+    const stageInstruction = params.segmentIndex === 0
+        ? '这是第一部分，请依据本段证据建立模式包骨架。信息不足的字段保持缺失。'
+        : '这是后续部分，请基于上一版完整草稿补充、纠错，并删除已被本段证据推翻的内容。';
+    const confirmed = params.confirmedFieldPaths.length > 0
+        ? params.confirmedFieldPaths.join('\n- ')
+        : '无';
+    return {
+        prompt: [
+            `【来源作品】${params.workName}`,
+            `【基础题材】${params.baseMode}`,
+            `【当前进度】第 ${params.segmentIndex + 1} / ${params.totalSegments} 分段`,
+            stageInstruction,
+            '【上一版完整模式包草稿】',
+            JSON.stringify(params.currentDraft),
+            '【用户确认字段不得覆盖】',
+            confirmed,
+            '【当前分段证据】',
+            JSON.stringify(构建当前分段证据(params.segment)),
+            '输出严格 JSON：{"completion":{更新后的完整模式包草稿},"conflictHints":["供最终整理使用的冲突提示"]}。',
+            '必须输出更新后的完整模式包草稿，而不是局部补丁；没有冲突时 conflictHints 输出空数组。'
+        ].join('\n'),
+        inputStats: {
+            原文总字符数,
+            实际输入字符数,
+            是否完整输入: 实际输入字符数 === 原文总字符数
+        }
+    };
+};
+
+export const 构建小说模式包最终整理用户提示词 = (params: {
+    workName: string;
+    baseMode: 题材模式类型;
+    currentDraft: Partial<ModeRuntimeProfile>;
+    conflictHints: string[];
+    confirmedFieldPaths: string[];
+}): string => [
+    `【来源作品】${params.workName}`,
+    `【基础题材】${params.baseMode}`,
+    '全部小说分段均已处理。现在只做最终一致性整理，不再读取原文。',
+    '可以统一命名、消除重复、按冲突提示选择后文已确认的设定；不得新增没有证据的设定。',
+    '【当前完整草稿】',
+    JSON.stringify(params.currentDraft),
+    '【累计冲突提示】',
+    JSON.stringify(params.conflictHints),
+    '【用户确认字段不得覆盖】',
+    JSON.stringify(params.confirmedFieldPaths),
+    '只输出严格 JSON：{"completion":{整理后的完整模式包草稿},"conflictHints":[]}。'
+].join('\n');

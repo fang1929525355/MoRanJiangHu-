@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { 创建空小说拆分数据集 } from '../services/novelDecompositionStore';
 import { 聚合小说拆分数据集, 基于分段构建注入树 } from '../services/novelDecompositionPipeline';
-import { 构建小说拆分模式包创意工坊模块, 解析小说模式包题材 } from '../services/novelDecompositionWorkshopBridge';
+import {
+    构建小说拆分模式包创意工坊模块,
+    解析小说模式包题材,
+    清洗小说模式包累积草稿
+} from '../services/novelDecompositionWorkshopBridge';
 import type { 小说拆分分段结构 } from '../types';
 
 const 创建分段 = (patch: Partial<小说拆分分段结构>): 小说拆分分段结构 => ({
@@ -63,6 +67,21 @@ const 序列化客户可见运行时配置 = (profile: any): string => JSON.stri
 });
 
 describe('novelDecompositionWorkshopBridge', () => {
+    it('每轮累积草稿都会过滤无证据的末日和无限流模板', () => {
+        const dataset = 创建空小说拆分数据集({
+            标题: '普通武侠',
+            世界边界规则: ['不得出现主神空间、丧尸或避难所。']
+        });
+        const cleaned = 清洗小说模式包累积草稿(dataset, '武侠', {
+            economy: { primaryCurrency: '奖励点' },
+            map: { locationTypes: ['感染区', '客栈'] },
+            image: { visualStyle: '写实末日风' },
+            time: { calendarName: '大梁历' }
+        });
+        expect(JSON.stringify(cleaned)).not.toMatch(/奖励点|感染区|写实末日风/u);
+        expect(cleaned.time?.calendarName).toBe('大梁历');
+    });
+
     it('手动选择题材时覆盖自动识别结果', () => {
         const dataset = 聚合小说拆分数据集(创建空小说拆分数据集({
             id: 'dataset-manual-wuxia',

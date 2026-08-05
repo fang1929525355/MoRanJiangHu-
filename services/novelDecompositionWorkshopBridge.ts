@@ -505,6 +505,16 @@ const 清理AI补全草稿配置 = (
     return result;
 };
 
+export const 清洗小说模式包累积草稿 = (
+    dataset: 小说拆分数据集结构,
+    baseMode: 题材模式类型,
+    draft: Partial<ModeRuntimeProfile>
+): Partial<ModeRuntimeProfile> => {
+    const resolvedMode = 解析小说模式包题材(dataset, baseMode);
+    const hasInfiniteEvidence = resolvedMode === '无限流' || 小说拆分疑似无限流题材(dataset);
+    return 清理AI补全草稿配置(draft, resolvedMode, hasInfiniteEvidence);
+};
+
 /** Deep-merge AI completion fields over the official profile. */
 const 合并AI补全到模式运行时配置 = (
     base: ModeRuntimeProfile,
@@ -661,10 +671,12 @@ export const AI补全小说模式包配置 = async (
     const { dataset, apiConfig, signal, onDelta } = params;
     const streamOptions = onDelta ? { stream: true, onDelta } : undefined;
     const result = await generateNovelModePackCompletion(dataset, apiConfig, streamOptions, signal);
-    const baseMode = 解析小说模式包题材(dataset, params.baseMode);
-    const hasInfiniteEvidence = baseMode === '无限流' || 小说拆分疑似无限流题材(dataset);
     return {
         ...result,
-        completion: 清理AI补全草稿配置(result.completion as Partial<ModeRuntimeProfile>, baseMode, hasInfiniteEvidence)
+        completion: 清洗小说模式包累积草稿(
+            dataset,
+            解析小说模式包题材(dataset, params.baseMode),
+            result.completion as Partial<ModeRuntimeProfile>
+        ) as Record<string, any>
     };
 };

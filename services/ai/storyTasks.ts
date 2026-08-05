@@ -1,6 +1,7 @@
 import { GameResponse, TavernCommand, 内置提示词条目结构 } from '../../types';
 import type { 当前可用接口结构 } from '../../utils/apiConfig';
 import type { 小说拆分数据集结构, 小说拆分角色档案结构, 小说拆分势力档案结构, 小说拆分地图地点档案结构, 小说拆分物品档案结构 } from '../../models/novelDecomposition';
+import type { 题材模式类型 } from '../../models/system';
 import { 翻译连接测试错误 } from './imageGenerationDiagnostics';
 import { parseJsonWithRepair } from '../../utils/jsonRepair';
 import { 获取世界观生成系统提示词, 构建世界观生成用户提示词 } from '../../prompts/runtime/worldGeneration';
@@ -24,7 +25,12 @@ import {
     小说拆分COT伪装提示词
 } from '../../prompts/runtime/novelDecomposition';
 import { 小说拆分COT提示词 } from '../../prompts/runtime/novelDecompositionCot';
-import { 小说模式包补全系统提示词, 构建小说模式包补全用户提示词 } from '../../prompts/runtime/novelModePackCompletion';
+import {
+    小说模式包补全系统提示词,
+    构建小说模式包补全用户提示词,
+    构建小说模式包分段完善用户提示词,
+    构建小说模式包最终整理用户提示词
+} from '../../prompts/runtime/novelModePackCompletion';
 import { 分段字段补全系统提示词, 构建分段字段补全用户提示词, type 分段字段AI补全结果 } from '../../prompts/runtime/novelSegmentFieldCompletion';
 import { 同人规划分析附加系统提示词, 同人规划分析附加COT提示词 } from '../../prompts/runtime/fandomPlanningAnalysis';
 import { 同人世界演变附加系统提示词, 同人世界演变附加COT提示词 } from '../../prompts/runtime/fandomWorldEvolution';
@@ -2354,6 +2360,12 @@ export const testConnection = async (
 export interface NovelModePackCompletionResult {
     completion: Record<string, any>;
     rawText: string;
+    conflictHints?: string[];
+    inputStats?: {
+        原文总字符数: number;
+        实际输入字符数: number;
+        是否完整输入: boolean;
+    };
 }
 
 const 解析AI补全JSON候选 = (text: string, errorMessage: string): any => {
@@ -2522,6 +2534,86 @@ const 解析小说模式包补全JSON = (rawText: string): Record<string, any> =
     }
 
     return parsed;
+};
+
+const 解析小说模式包逐段补全JSON = (rawText: string): {
+    completion: Record<string, any>;
+    conflictHints: string[];
+} => {
+    const parsed = 解析AI补全JSON候选(rawText, 'AI 逐段完善输出无法解析为 JSON 对象');
+    const completion = 解析小说模式包补全JSON(JSON.stringify(parsed?.completion));
+    const conflictHints = Array.isArray(parsed?.conflictHints)
+        ? parsed.conflictHints.filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+        : [];
+    return { completion, conflictHints };
+};
+
+export const generateNovelModePackSegmentCompletion = async (
+    params: {
+        dataset: 小说拆分数据集结构;
+        segmentIndex: number;
+        baseMode: 题材模式类型;
+        currentDraft: Record<string, any>;
+        confirmedFieldPaths: string[];
+    },
+    apiConfig: 当前可用接口结构,
+    streamOptions?: WorldStreamOptions,
+    signal?: AbortSignal
+): Promise<NovelModePackCompletionResult> => {
+    if (!apiConfig.apiKey) throw new Error('Missing API Key');
+    const segment = params.dataset.分段列表[params.segmentIndex];
+    if (!segment) throw new Error(`模式包完善分段不存在：${params.segmentIndex + 1}`);
+    const { prompt, inputStats } = 构建小说模式包分段完善用户提示词({
+        workName: params.dataset.作品名 || params.dataset.标题 || '未命名小说',
+        baseMode: params.baseMode,
+        segmentIndex: params.segmentIndex,
+        totalSegments: params.dataset.分段列表.length,
+        segment,
+        currentDraft: params.currentDraft,
+        confirmedFieldPaths: params.confirmedFieldPaths
+    });
+    const rawText = await 请求模型文本(
+        apiConfig,
+        规范化文本补全消息链([
+            { role: 'system', content: 小说模式包补全系统提示词 },
+            { role: 'user', content: prompt }
+        ], { 保留System: true, 合并同角色: false }),
+        { temperature: 0.3, streamOptions, signal }
+    );
+    const { completion, conflictHints } = 解析小说模式包逐段补全JSON(rawText);
+    return { completion, rawText, conflictHints, inputStats };
+};
+
+export const generateNovelModePackFinalization = async (
+    params: {
+        dataset: 小说拆分数据集结构;
+        baseMode: 题材模式类型;
+        currentDraft: Record<string, any>;
+        conflictHints: string[];
+        confirmedFieldPaths: string[];
+    },
+    apiConfig: 当前可用接口结构,
+    streamOptions?: WorldStreamOptions,
+    signal?: AbortSignal
+): Promise<NovelModePackCompletionResult> => {
+    if (!apiConfig.apiKey) throw new Error('Missing API Key');
+    const prompt = 构建小说模式包最终整理用户提示词({
+        workName: params.dataset.作品名 || params.dataset.标题 || '未命名小说',
+        baseMode: params.baseMode,
+        currentDraft: params.currentDraft,
+        conflictHints: params.conflictHints,
+        confirmedFieldPaths: params.confirmedFieldPaths
+    });
+    const rawText = await 请求模型文本(
+        apiConfig,
+        规范化文本补全消息链([
+            { role: 'system', content: 小说模式包补全系统提示词 },
+            { role: 'user', content: prompt }
+        ], { 保留System: true, 合并同角色: false }),
+        { temperature: 0.15, streamOptions, signal }
+    );
+    const { completion, conflictHints } = 解析小说模式包逐段补全JSON(rawText);
+    return { completion, rawText, conflictHints };
 };
 
 /**
