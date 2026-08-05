@@ -174,22 +174,27 @@ const apkSize = currentApkBuffer.byteLength;
 const openListBaseUrl = readEnv('MORAN_OPENLIST_BASE_URL', 'https://openlist.bacon.de5.net').replace(/\/+$/, '');
 const openListAuthToken = readEnv('MORAN_OPENLIST_AUTH_TOKEN');
 const openListUploadTimeoutMs = Math.max(1000, Number(readEnv('MORAN_OPENLIST_UPLOAD_TIMEOUT_MS', '600000')));
+const skipOpenListApkUpload = process.env.MORAN_OPENLIST_SKIP_APK_UPLOAD === '1';
 
-uploadApkFileToOpenListWithCurl({
-  apkPath,
-  versionName: currentVersionName,
-  targetRoot: '/Onedrive/MoRanJiangHu/releases',
-  baseUrl: openListBaseUrl,
-  authToken: openListAuthToken,
-  timeoutMs: openListUploadTimeoutMs
-});
-await verifyOpenListApkFiles({
-  versionName: currentVersionName,
-  expectedSize: apkSize,
-  downloadRoot: '/Onedrive/MoRanJiangHu/releases',
-  baseUrl: openListBaseUrl,
-  authToken: openListAuthToken
-});
+if (skipOpenListApkUpload) {
+  console.warn('[OpenList] APK upload and provider URLs skipped by MORAN_OPENLIST_SKIP_APK_UPLOAD=1');
+} else {
+  uploadApkFileToOpenListWithCurl({
+    apkPath,
+    versionName: currentVersionName,
+    targetRoot: '/Onedrive/MoRanJiangHu/releases',
+    baseUrl: openListBaseUrl,
+    authToken: openListAuthToken,
+    timeoutMs: openListUploadTimeoutMs
+  });
+  await verifyOpenListApkFiles({
+    versionName: currentVersionName,
+    expectedSize: apkSize,
+    downloadRoot: '/Onedrive/MoRanJiangHu/releases',
+    baseUrl: openListBaseUrl,
+    authToken: openListAuthToken
+  });
+}
 
 const websiteBaseUrl = String(releaseInfo.websiteUrl || '').replace(/\/+$/, '');
 const githubReleaseAccelerators = readEnv('GITHUB_RELEASE_ACCELERATORS', 'https://gh.ddlc.top,https://gh-proxy.com,https://gh-proxy.ygxz.in,https://ghfast.top')
@@ -229,8 +234,8 @@ const providerApkUrls = {
   fullstack: '',
   vps: `${String(process.env.MORAN_VPS_APK_BASE_URL || 'https://moranjianghu.bacon159.pp.ua').replace(/\/+$/, '')}/latest.apk`,
   quarkTv: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=quark-tv` : '',
-  onedrive: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=onedrive` : '',
-  onedriveDirect: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=onedrive-direct` : '',
+  onedrive: !skipOpenListApkUpload && websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=onedrive` : '',
+  onedriveDirect: !skipOpenListApkUpload && websiteBaseUrl ? `${websiteBaseUrl}/api/apk/latest.apk?provider=onedrive-direct` : '',
   github: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/version/${encodeURIComponent(currentVersionedFileName)}?provider=github` : '',
   githubDirect: `https://github.com/ypq123456789/MoRanJiangHu/releases/download/v${currentVersionName}/${currentVersionedFileName}`,
   githubRaw: websiteBaseUrl ? `${websiteBaseUrl}/api/apk/version/${encodeURIComponent(currentVersionedFileName)}?provider=github-raw` : '',
