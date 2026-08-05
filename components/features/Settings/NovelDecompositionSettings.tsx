@@ -62,7 +62,7 @@ import {
     type 小说分解创意工坊条目
 } from '../../../services/workshopNovelDecomposition';
 import { 发布创意工坊模块, 导入本地创意工坊模块 } from '../../../services/creativeWorkshop';
-import { 构建小说拆分模式包创意工坊模块, AI补全小说模式包配置, 解析小说模式包题材 } from '../../../services/novelDecompositionWorkshopBridge';
+import { 构建小说拆分模式包创意工坊模块, 解析小说模式包题材 } from '../../../services/novelDecompositionWorkshopBridge';
 import { 题材模式顺序 } from '../../../utils/topicModeProfiles';
 import { generateNovelSegmentFieldCompletion } from '../../../services/ai/storyTasks';
 import {
@@ -71,6 +71,7 @@ import {
 } from '../../../services/novelSegmentFieldCompletionContext';
 import type { 分段字段AI补全结果 } from '../../../prompts/runtime/novelSegmentFieldCompletion';
 import { 读取云端游玩会话 } from '../../../services/cloudPlayService';
+import { useNovelModePackCompletion } from '../../../hooks/useNovelModePackCompletion';
 
 interface Props {
     settings: 接口设置结构;
@@ -549,10 +550,8 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
     const [workshopBusyId, setWorkshopBusyId] = useState('');
     const [workshopPublishing, setWorkshopPublishing] = useState(false);
     const [modePackagePublishing, setModePackagePublishing] = useState(false);
-    const [aiCompletionRunning, setAiCompletionRunning] = useState(false);
     const [aiCompletionDraft, setAiCompletionDraft] = useState<Partial<import('../../../models/system').ModeRuntimeProfile> | null>(null);
     const [modePackageTopic, setModePackageTopic] = useState<题材模式类型>('武侠');
-    const [aiCompletionLog, setAiCompletionLog] = useState('');
     const [aiCompletionExpanded, setAiCompletionExpanded] = useState<Record<string, boolean>>({});
     const [workshopAnonymous, setWorkshopAnonymous] = useState(false);
     const [workshopUsername, setWorkshopUsername] = useState('');
@@ -795,19 +794,34 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
     const runningTaskCount = tasks.filter((item) => item.状态 === 'running').length;
     const resumableTaskCount = 筛选可后台续跑任务(tasks).length;
     const selectedDataset = datasetList.find((item) => item.id === selectedDatasetId) || datasetList[0] || null;
+    const aggregatedModePackageDataset = useMemo(
+        () => selectedDataset ? 聚合小说拆分数据集(selectedDataset) : null,
+        [selectedDataset]
+    );
+    const modePackCompletion = useNovelModePackCompletion({
+        dataset: aggregatedModePackageDataset,
+        baseMode: modePackageTopic,
+        apiConfig: 获取小说拆分接口配置(form),
+        onNotify
+    });
+    const aiCompletionRunning = modePackCompletion.running;
+    const aiCompletionLog = modePackCompletion.log;
+
     useEffect(() => {
         if (selectedDataset) {
             setModePackageTopic(解析小说模式包题材(聚合小说拆分数据集(selectedDataset)));
         }
         setAiCompletionDraft(null);
-        setAiCompletionLog('');
         setAiCompletionExpanded({});
     }, [selectedDataset?.id]);
+
+    useEffect(() => {
+        setAiCompletionDraft(modePackCompletion.draft);
+    }, [modePackCompletion.draft]);
 
     const handleModePackageTopicChange = (value: 题材模式类型) => {
         setModePackageTopic(value);
         setAiCompletionDraft(null);
-        setAiCompletionLog('');
         setAiCompletionExpanded({});
     };
     const selectedSnapshots = snapshots.filter((item) => item.数据集ID === (selectedDataset?.id || ''));
@@ -1949,44 +1963,41 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
         }
     };
 
-    const handleAiCompletionForModePackage = async () => {
-        if (!selectedDataset) {
-            推送错误提示('请先选择一个数据集。');
-            return;
-        }
-        const apiConfig = 获取小说拆分接口配置(form);
-        if (!apiConfig?.apiKey) {
-            推送错误提示('请先在接口设置中配置小说分解 API，AI 补全需要可用接口。');
-            return;
-        }
-
-        setAiCompletionRunning(true);
-        setAiCompletionLog('AI 补全中...\n');
+    const handleModePackCompletionPrimaryAction = async () => {
         try {
-            const result = await AI补全小说模式包配置({
-                dataset: 聚合小说拆分数据集(selectedDataset),
-                apiConfig,
-                baseMode: modePackageTopic,
-                onDelta: (delta, accumulated) => {
-                    setAiCompletionLog(accumulated);
-                }
-            });
-            setAiCompletionDraft(result.completion as any);
-            const fieldNames = Object.keys(result.completion);
-            setAiCompletionLog(fieldNames.length > 0
-                ? `AI 补全完成。\n已覆盖分区：${fieldNames.map((key) => 模式包分区名称[key] || key).join('、')}`
-                : 'AI 补全完成，但未发现可合并到当前题材的配置字段。'
-            );
-            设置状态消息(`AI 补全完成，已覆盖 ${fieldNames.length} 个配置字段（${fieldNames.join('、')}）。下次生成或贡献模式包时会自动携带。`);
-            onNotify?.({
-                title: 'AI 补全完成',
-                message: `已生成 ${fieldNames.length} 个小说专属配置字段，生成模式包时将自动合并。`,
-                tone: 'success'
-            });
+            if (modePackCompletion.uiState.primaryAction === 'cancel') {
+                modePackCompletion.cancel();
+                return;
+            }
+            if (modePackCompletion.uiState.primaryAction === 'resume') {
+                await modePackCompletion.resume();
+                return;
+            }
+            if (modePackCompletion.uiState.primaryAction === 'retry') {
+                modePackCompletion.retryLoad();
+                return;
+            }
+            await modePackCompletion.start();
         } catch (error: any) {
-            推送错误提示(`AI 补全失败：${error?.message || '未知错误'}`);
-        } finally {
-            setAiCompletionRunning(false);
+            推送错误提示(error?.message || '模式包逐分段完善启动失败。');
+        }
+    };
+
+    const handleRestartModePackCompletion = async () => {
+        const ok = requestConfirm
+            ? await requestConfirm({
+                title: '从头重建模式包完善任务',
+                message: '将清除当前模式包完善草稿和分段进度，不影响小说分解数据集。是否继续？',
+                confirmText: '从头重建',
+                cancelText: '取消',
+                danger: true
+            })
+            : window.confirm('将清除当前模式包完善草稿和分段进度，不影响小说分解数据集。是否继续？');
+        if (!ok) return;
+        try {
+            await modePackCompletion.restart();
+        } catch (error: any) {
+            推送错误提示(error?.message || '从头重建模式包完善任务失败。');
         }
     };
 
@@ -2007,33 +2018,30 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
 
     /** 模式包补全：更新 draft 中某分区的某个字段路径 */
     const 更新模式包补全字段 = (section: string, path: string[], value: any) => {
-        setAiCompletionDraft((prev) => {
-            if (!prev) return prev;
-            const next = { ...prev };
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let obj: any = next[section];
-            if (!obj || typeof obj !== 'object') return prev;
-            // 对 section 做浅拷贝避免引用共享
-            obj = Array.isArray(obj) ? [...obj] : { ...obj };
-            (next as any)[section] = obj;
-            for (let i = 0; i < path.length - 1; i++) {
-                const key = path[i];
-                if (!obj[key] || typeof obj[key] !== 'object') obj[key] = {};
-                obj[key] = Array.isArray(obj[key]) ? [...obj[key]] : { ...obj[key] };
-                obj = obj[key];
-            }
-            obj[path[path.length - 1]] = value;
-            return next;
+        if (!aiCompletionDraft || aiCompletionRunning) return;
+        const next = structuredClone(aiCompletionDraft);
+        let obj: any = (next as any)[section];
+        if (!obj || typeof obj !== 'object') return;
+        for (let i = 0; i < path.length - 1; i++) {
+            const key = path[i];
+            if (!obj[key] || typeof obj[key] !== 'object') obj[key] = {};
+            obj = obj[key];
+        }
+        obj[path[path.length - 1]] = value;
+        setAiCompletionDraft(next);
+        void modePackCompletion.updateDraft(next, [[section, ...path].join('.')]).catch((error: any) => {
+            推送错误提示(error?.message || '保存人工确认字段失败。');
         });
     };
 
     /** 模式包补全：删除 draft 中某分区 */
     const 删除模式包补全分区 = (section: string) => {
-        setAiCompletionDraft((prev) => {
-            if (!prev) return prev;
-            const next = { ...prev };
-            delete (next as any)[section];
-            return Object.keys(next).length > 0 ? next : null;
+        if (!aiCompletionDraft || aiCompletionRunning) return;
+        const next = { ...aiCompletionDraft };
+        delete (next as any)[section];
+        setAiCompletionDraft(next);
+        void modePackCompletion.updateDraft(next, [section]).catch((error: any) => {
+            推送错误提示(error?.message || '保存人工确认字段失败。');
         });
     };
 
@@ -2055,6 +2063,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                         {value.length > 60 ? (
                             <textarea
                                 value={value}
+                                disabled={aiCompletionRunning}
                                 onChange={(e) => 更新模式包补全字段(pathPrefix[0], fullPath.slice(1), e.target.value)}
                                 rows={3}
                                 className="w-full border border-white/10 bg-black/40 px-3 py-1.5 text-cyan-100 rounded text-[11px] outline-none focus:border-cyan-500/40 transition-colors resize-y font-mono"
@@ -2063,6 +2072,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             <input
                                 type="text"
                                 value={value}
+                                disabled={aiCompletionRunning}
                                 onChange={(e) => 更新模式包补全字段(pathPrefix[0], fullPath.slice(1), e.target.value)}
                                 className="w-full border border-white/10 bg-black/40 px-3 py-1.5 text-cyan-100 rounded text-[11px] outline-none focus:border-cyan-500/40 transition-colors font-mono"
                             />
@@ -2076,6 +2086,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                         <input
                             type="number"
                             value={value}
+                            disabled={aiCompletionRunning}
                             onChange={(e) => 更新模式包补全字段(pathPrefix[0], fullPath.slice(1), Number(e.target.value))}
                             className="w-32 border border-white/10 bg-black/40 px-3 py-1.5 text-cyan-100 rounded text-[11px] outline-none focus:border-cyan-500/40 transition-colors font-mono"
                         />
@@ -2087,6 +2098,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                         <input
                             type="checkbox"
                             checked={value}
+                            disabled={aiCompletionRunning}
                             onChange={(e) => 更新模式包补全字段(pathPrefix[0], fullPath.slice(1), e.target.checked)}
                             className="h-3.5 w-3.5 accent-cyan-500"
                         />
@@ -2101,6 +2113,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             <label className="text-[10px] text-gray-400 font-mono">{fieldLabel} ({value.length} 项)</label>
                             <textarea
                                 value={value.join('\n')}
+                                disabled={aiCompletionRunning}
                                 onChange={(e) => 更新模式包补全字段(pathPrefix[0], fullPath.slice(1), e.target.value.split('\n'))}
                                 rows={Math.min(value.length + 1, 8)}
                                 className="w-full border border-white/10 bg-black/40 px-3 py-1.5 text-cyan-100 rounded text-[11px] outline-none focus:border-cyan-500/40 transition-colors resize-y font-mono leading-relaxed"
@@ -2115,6 +2128,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             <label className="text-[10px] text-gray-400 font-mono">{fieldLabel} ({value.length} 项)</label>
                             <textarea
                                 value={JSON.stringify(value, null, 2)}
+                                disabled={aiCompletionRunning}
                                 onChange={(e) => {
                                     try {
                                         const parsed = JSON.parse(e.target.value);
@@ -2241,6 +2255,10 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
             setMessage('请先选择一个数据集。');
             return;
         }
+        if (!modePackCompletion.uiState.canUseDraft) {
+            推送错误提示('模式包仍有分段未参与完善，请先继续完成全部分段和最终整理。');
+            return;
+        }
         try {
             const module = 构建小说拆分模式包创意工坊模块({
                 dataset: 聚合小说拆分数据集(selectedDataset),
@@ -2263,6 +2281,10 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
     const handlePublishModePackageFromSelectedDataset = async () => {
         if (!selectedDataset) {
             setMessage('请先选择一个数据集。');
+            return;
+        }
+        if (!modePackCompletion.uiState.canUseDraft) {
+            推送错误提示('模式包仍有分段未参与完善，请先继续完成全部分段和最终整理。');
             return;
         }
         if (!workshopUsername) {
@@ -2879,22 +2901,40 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                     {workshopPublishing ? '发布中...' : '发布为小说分解模块'}
                                 </button>
                                 <button
-                                    onClick={() => void handleAiCompletionForModePackage()}
-                                    disabled={aiCompletionRunning || !selectedDataset}
-                                    title="用 AI 根据小说内容补全模式包的货币、能力体系、开局背景等运行时配置"
+                                    onClick={() => void handleModePackCompletionPrimaryAction()}
+                                    disabled={!selectedDataset || modePackCompletion.uiState.primaryAction === 'none'}
+                                    title="按小说分段顺序逐步完善模式包"
                                     className="px-5 py-2.5 rounded-lg text-xs font-medium border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                    {aiCompletionRunning ? 'AI 补全中...' : aiCompletionDraft ? '重新 AI 补全' : 'AI 补全模式包'}
+                                    {modePackCompletion.uiState.primaryAction === 'cancel'
+                                        ? '取消'
+                                        : modePackCompletion.uiState.primaryAction === 'retry'
+                                            ? '重试加载进度'
+                                        : modePackCompletion.uiState.primaryAction === 'resume'
+                                            ? '继续完善'
+                                            : modePackCompletion.uiState.primaryAction === 'none'
+                                                ? '模式包完善已完成'
+                                                : '开始逐分段完善'}
                                 </button>
+                                {modePackCompletion.uiState.showRestart && (
+                                    <button
+                                        onClick={() => void handleRestartModePackCompletion()}
+                                        disabled={aiCompletionRunning}
+                                        className="px-5 py-2.5 rounded-lg text-xs font-medium border border-orange-500/30 bg-orange-500/10 text-orange-200 hover:bg-orange-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        从头重建
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => void handleGenerateModePackageFromSelectedDataset()}
-                                    className="px-5 py-2.5 rounded-lg text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 transition-all"
+                                    disabled={!modePackCompletion.uiState.canUseDraft}
+                                    className="px-5 py-2.5 rounded-lg text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     生成本地模式包
                                 </button>
                                 <button
                                     onClick={() => void handlePublishModePackageFromSelectedDataset()}
-                                    disabled={modePackagePublishing || !workshopUsername}
+                                    disabled={modePackagePublishing || !workshopUsername || !modePackCompletion.uiState.canUseDraft}
                                     title={workshopUsername ? '贡献为标准创意工坊模式包' : '请先登录联机账号'}
                                     className="px-5 py-2.5 rounded-lg text-xs font-medium border border-purple-500/30 bg-purple-500/10 text-purple-200 hover:bg-purple-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-50"
                                 >
@@ -2913,18 +2953,32 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                     删除数据集
                                 </button>
                             </div>
+                            {modePackCompletion.record && (
+                                <div className="novel-mode-completion-status rounded-lg border border-cyan-500/20 bg-cyan-950/10 px-4 py-3 text-xs text-cyan-100/80 space-y-2">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span>{modePackCompletion.uiState.statusText}</span>
+                                        <span>{modePackCompletion.uiState.progressPercent}%</span>
+                                    </div>
+                                    <div className="h-1.5 overflow-hidden rounded-full bg-black/40">
+                                        <div className="h-full bg-cyan-400 transition-all" style={{ width: `${modePackCompletion.uiState.progressPercent}%` }} />
+                                    </div>
+                                    {modePackCompletion.uiState.truncationText && <div className="text-amber-300">{modePackCompletion.uiState.truncationText}</div>}
+                                    {!modePackCompletion.uiState.canUseDraft && <div className="text-amber-200">仍有分段未参与完善，暂不能生成或贡献模式包。</div>}
+                                    {!modePackCompletion.fingerprintMatches && <div className="text-red-300">小说分段内容或顺序已变化，请从头重建。</div>}
+                                </div>
+                            )}
                             {(aiCompletionDraft || aiCompletionLog) && (
-                                <div className="rounded-lg border border-cyan-500/15 bg-cyan-950/10 px-4 py-3 text-xs space-y-2">
+                                <div className="novel-mode-completion-draft rounded-lg border border-cyan-500/15 bg-cyan-950/10 px-4 py-3 text-xs space-y-2">
                                     <div className="flex items-center justify-between">
                                         <span className="font-medium text-cyan-200">
                                             {aiCompletionDraft ? `AI 补全已就绪（${Object.keys(aiCompletionDraft).length} 个字段）` : 'AI 补全输出'}
                                         </span>
                                         {aiCompletionDraft && (
                                             <button
-                                                onClick={() => { setAiCompletionDraft(null); setAiCompletionLog(''); setAiCompletionExpanded({}); }}
+                                                onClick={() => void handleRestartModePackCompletion()}
                                                 className="text-[10px] text-cyan-400/60 hover:text-cyan-300 transition-colors"
                                             >
-                                                清除补全
+                                                从头重建
                                             </button>
                                         )}
                                     </div>
@@ -2968,10 +3022,10 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                             })}
                                             <div className="flex justify-end pt-1">
                                                 <button
-                                                    onClick={() => { setAiCompletionDraft(null); setAiCompletionLog(''); setAiCompletionExpanded({}); }}
+                                                    onClick={() => void handleRestartModePackCompletion()}
                                                     className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors"
                                                 >
-                                                    清除全部补全
+                                                    从头重建
                                                 </button>
                                             </div>
                                         </div>
@@ -3015,17 +3069,35 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             </button>
                             <button
                                 type="button"
-                                onClick={() => void handleAiCompletionForModePackage()}
-                                disabled={aiCompletionRunning || !selectedDataset}
-                                title="用 AI 根据小说内容补全模式包运行时配置"
+                                onClick={() => void handleModePackCompletionPrimaryAction()}
+                                disabled={!selectedDataset || modePackCompletion.uiState.primaryAction === 'none'}
+                                title="按小说分段顺序逐步完善模式包"
                                 className="px-4 py-2 rounded-lg text-xs font-medium border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition-all disabled:opacity-50"
                             >
-                                {aiCompletionRunning ? 'AI 补全中...' : aiCompletionDraft ? '重新 AI 补全' : 'AI 补全模式包'}
+                                {modePackCompletion.uiState.primaryAction === 'cancel'
+                                    ? '取消'
+                                    : modePackCompletion.uiState.primaryAction === 'retry'
+                                        ? '重试加载进度'
+                                    : modePackCompletion.uiState.primaryAction === 'resume'
+                                        ? '继续完善'
+                                        : modePackCompletion.uiState.primaryAction === 'none'
+                                            ? '模式包完善已完成'
+                                            : '开始逐分段完善'}
                             </button>
+                            {modePackCompletion.uiState.showRestart && (
+                                <button
+                                    type="button"
+                                    onClick={() => void handleRestartModePackCompletion()}
+                                    disabled={aiCompletionRunning}
+                                    className="px-4 py-2 rounded-lg text-xs font-medium border border-orange-500/30 bg-orange-500/10 text-orange-200 hover:bg-orange-500/20 transition-all disabled:opacity-50"
+                                >
+                                    从头重建
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => void handleGenerateModePackageFromSelectedDataset()}
-                                disabled={!selectedDataset}
+                                disabled={!selectedDataset || !modePackCompletion.uiState.canUseDraft}
                                 className="px-4 py-2 rounded-lg text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 transition-all disabled:opacity-50"
                             >
                                 生成本地模式包
@@ -3033,7 +3105,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                             <button
                                 type="button"
                                 onClick={() => void handlePublishModePackageFromSelectedDataset()}
-                                disabled={!selectedDataset || modePackagePublishing || !workshopUsername}
+                                disabled={!selectedDataset || modePackagePublishing || !workshopUsername || !modePackCompletion.uiState.canUseDraft}
                                 title={workshopUsername ? '贡献当前数据集生成的标准模式包' : '请先登录联机账号'}
                                 className="px-4 py-2 rounded-lg text-xs font-medium border border-purple-500/30 bg-purple-500/10 text-purple-200 hover:bg-purple-500/20 transition-all disabled:opacity-50"
                             >
@@ -3047,18 +3119,33 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                     </div>
                     <div className="text-[11px] text-gray-500">{workshopUsername ? `联机账号：${workshopUsername}` : '发布社区投稿需要先登录联机账号'}</div>
 
+                    {modePackCompletion.record && (
+                        <div className="novel-mode-completion-status rounded-lg border border-cyan-500/20 bg-cyan-950/10 px-4 py-3 text-xs text-cyan-100/80 space-y-2">
+                            <div className="flex items-center justify-between gap-3">
+                                <span>{modePackCompletion.uiState.statusText}</span>
+                                <span>{modePackCompletion.uiState.progressPercent}%</span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-black/40">
+                                <div className="h-full bg-cyan-400 transition-all" style={{ width: `${modePackCompletion.uiState.progressPercent}%` }} />
+                            </div>
+                            {modePackCompletion.uiState.truncationText && <div className="text-amber-300">{modePackCompletion.uiState.truncationText}</div>}
+                            {!modePackCompletion.uiState.canUseDraft && <div className="text-amber-200">仍有分段未参与完善，暂不能生成或贡献模式包。</div>}
+                            {!modePackCompletion.fingerprintMatches && <div className="text-red-300">小说分段内容或顺序已变化，请从头重建。</div>}
+                        </div>
+                    )}
+
                     {(aiCompletionDraft || aiCompletionLog) && (
-                        <div className="rounded-lg border border-cyan-500/15 bg-cyan-950/10 px-4 py-3 text-xs space-y-2">
+                        <div className="novel-mode-completion-draft rounded-lg border border-cyan-500/15 bg-cyan-950/10 px-4 py-3 text-xs space-y-2">
                             <div className="flex items-center justify-between">
                                 <span className="font-medium text-cyan-200">
                                     {aiCompletionDraft ? `AI 补全已就绪（${Object.keys(aiCompletionDraft).length} 个字段）` : 'AI 补全输出'}
                                 </span>
                                 {aiCompletionDraft && (
                                     <button
-                                        onClick={() => { setAiCompletionDraft(null); setAiCompletionLog(''); }}
+                                        onClick={() => void handleRestartModePackCompletion()}
                                         className="text-[10px] text-cyan-400/60 hover:text-cyan-300 transition-colors"
                                     >
-                                        清除补全
+                                        从头重建
                                     </button>
                                 )}
                             </div>
@@ -3102,10 +3189,10 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                     })}
                                     <div className="flex justify-end pt-1">
                                         <button
-                                            onClick={() => { setAiCompletionDraft(null); setAiCompletionLog(''); setAiCompletionExpanded({}); }}
+                                            onClick={() => void handleRestartModePackCompletion()}
                                             className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors"
                                         >
-                                            清除全部补全
+                                            从头重建
                                         </button>
                                     </div>
                                 </div>

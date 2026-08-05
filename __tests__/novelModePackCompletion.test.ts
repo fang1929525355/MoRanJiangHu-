@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { 创建空小说拆分数据集 } from '../services/novelDecompositionStore';
-import { generateNovelModePackCompletion, generateNovelSegmentFieldCompletion } from '../services/ai/storyTasks';
+import {
+    generateNovelModePackCompletion,
+    generateNovelModePackFinalization,
+    generateNovelModePackSegmentCompletion,
+    generateNovelSegmentFieldCompletion
+} from '../services/ai/storyTasks';
 import type { 当前可用接口结构 } from '../utils/apiConfig';
 import { AI补全小说模式包配置 } from '../services/novelDecompositionWorkshopBridge';
 
@@ -146,5 +151,85 @@ describe('novel mode pack completion', () => {
             narrativeStyle: '以甲子为度，岁月流转中蕴含因果'
         });
         expect(draftText).not.toMatch(/apocalypse|感染区|避难所|幸存者|丧尸|末日物资券|瓶盖|封锁线|防护服|写实末日风/iu);
+    });
+
+    it('passes the previous full draft into the next segment request', async () => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                choices: [{ message: { content: JSON.stringify({
+                    completion: { economy: { primaryCurrency: '铜钱' } },
+                    conflictHints: []
+                }) } }]
+            }), { status: 200, headers: { 'content-type': 'application/json' } }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                choices: [{ message: { content: JSON.stringify({
+                    completion: { economy: { primaryCurrency: '银票' } },
+                    conflictHints: ['后文明确使用银票']
+                }) } }]
+            }), { status: 200, headers: { 'content-type': 'application/json' } }));
+        const dataset = 创建空小说拆分数据集({ 标题: '测试小说', 作品名: '测试小说' });
+        dataset.分段列表 = [
+            { id: 'seg-1', 标题: '第一段', 原文内容: '市面使用铜钱。' } as any,
+            { id: 'seg-2', 标题: '第二段', 原文内容: '后文改用银票。' } as any
+        ];
+
+        const first = await generateNovelModePackSegmentCompletion({
+            dataset,
+            segmentIndex: 0,
+            baseMode: '武侠',
+            currentDraft: {},
+            confirmedFieldPaths: []
+        }, apiConfig, { stream: false });
+        const second = await generateNovelModePackSegmentCompletion({
+            dataset,
+            segmentIndex: 1,
+            baseMode: '武侠',
+            currentDraft: first.completion,
+            confirmedFieldPaths: []
+        }, apiConfig, { stream: false });
+
+        const secondRequest = JSON.parse(String(fetchSpy.mock.calls[1][1]?.body));
+        expect(JSON.stringify(secondRequest.messages)).toContain('primaryCurrency');
+        expect(JSON.stringify(secondRequest.messages)).toContain('铜钱');
+        expect(second.completion.economy?.primaryCurrency).toBe('银票');
+        expect(second.conflictHints).toEqual(['后文明确使用银票']);
+    });
+
+    it('parses finalization output as a complete draft', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({
+                completion: { economy: { primaryCurrency: '银票' } },
+                conflictHints: []
+            }) } }]
+        }), { status: 200, headers: { 'content-type': 'application/json' } }));
+        const dataset = 创建空小说拆分数据集({ 标题: '测试小说' });
+        const result = await generateNovelModePackFinalization({
+            dataset,
+            baseMode: '武侠',
+            currentDraft: { economy: { primaryCurrency: '银票' } },
+            conflictHints: ['使用后文货币名'],
+            confirmedFieldPaths: []
+        }, apiConfig, { stream: false });
+        expect(result.completion.economy?.primaryCurrency).toBe('银票');
+    });
+
+    it('accepts a direct full draft when the model follows the legacy system-level JSON shape', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({
+                economy: { primaryCurrency: '银票' },
+                ability: { primaryAxis: '武学境界' }
+            }) } }]
+        }), { status: 200, headers: { 'content-type': 'application/json' } }));
+        const dataset = 创建空小说拆分数据集({ 标题: '测试小说' });
+        dataset.分段列表 = [{ id: 'seg-1', 标题: '第一段', 原文内容: '银票通行。' } as any];
+        const result = await generateNovelModePackSegmentCompletion({
+            dataset,
+            segmentIndex: 0,
+            baseMode: '武侠',
+            currentDraft: {},
+            confirmedFieldPaths: []
+        }, apiConfig, { stream: false });
+        expect(result.completion.economy?.primaryCurrency).toBe('银票');
+        expect(result.conflictHints).toEqual([]);
     });
 });

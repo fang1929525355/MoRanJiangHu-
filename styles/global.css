@@ -144,6 +144,25 @@ html[data-theme="day"] .novel-mode-topic-select {
   color: #451a03 !important;
 }
 
+html[data-theme="day"] .novel-mode-completion-status,
+html[data-theme="day"] .novel-mode-completion-draft {
+  border-color: rgba(8, 145, 178, 0.28) !important;
+  background: rgba(236, 254, 255, 0.92) !important;
+  color: #164e63 !important;
+}
+
+html[data-theme="day"] .novel-mode-completion-status [class*="text-cyan"],
+html[data-theme="day"] .novel-mode-completion-draft [class*="text-cyan"] {
+  color: #155e75 !important;
+}
+
+html[data-theme="day"] .novel-mode-completion-draft input,
+html[data-theme="day"] .novel-mode-completion-draft textarea {
+  border-color: rgba(8, 145, 178, 0.24) !important;
+  background: #ffffff !important;
+  color: #164e63 !important;
+}
+
 .novel-archive-fields {
   display: flex;
   flex-direction: column;

@@ -14,6 +14,7 @@ export const 设置键 = {
     小说分解数据集: 'novel_decomposition_datasets',
     小说分解任务: 'novel_decomposition_tasks',
     小说分解注入快照: 'novel_decomposition_snapshots',
+    小说模式包完善进度: 'novel_mode_pack_completion_progress',
     场景图片档案: 'scene_image_archive',
     内置提示词: 内置提示词存储键,
     世界书列表: 世界书存储键,
