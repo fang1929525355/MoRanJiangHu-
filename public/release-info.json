@@ -1,10 +1,10 @@
 {
-  "versionCode": 643,
-  "versionName": "1.0.643",
+  "versionCode": 644,
+  "versionName": "1.0.644",
   "releaseChannel": "stable",
   "releaseNotes": [
-    "修复从创意工坊进入「小说分解工作台」时可能直接报错、界面打不开的问题（提示 Cannot read properties of null）；现在未选中任何小说也能正常进入工作台。",
-    "加强小说分解工作台的空状态处理：没有导入小说、或清空已选小说时不会再让页面崩溃，可以直接继续导入和拆章。",
+    "减小安装包体积：精简内置资源，APK 体积减少约 40MB，下载与安装更快。",
+    "拍卖行固定拍品图标改为在线加载，弱网或重装后也能稳定显示，不再依赖安装包内图片。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
@@ -682,11 +682,11 @@
   "multiDeviceSyncGuideUrl": "https://msjh.bacon159.pp.ua/tutorials.html#sync",
   "tutorialsUrl": "https://msjh.bacon159.pp.ua/tutorials.html",
   "changes": [
-    "修复从创意工坊进入「小说分解工作台」时可能直接报错、界面打不开的问题（提示 Cannot read properties of null）；现在未选中任何小说也能正常进入工作台。",
-    "加强小说分解工作台的空状态处理：没有导入小说、或清空已选小说时不会再让页面崩溃，可以直接继续导入和拆章。",
+    "减小安装包体积：精简内置资源，APK 体积减少约 40MB，下载与安装更快。",
+    "拍卖行固定拍品图标改为在线加载，弱网或重装后也能稳定显示，不再依赖安装包内图片。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
-  "notes": "修复从创意工坊进入「小说分解工作台」时可能直接报错、界面打不开的问题（提示 Cannot read properties of null）；现在未选中任何小说也能正常进入工作台。\n加强小说分解工作台的空状态处理：没有导入小说、或清空已选小说时不会再让页面崩溃，可以直接继续导入和拆章。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-08-06T20:13:53+08:00"
+  "notes": "减小安装包体积：精简内置资源，APK 体积减少约 40MB，下载与安装更快。\n拍卖行固定拍品图标改为在线加载，弱网或重装后也能稳定显示，不再依赖安装包内图片。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
+  "releasePublishedAt": "2026-08-06T23:21:44.703+08:00"
 }

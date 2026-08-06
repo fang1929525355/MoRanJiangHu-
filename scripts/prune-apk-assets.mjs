@@ -11,7 +11,9 @@ const apkPublicAssetsDir = path.join(rootDir, 'android', 'app', 'src', 'main', '
 const removableDirs = [
   // These generated preset item images are mirrored from hosted image URLs used
   // by the app, and are too large to bundle into every APK release.
-  'item-presets'
+  'item-presets',
+  // 拍卖行固定拍品图标（约 42MB）由站点自身以远程 URL 提供，APK 不再打包，避免体积膨胀。
+  'auction-items'
 ];
 
 let removedBytes = 0;

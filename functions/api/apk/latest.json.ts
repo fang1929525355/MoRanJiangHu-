@@ -64,7 +64,8 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
         const stableManifestUrl = `${baseUrl}/api/apk/latest.json`;
         const latestApkUrl = `${baseUrl}/api/apk/latest.apk`;
         const fullstackApkUrl = '';
-        const vpsApkUrl = 'https://moranjianghu.bacon159.pp.ua/latest.apk';
+        // VPS 通道（moranjianghu.bacon159.pp.ua/latest.apk）已长期未同步、无可用部署通道，
+        // 不再对外暴露 stale 死链；需要时由发布流程重新写入有效地址。
         const quarkTvApkUrl = `${baseUrl}/api/apk/latest.apk?provider=quark-tv`;
         const oneDriveApkUrl = `${baseUrl}/api/apk/latest.apk?provider=onedrive`;
         const oneDriveDirectApkUrl = `${baseUrl}/api/apk/latest.apk?provider=onedrive-direct`;
@@ -86,7 +87,7 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
             ? manifestPreferredApkProvider
             : 'onedrive';
         // 按 preferredApkProvider 排序候选源；B2 渠道已废弃。
-        const vpsGroup = [vpsApkUrl];
+        const vpsGroup: string[] = [];
         const quarkGroup = [quarkTvApkUrl];
         const githubGroup = [...githubAcceleratedApkUrls, githubApkUrl, githubDirectApkUrl];
         const githubRawGroup = [githubRawAcceleratedApkUrl, githubRawApkUrl, githubRawDirectApkUrl];
@@ -121,7 +122,6 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
                 hi168ApkUrl: '',
                 b2ApkUrl: '',
                 fullstackApkUrl,
-                vpsApkUrl,
                 quarkTvApkUrl,
                 githubApkUrl,
                 githubDirectApkUrl,
