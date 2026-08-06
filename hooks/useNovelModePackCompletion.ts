@@ -32,6 +32,29 @@ export const 是否允许模式包完善运行回写 = (
     runToken: number
 ): boolean => activeTargetKey === runTargetKey && activeToken === runToken;
 
+/**
+ * 解析当前生效的模式包完善记录。
+ * [修复] 历史写法为 `record?.数据集ID === dataset?.id && record.题材 === baseMode`：
+ * 当工作台刚打开、尚未选中小说时 record 与 dataset 同时为 null，
+ * 前半段会退化成 `undefined === undefined` 判定为真，继续读取 `record.题材`
+ * 抛出 "Cannot read properties of null (reading '题材')" 导致工作台白屏。
+ * 这里显式要求 record 与 dataset 均非空后再比对，杜绝空值穿透。
+ */
+export const 解析当前小说模式包激活记录 = (
+    targetReady: boolean,
+    record: 小说模式包完善记录 | null | undefined,
+    dataset: 小说拆分数据集结构 | null | undefined,
+    baseMode: 题材模式类型
+): 小说模式包完善记录 | null => (
+    targetReady
+        && record != null
+        && dataset != null
+        && record.数据集ID === dataset.id
+        && record.题材 === baseMode
+        ? record
+        : null
+);
+
 export const 计算小说模式包完善界面状态 = (
     record: 小说模式包完善记录 | null,
     running: boolean,
@@ -121,11 +144,7 @@ export const useNovelModePackCompletion = (params: {
     const currentTargetReady = targetReady
         && readyTargetKeyRef.current === targetKey
         && readyDatasetRef.current === dataset;
-    const activeRecord = currentTargetReady
-        && record?.数据集ID === dataset?.id
-        && record.题材 === baseMode
-        ? record
-        : null;
+    const activeRecord = 解析当前小说模式包激活记录(currentTargetReady, record, dataset, baseMode);
 
     useEffect(() => {
         let active = true;
