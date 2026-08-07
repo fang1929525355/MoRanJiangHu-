@@ -15,6 +15,7 @@ import {
 } from '../../prompts/core/cotHeroine';
 import { 写作_防止说话 } from '../../prompts/writing/noControl';
 import { 写作_冲突节奏 } from '../../prompts/writing/conflictPacing';
+import { 主剧情叙事总约束 } from '../../prompts/runtime/storyStyles';
 import { 获取酒馆预设顺序, 获取预设已分类正则脚本 } from '../../utils/tavernPreset';
 import { 对世界书执行酒馆正则, 对用户输入执行酒馆正则 } from '../../utils/tavernRegexEngine';
 import {
@@ -53,6 +54,7 @@ export type 酒馆消息 = {
 export type 酒馆上下文结构 = {
     shortMemoryContext: string;
     contextPieces: {
+        叙事约束提示词: string;
         worldPrompt: string;
         地图建筑状态: string;
         同人设定摘要: string;
@@ -296,6 +298,7 @@ const 构建酒馆世界书文本 = (
         ? options.剧情安排后附加文本.trim()
         : '';
     return [
+        主剧情叙事总约束,
         contextPieces.叙事约束提示词,
         contextPieces.worldPrompt,
         contextPieces.地图建筑状态,

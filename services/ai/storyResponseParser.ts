@@ -1129,9 +1129,25 @@ const 是否完整闭合的角色对白 = (value: string): boolean => {
     return closingIndex === source.length - 1;
 };
 
+const 预处理未换行标签正文 = (body: string): string => {
+    const normalized = body.replace(/\r\n/g, '\n');
+    const newlineCount = (normalized.match(/\n/g) || []).length;
+    const tagMatches = normalized.match(/【[^】]+】/g) || [];
+    // 当正文里标签不少但换行很少时，说明模型把多段标签内容挤成了一行。
+    // 在相邻标签之间插入换行，让下游按正常分行逻辑解析。
+    if (tagMatches.length >= 2 && newlineCount < tagMatches.length - 1) {
+        // 标签之间夹了正文内容且换行不足（模型把多段标签挤成一行）。
+        // 在每个「】…【」之间补一个换行，让每个「【标签】内容」各自成行；
+        // 换行插在下一个【之前（而非】之后），否则单独的【标签】会被下游当成空行丢弃，
+        // 而夹在正文里的【标签】又不会被识别为独立说话人。
+        return normalized.replace(/】([^\n【]*?)【/g, '】$1\n【');
+    }
+    return normalized;
+};
+
 const 解析正文日志 = (body: string, declaredNames?: Set<string>): Array<{ sender: string; text: string }> => {
     if (!body || !body.trim()) return [];
-    const lines = body.replace(/\r\n/g, '\n').split('\n');
+    const lines = 预处理未换行标签正文(body).split('\n');
     const logs: Array<{ sender: string; text: string }> = [];
     let current: { sender: string; text: string } | null = null;
     const 写入旁白行 = (value: string) => {

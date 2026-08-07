@@ -1037,4 +1037,19 @@ describe('storyResponseParser', () => {
         expect(parsed.declaredSpeakers).toEqual(['芙莉莲', '琪亚娜']);
         expect(parsed.logs[0].sender).toBe('芙莉莲');
     });
+
+    it('兜底拆分模型未换行的多标签正文', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【旁白】周围镇民哄笑。【卖豆腐的王大娘】“就是啊宋小子！”【旁白】高台上二当家没有生气。',
+            '</正文>',
+            '<短期记忆>test</短期记忆>'
+        ].join('\n'));
+
+        expect(parsed.logs).toEqual([
+            { sender: '旁白', text: '周围镇民哄笑。' },
+            { sender: '卖豆腐的王大娘', text: '就是啊宋小子！' },
+            { sender: '旁白', text: '高台上二当家没有生气。' }
+        ]);
+    });
 });

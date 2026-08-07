@@ -93,4 +93,9 @@ describe('酒馆预设接管原版叙事指令', () => {
     it('核心游戏规则（非文风部分）仍保留在世界书中', () => {
         expect(allText).toContain('遵守剧情法则');
     });
+
+    it('世界书注入主剧情叙事总约束（防止 NPC 无理由围绕主角）', () => {
+        expect(allText).toContain('叙事必须去魅主');
+        expect(allText).toContain('不要让 NPC 或群体无理由地围绕主角倾倒');
+    });
 });

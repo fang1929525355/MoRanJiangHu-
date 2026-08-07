@@ -9,10 +9,10 @@ import InlineSelect from '../../ui/InlineSelect';
 import * as textAIService from '../../../services/ai/text';
 import {
     创建接口配置模板,
-    构建OpenAI兼容模型列表候选地址,
     供应商标签,
     规范化接口设置
 } from '../../../utils/apiConfig';
+import { 获取OpenAI兼容模型列表 } from '../../../utils/openAIModelListFetcher';
 
 interface Props {
     settings: 接口设置结构;
@@ -270,31 +270,17 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
     };
 
     const fetchModelsFromCurrentConfig = async (): Promise<string[] | null> => {
-        const baseUrlForRequest = (activeConfig?.baseUrl || '').trim();
-        const apiKeyForRequest = (activeConfig?.apiKey || '').trim();
-        if (!apiKeyForRequest || !baseUrlForRequest) {
-            setMessage('请先填写当前配置的 API Key 和 Base URL');
+        if (!activeConfig) {
+            setMessage('请先创建并选择一个接口配置。');
             return null;
         }
         try {
-            const candidateUrls = 构建OpenAI兼容模型列表候选地址(baseUrlForRequest);
-            for (const url of candidateUrls) {
-                const isMimo = activeConfig?.供应商 === 'mimo_api'
-                    || activeConfig?.供应商 === 'mimo_token_plan'
-                    || baseUrlForRequest.toLowerCase().includes('xiaomimimo.com');
-                const res = await fetch(url, {
-                    headers: isMimo
-                        ? { 'api-key': apiKeyForRequest }
-                        : { Authorization: `Bearer ${apiKeyForRequest}` }
-                });
-                if (!res.ok) continue;
-                const data = await res.json();
-                if (data && Array.isArray(data.data)) {
-                    return data.data.map((m: any) => m?.id).filter(Boolean);
-                }
-            }
-            setMessage('获取失败：返回格式错误。');
-            return null;
+            const result = await 获取OpenAI兼容模型列表({
+                baseUrl: activeConfig.baseUrl,
+                apiKey: activeConfig.apiKey,
+                供应商: activeConfig.供应商
+            });
+            return result;
         } catch (e: any) {
             setMessage(`获取失败：${e.message}`);
             return null;

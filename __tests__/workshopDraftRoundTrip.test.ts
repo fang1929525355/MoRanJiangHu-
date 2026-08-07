@@ -421,6 +421,33 @@ describe('普通模块与仅 payload 模块反向', () => {
         expect(restored.tags).toContain('轶闻');
     });
 
+    it('单块 world_rules 模块编辑后不会累积成多段（复用原始块 id）', () => {
+        const source: 创意工坊模块条目 = {
+            id: 'community-trails-world-rules',
+            type: 'world_rules',
+            formatVersion: 2,
+            workshopKind: 'standard_module',
+            title: '轨迹世界规则',
+            subtitle: '',
+            description: '',
+            tags: ['武侠'],
+            payload: { schema: 'moranjianghu-creative-workshop-standard-module', version: 2, mode: '武侠', content: 'A 不属于 B' },
+            contentBlocks: [{ id: 'world-core', title: '世界核心', purpose: '规则', content: 'A 不属于 B', injectionTarget: 'manualWorldPrompt' }],
+            usagePrompt: '',
+            safetyNotes: [],
+            injectionPreview: ['A 不属于 B'],
+            source: 'local',
+            contributor: '测试'
+        };
+        const draft = 模块转贡献草稿(source)!;
+        draft.body = 'A 属于 B';
+        const rebuilt = 构建贡献模块(draft, '测试');
+        expect(rebuilt.contentBlocks).toHaveLength(1);
+        expect(rebuilt.contentBlocks?.[0].id).toBe('world-core');
+        expect(rebuilt.contentBlocks?.[0].content).toBe('A 属于 B');
+        expect((rebuilt.payload as any).content).toBe('A 属于 B');
+    });
+
     it('列表整合不把孤立普通 topic 伪装成完整模式包', () => {
         const ordinary: 创意工坊模块条目 = {
             id: 'ordinary-topic',

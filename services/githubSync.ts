@@ -20,6 +20,8 @@ const 图片资源存储名 = 'image_assets';
 const GITHUB_API_BASE = 'https://api.github.com';
 const RELEASE_UPLOAD_PROXY_PATH = '/api/github/release-upload';
 const RELEASE_DOWNLOAD_PROXY_PATH = '/api/github/release-download';
+const PRIMARY_SYNC_API_BASE = 'https://msjh.bacon159.pp.ua';
+const BACKUP_SYNC_API_BASE = 'https://msjh.bacon.de5.net';
 const DEVICE_LOCAL_SETTING_KEYS = new Set<string>(['visual_settings']);
 const 云同步分卷大小 = 8 * 1024 * 1024;
 const 单分卷上传超时毫秒 = 300000;
@@ -757,6 +759,21 @@ const 删除旧设置云同步附件 = async (token: string, config: RepoConfig,
     }
 };
 
+export const 构建GitHub代理地址 = (path: string): string => {
+    const configured = 构建同步API地址(path);
+    if (/^https?:\/\//i.test(configured)) return configured;
+    if (是否原生Capacitor环境()) {
+        return `${PRIMARY_SYNC_API_BASE}${path}`;
+    }
+    return configured;
+};
+
+export const 构建GitHub代理地址列表 = (path: string): string[] => {
+    const primary = 构建GitHub代理地址(path);
+    const candidates = [primary, `${PRIMARY_SYNC_API_BASE}${path}`, `${BACKUP_SYNC_API_BASE}${path}`];
+    return Array.from(new Set(candidates.filter(Boolean)));
+};
+
 const 使用XHR上传附件 = (
     token: string,
     uploadUrl: string,
@@ -765,7 +782,7 @@ const 使用XHR上传附件 = (
     onProgress?: 附件上传进度回调
 ): Promise<Response> => new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', 构建同步API地址(RELEASE_UPLOAD_PROXY_PATH));
+    xhr.open('POST', 构建GitHub代理地址(RELEASE_UPLOAD_PROXY_PATH));
     xhr.responseType = 'text';
     xhr.timeout = 单分卷上传超时毫秒;
     xhr.setRequestHeader('Content-Type', contentType);
@@ -797,7 +814,7 @@ const 执行Release附件上传 = async (
     if (是否原生Capacitor环境()) {
         onProgress?.(0, bytes.length);
         const response = await CapacitorHttp.request({
-            url: 构建同步API地址(RELEASE_UPLOAD_PROXY_PATH),
+            url: 构建GitHub代理地址(RELEASE_UPLOAD_PROXY_PATH),
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -824,7 +841,7 @@ const 执行Release附件上传 = async (
         return 使用XHR上传附件(token, uploadUrl, body, contentType, onProgress);
     }
 
-    return fetch(构建同步API地址(RELEASE_UPLOAD_PROXY_PATH), {
+    return fetch(构建GitHub代理地址(RELEASE_UPLOAD_PROXY_PATH), {
         method: 'POST',
         headers: {
             'Content-Type': contentType,
@@ -860,7 +877,7 @@ const 上传单个附件 = async (
 };
 
 const 下载Release附件二进制 = async (token: string, url: string): Promise<下载附件结果> => {
-    const requestUrl = 构建同步API地址(RELEASE_DOWNLOAD_PROXY_PATH);
+    const requestUrl = 构建GitHub代理地址(RELEASE_DOWNLOAD_PROXY_PATH);
     const requestHeaders = {
         'Content-Type': 'application/json',
         'X-GitHub-Token': token,

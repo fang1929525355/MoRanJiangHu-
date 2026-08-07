@@ -1261,16 +1261,20 @@ export const 构建贡献模块 = (draft: 贡献草稿, contributor: string, exi
     const style = draft.style.trim();
     const scopeLabel = draft.scope === 'nsfw' ? 'NSFW 生图' : draft.scope === 'scene' ? '场景生图' : draft.scope === 'all' ? '通用生图' : '普通生图';
     const injectionTarget = draft.type === 'ability' ? 'manualRealmPrompt' : draft.type === 'comfy_workflow' ? 'imageWorkflow' : draft.type === 'tavern_preset' ? 'referenceOnly' : 'manualWorldPrompt';
+    const originalContentBlocks = source && !sourceIsModePackage ? 提取模块内容块(source) : [];
+    // 单模块编辑时，若源模块只有一块内容，复用其 id，避免合并时因 id 不匹配导致旧块保留、新块追加的累积问题。
+    const generatedBlockId = originalContentBlocks.length === 1
+        ? originalContentBlocks[0].id
+        : `${draft.type}-main`;
     const generatedContentBlocks: NonNullable<创意工坊模块条目['contentBlocks']> = [
         {
-            id: `${draft.type}-main`,
+            id: generatedBlockId,
             title: draft.type === 'ability' ? '能力与境界规则' : draft.type === 'comfy_workflow' ? 'ComfyUI 工作流' : draft.type === 'tavern_preset' ? '酒馆预设 JSON' : '世界与题材规则',
             purpose: draft.type === 'comfy_workflow' ? '提供可导入的生图工作流或工作流说明。' : draft.type === 'tavern_preset' ? '提供可直接选择的 SillyTavern 酒馆预设。' : '作为模型注入的主要规则内容。',
             injectionTarget,
             content: draft.body.trim()
         }
     ];
-    const originalContentBlocks = source && !sourceIsModePackage ? 提取模块内容块(source) : [];
     const contentBlocks = 合并模式包内容块(originalContentBlocks, generatedContentBlocks);
     const safetyNotes = 分割文本行(draft.safetyNotes);
     const usagePrompt = draft.usagePrompt.trim() || (draft.type === 'comfy_workflow'
