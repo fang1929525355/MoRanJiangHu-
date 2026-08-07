@@ -876,8 +876,23 @@ const 上传单个附件 = async (
     }
 };
 
+// 下载是幂等读取，主代理不可用时可以安全地依次回退到备用代理。
+// 上传不做同样的故障切换：重试可能在代理已转发但响应丢失的情况下产生重复附件，
+// 与 上传单个附件 的大小校验冲突，因此上传始终只用 构建GitHub代理地址 的单一地址。
 const 下载Release附件二进制 = async (token: string, url: string): Promise<下载附件结果> => {
-    const requestUrl = 构建GitHub代理地址(RELEASE_DOWNLOAD_PROXY_PATH);
+    const candidates = 构建GitHub代理地址列表(RELEASE_DOWNLOAD_PROXY_PATH);
+    let lastError: unknown = null;
+    for (let index = 0; index < candidates.length; index += 1) {
+        try {
+            return await 通过代理下载Release附件(token, url, candidates[index]);
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError instanceof Error ? lastError : new Error('下载云存档附件失败：所有云同步代理均不可用');
+};
+
+const 通过代理下载Release附件 = async (token: string, url: string, requestUrl: string): Promise<下载附件结果> => {
     const requestHeaders = {
         'Content-Type': 'application/json',
         'X-GitHub-Token': token,

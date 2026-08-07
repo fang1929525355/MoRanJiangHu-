@@ -1129,20 +1129,22 @@ const 是否完整闭合的角色对白 = (value: string): boolean => {
     return closingIndex === source.length - 1;
 };
 
+// 说话人标签只会出现在句子边界之后。若「】」与下一个「【」之间的文本不是以句末标点收尾，
+// 说明后面那个「【…】」是正文内部的物品名或强调标记（例如「【角色】“查看【青霜剑】。”」），
+// 此时拆行会把同一句对白割裂，必须跳过。between 为空（两个标签紧挨）时视为可拆。
+const 标签前句末收尾正则 = /(?:^|[。！？!?…；;：:”’"'』」）)])$/;
+
 const 预处理未换行标签正文 = (body: string): string => {
     const normalized = body.replace(/\r\n/g, '\n');
-    const newlineCount = (normalized.match(/\n/g) || []).length;
-    const tagMatches = normalized.match(/【[^】]+】/g) || [];
-    // 当正文里标签不少但换行很少时，说明模型把多段标签内容挤成了一行。
-    // 在相邻标签之间插入换行，让下游按正常分行逻辑解析。
-    if (tagMatches.length >= 2 && newlineCount < tagMatches.length - 1) {
-        // 标签之间夹了正文内容且换行不足（模型把多段标签挤成一行）。
-        // 在每个「】…【」之间补一个换行，让每个「【标签】内容」各自成行；
-        // 换行插在下一个【之前（而非】之后），否则单独的【标签】会被下游当成空行丢弃，
-        // 而夹在正文里的【标签】又不会被识别为独立说话人。
-        return normalized.replace(/】([^\n【]*?)【/g, '】$1\n【');
-    }
-    return normalized;
+    // 只在「同一行内存在『】…【』边界」时才需要处理。不能用整段换行总数判断：
+    // 正文别处的换行足够多时，仍可能有某一行把多个标签挤在一起。
+    if (!/】[^\n【】]*【/.test(normalized)) return normalized;
+    // 换行插在下一个【之前（而非】之后），否则单独的【标签】会被下游当成空行丢弃，
+    // 而夹在正文里的【标签】又不会被识别为独立说话人。
+    // 用先行断言不消费下一个标签，保证一行里连续多个标签能被逐个拆开。
+    return normalized.replace(/】([^\n【】]*)(?=【)/g, (matched, between: string) => (
+        标签前句末收尾正则.test(between.trimEnd()) ? `】${between}\n` : matched
+    ));
 };
 
 const 解析正文日志 = (body: string, declaredNames?: Set<string>): Array<{ sender: string; text: string }> => {

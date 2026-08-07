@@ -42,7 +42,13 @@ export const 获取OpenAI兼容模型列表 = async (config: 模型列表获取�
                 data = await res.json();
             }
             if (data && Array.isArray(data.data)) {
-                return data.data.map((m: any) => m?.id).filter(Boolean);
+                // 只保留有效的字符串 id：部分兼容实现会返回数字 id 或嵌套对象，
+                // 调用方（设置页）会对每项调用 .trim()，非字符串会直接抛 TypeError。
+                const modelIds = data.data
+                    .map((model: { id?: unknown }) => model?.id)
+                    .filter((id: unknown): id is string => typeof id === 'string' && id.trim().length > 0)
+                    .map((id: string) => id.trim());
+                if (modelIds.length > 0) return modelIds;
             }
         } catch (e: any) {
             lastError = e;

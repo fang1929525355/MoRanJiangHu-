@@ -446,6 +446,41 @@ describe('普通模块与仅 payload 模块反向', () => {
         expect(rebuilt.contentBlocks?.[0].id).toBe('world-core');
         expect(rebuilt.contentBlocks?.[0].content).toBe('A 属于 B');
         expect((rebuilt.payload as any).content).toBe('A 属于 B');
+        // 顶层 contentBlocks 与 payload.contentBlocks 是两条读取路径，必须同步更新
+        expect((rebuilt.payload as any).contentBlocks).toHaveLength(1);
+        expect((rebuilt.payload as any).contentBlocks?.[0].id).toBe('world-core');
+        expect((rebuilt.payload as any).contentBlocks?.[0].content).toBe('A 属于 B');
+    });
+
+    it('切换模块类型后不复用旧内容块 id，避免标题/注入目标停留在旧类型', () => {
+        const source: 创意工坊模块条目 = {
+            id: 'community-trails-world-rules',
+            type: 'world_rules',
+            formatVersion: 2,
+            workshopKind: 'standard_module',
+            title: '轨迹世界规则',
+            subtitle: '',
+            description: '',
+            tags: ['武侠'],
+            payload: { schema: 'moranjianghu-creative-workshop-standard-module', version: 2, mode: '武侠', content: 'A 不属于 B' },
+            contentBlocks: [{ id: 'world-core', title: '世界核心', purpose: '规则', content: 'A 不属于 B', injectionTarget: 'manualWorldPrompt' }],
+            usagePrompt: '',
+            safetyNotes: [],
+            injectionPreview: ['A 不属于 B'],
+            source: 'local',
+            contributor: '测试'
+        };
+        const draft = 模块转贡献草稿(source)!;
+        draft.type = 'ability';
+        draft.body = '新的境界体系规则';
+        const rebuilt = 构建贡献模块(draft, '测试');
+        // 类型已切换 → 不再复用 world-core，改用 ability-main 整块替换
+        expect(rebuilt.contentBlocks?.[0].id).toBe('ability-main');
+        expect(rebuilt.contentBlocks?.[0].injectionTarget).toBe('manualRealmPrompt');
+        expect(rebuilt.contentBlocks?.[0].title).toBe('能力与境界规则');
+        expect(rebuilt.contentBlocks?.[0].content).toBe('新的境界体系规则');
+        // 旧 world-core 块不应携带新内容
+        expect(rebuilt.contentBlocks?.some((b: any) => b.id === 'world-core' && b.content === '新的境界体系规则')).toBe(false);
     });
 
     it('列表整合不把孤立普通 topic 伪装成完整模式包', () => {

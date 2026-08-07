@@ -1263,7 +1263,17 @@ export const 构建贡献模块 = (draft: 贡献草稿, contributor: string, exi
     const injectionTarget = draft.type === 'ability' ? 'manualRealmPrompt' : draft.type === 'comfy_workflow' ? 'imageWorkflow' : draft.type === 'tavern_preset' ? 'referenceOnly' : 'manualWorldPrompt';
     const originalContentBlocks = source && !sourceIsModePackage ? 提取模块内容块(source) : [];
     // 单模块编辑时，若源模块只有一块内容，复用其 id，避免合并时因 id 不匹配导致旧块保留、新块追加的累积问题。
-    const generatedBlockId = originalContentBlocks.length === 1
+    // 但只有在「没有切换模块类型」时才可复用：合并模式包内容块 只覆盖 content，
+    // 若类型已变（注入目标不同），复用旧 id 会让 title / purpose / injectionTarget 停留在旧类型的值上，
+    // 此时改用 `${draft.type}-main` 让新块整体替换。旧数据缺少 injectionTarget 时按兼容处理，仍允许复用。
+    // 单模块编辑时，若源模块只有一块内容，复用其 id，避免合并时因 id 不匹配导致旧块保留、新块追加的累积问题。
+    // 但只有在「没有切换模块类型」时才可复用：合并模式包内容块 只覆盖 content，
+    // 若类型已变（注入目标不同），复用旧 id 会让 title / purpose / injectionTarget 停留在旧类型的值上。
+    // 此时直接整块替换（不再走 合并模式包内容块 的追加合并），保证切换类型后旧块不残留。
+    // 旧数据缺少 injectionTarget 时按兼容处理，仍允许复用。
+    const 可复用原始内容块 = originalContentBlocks.length === 1
+        && (originalContentBlocks[0].injectionTarget || injectionTarget) === injectionTarget;
+    const generatedBlockId = 可复用原始内容块
         ? originalContentBlocks[0].id
         : `${draft.type}-main`;
     const generatedContentBlocks: NonNullable<创意工坊模块条目['contentBlocks']> = [
@@ -1275,7 +1285,10 @@ export const 构建贡献模块 = (draft: 贡献草稿, contributor: string, exi
             content: draft.body.trim()
         }
     ];
-    const contentBlocks = 合并模式包内容块(originalContentBlocks, generatedContentBlocks);
+    // 仅当可复用原始块（未切换类型、单块）时走合并覆盖；否则整块替换，避免旧块残留。
+    const contentBlocks = 可复用原始内容块
+        ? 合并模式包内容块(originalContentBlocks, generatedContentBlocks)
+        : generatedContentBlocks;
     const safetyNotes = 分割文本行(draft.safetyNotes);
     const usagePrompt = draft.usagePrompt.trim() || (draft.type === 'comfy_workflow'
         ? '在文生图设置中选择该工作流；发布前请确认 JSON 可用。'

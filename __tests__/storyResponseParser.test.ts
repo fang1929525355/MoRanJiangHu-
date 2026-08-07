@@ -1052,4 +1052,37 @@ describe('storyResponseParser', () => {
             { sender: '旁白', text: '高台上二当家没有生气。' }
         ]);
     });
+
+    it('兜底拆分不会切开正文中间的物品名标签', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【宋青书】“我要查看【青霜剑】的品相。”【旁白】他把剑推到柜台上。',
+            '</正文>',
+            '<短期记忆>test</短期记忆>'
+        ].join('\n'));
+
+        // 【青霜剑】夹在同一句对白中间（前文「我要查看」不是句末），不能被当成新说话人拆行；
+        // 而【旁白】前面是完整句子的收尾引号，应当正常拆分。
+        expect(parsed.logs).toEqual([
+            { sender: '宋青书', text: '“我要查看【青霜剑】的品相。”' },
+            { sender: '旁白', text: '他把剑推到柜台上。' }
+        ]);
+    });
+
+    it('正文其他位置换行很多时，仍会拆分挤在同一行的多个标签', () => {
+        const parsed = parseStoryRawText([
+            '<正文>',
+            '【旁白】天光初亮。',
+            '【旁白】街市渐渐热闹起来。',
+            '【旁白】风里带着炊烟味。',
+            '【旁白】他停在摊前。【宋青书】“来两屉包子。”',
+            '</正文>',
+            '<短期记忆>test</短期记忆>'
+        ].join('\n'));
+
+        // 整段换行数已超过标签数，旧的「换行总数」判据会跳过预处理，
+        // 导致最后一行的两个标签被合成一条日志。
+        expect(parsed.logs[parsed.logs.length - 1]).toEqual({ sender: '宋青书', text: '“来两屉包子。”' });
+        expect(parsed.logs.some((log) => log.text.includes('【宋青书】'))).toBe(false);
+    });
 });
