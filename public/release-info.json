@@ -1,14 +1,31 @@
 {
-  "versionCode": 644,
-  "versionName": "1.0.644",
+  "versionCode": 645,
+  "versionName": "1.0.645",
   "releaseChannel": "stable",
   "releaseNotes": [
-    "减小安装包体积：精简内置资源，APK 体积减少约 40MB，下载与安装更快。",
-    "拍卖行固定拍品图标改为在线加载，弱网或重装后也能稳定显示，不再依赖安装包内图片。",
+    "云存档下载修复：修复自定义同步地址为空时 GitHub 云存档下载提示 “no protocol” 的问题，现在主站与备用站双代理都可用。",
+    "自定义模型列表可正常加载：OpenCode 等自定义 OpenAI 兼容接口现在能正确拉取可用模型列表（解决 WebView 内 CORS 导致的获取失败）。",
+    "创意工坊编辑不再累积重复内容：单模块编辑后不会再出现 “A 不属于 B / A 属于 B” 这样的重复段落。",
+    "剧情正文正确分段：AI 返回的长正文现在会按【角色】/【旁白】等标签正确换行分段，阅读更清晰。",
+    "酒馆预设保留主剧情约束：启用酒馆预设时不再丢失“去魅主”叙事总约束，NPC 也不再异常扎堆在主角身边。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
   "releaseHistory": [
+    {
+      "versionName": "1.0.645",
+      "versionCode": 645,
+      "releasePublishedAt": "2026-08-07T19:54:50.786+08:00",
+      "releaseNotes": [
+        "云存档下载修复：修复自定义同步地址为空时 GitHub 云存档下载提示 “no protocol” 的问题，现在主站与备用站双代理都可用。",
+        "自定义模型列表可正常加载：OpenCode 等自定义 OpenAI 兼容接口现在能正确拉取可用模型列表（解决 WebView 内 CORS 导致的获取失败）。",
+        "创意工坊编辑不再累积重复内容：单模块编辑后不会再出现 “A 不属于 B / A 属于 B” 这样的重复段落。",
+        "剧情正文正确分段：AI 返回的长正文现在会按【角色】/【旁白】等标签正确换行分段，阅读更清晰。",
+        "酒馆预设保留主剧情约束：启用酒馆预设时不再丢失“去魅主”叙事总约束，NPC 也不再异常扎堆在主角身边。",
+        "官网：https://msjh.bacon159.pp.ua/",
+        "备用站：https://msjh.bacon.de5.net/"
+      ]
+    },
     {
       "versionName": "1.0.634",
       "versionCode": 634,
@@ -682,11 +699,14 @@
   "multiDeviceSyncGuideUrl": "https://msjh.bacon159.pp.ua/tutorials.html#sync",
   "tutorialsUrl": "https://msjh.bacon159.pp.ua/tutorials.html",
   "changes": [
-    "减小安装包体积：精简内置资源，APK 体积减少约 40MB，下载与安装更快。",
-    "拍卖行固定拍品图标改为在线加载，弱网或重装后也能稳定显示，不再依赖安装包内图片。",
+    "云存档下载修复：修复自定义同步地址为空时 GitHub 云存档下载提示 “no protocol” 的问题，现在主站与备用站双代理都可用。",
+    "自定义模型列表可正常加载：OpenCode 等自定义 OpenAI 兼容接口现在能正确拉取可用模型列表（解决 WebView 内 CORS 导致的获取失败）。",
+    "创意工坊编辑不再累积重复内容：单模块编辑后不会再出现 “A 不属于 B / A 属于 B” 这样的重复段落。",
+    "剧情正文正确分段：AI 返回的长正文现在会按【角色】/【旁白】等标签正确换行分段，阅读更清晰。",
+    "酒馆预设保留主剧情约束：启用酒馆预设时不再丢失“去魅主”叙事总约束，NPC 也不再异常扎堆在主角身边。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
-  "notes": "减小安装包体积：精简内置资源，APK 体积减少约 40MB，下载与安装更快。\n拍卖行固定拍品图标改为在线加载，弱网或重装后也能稳定显示，不再依赖安装包内图片。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-08-06T23:21:44.703+08:00"
+  "notes": "云存档下载修复：修复自定义同步地址为空时 GitHub 云存档下载提示 “no protocol” 的问题，现在主站与备用站双代理都可用。\n自定义模型列表可正常加载：OpenCode 等自定义 OpenAI 兼容接口现在能正确拉取可用模型列表（解决 WebView 内 CORS 导致的获取失败）。\n创意工坊编辑不再累积重复内容：单模块编辑后不会再出现 “A 不属于 B / A 属于 B” 这样的重复段落。\n剧情正文正确分段：AI 返回的长正文现在会按【角色】/【旁白】等标签正确换行分段，阅读更清晰。\n酒馆预设保留主剧情约束：启用酒馆预设时不再丢失“去魅主”叙事总约束，NPC 也不再异常扎堆在主角身边。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
+  "releasePublishedAt": "2026-08-07T19:54:50.786+08:00"
 }
