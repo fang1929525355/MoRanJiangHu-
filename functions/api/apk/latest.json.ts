@@ -86,16 +86,14 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
         const preferredApkProvider = hasManifestPreferredApkProvider
             ? manifestPreferredApkProvider
             : 'onedrive';
-        // 按 preferredApkProvider 排序候选源；B2 渠道已废弃。
-        const vpsGroup: string[] = [];
+        // 按 preferredApkProvider 排序候选源；B2 渠道已废弃，VPS 通道（moranjianghu.bacon159.pp.ua/latest.apk）
+        // 长期未同步、无可用部署通道，已不再作为可选 provider，未知 provider 回退到默认排序。
         const quarkGroup = [quarkTvApkUrl];
         const githubGroup = [...githubAcceleratedApkUrls, githubApkUrl, githubDirectApkUrl];
         const githubRawGroup = [githubRawAcceleratedApkUrl, githubRawApkUrl, githubRawDirectApkUrl];
         const oneDriveGroup = [oneDriveApkUrl, oneDriveDirectApkUrl];
         let providerOrderedUrls: string[];
-        if (preferredApkProvider === 'vps') {
-            providerOrderedUrls = [...vpsGroup, ...quarkGroup, ...oneDriveGroup, ...githubGroup, ...githubRawGroup];
-        } else if (preferredApkProvider === 'quark-tv') {
+        if (preferredApkProvider === 'quark-tv') {
             providerOrderedUrls = [...quarkGroup, ...oneDriveGroup, ...githubGroup, ...githubRawGroup];
         } else if (preferredApkProvider === 'onedrive' || preferredApkProvider === 'onedrive-direct') {
             providerOrderedUrls = [...oneDriveGroup, ...quarkGroup, ...githubRawGroup, ...githubGroup];

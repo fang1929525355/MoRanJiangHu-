@@ -140,7 +140,7 @@ describe('APK latest manifest proxy', () => {
         expect(payload.latest.apkUrls.some((url: string) => url.includes('provider=b2'))).toBe(false);
     });
 
-    it('publishes the VPS direct URL first when preferredApkProvider is vps', async () => {
+    it('falls back to default ordering when preferredApkProvider is an unsupported channel like vps', async () => {
         const response = await onRequestGet({
             request: buildRequest(),
             env: buildEnv({
@@ -153,11 +153,10 @@ describe('APK latest manifest proxy', () => {
         expect(response.status).toBe(200);
         const payload = await response.json();
 
-        expect(payload.latest.preferredApkProvider).toBe('vps');
-        expect(payload.latest.vpsApkUrl).toBe('https://moranjianghu.bacon159.pp.ua/latest.apk');
-        expect(payload.latest.apkUrls[0]).toBe(payload.latest.vpsApkUrl);
-        expect(payload.latest.apkUrls.indexOf(payload.latest.vpsApkUrl)).toBeLessThan(
-            payload.latest.apkUrls.indexOf(payload.latest.quarkTvApkUrl)
-        );
+        // VPS 通道已移除：不再输出死链，也不作为首选下载源。
+        expect(payload.latest.vpsApkUrl).toBeUndefined();
+        expect(payload.latest.apkUrls).not.toContain('https://moranjianghu.bacon159.pp.ua/latest.apk');
+        // 未知/不支持的 provider 回退到默认排序（github-raw 加速组优先）。
+        expect(payload.latest.apkUrls[0]).toBe(payload.latest.githubRawAcceleratedApkUrl);
     });
 });
