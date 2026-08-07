@@ -141,3 +141,10 @@ Desktop.ini
 *.njsproj
 *.sln
 *.sw?
+
+# Temp single-file artifacts and leftover preview/release copies (kept untracked, never committed)
+/.tmp*
+/.reasonix/
+/.release-repo-*/
+/dist-prev-*/
+playwright.config.tmp-*.mjs
