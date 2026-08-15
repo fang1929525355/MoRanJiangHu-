@@ -9,14 +9,20 @@ import {
 } from '../utils/imageAssets';
 import { isNativeCapacitorEnvironment } from '../utils/nativeRuntime';
 
-const 取文本 = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+const 取可扫描文本 = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    // 图片引用和 HTTP(S) 地址本身都很短。超长字符串通常是剧情正文或 data URL，
+    // 对它们执行 trim() 会在移动端额外复制整段大字符串并抬高内存峰值。
+    if (value.length > 16 * 1024) return '';
+    return value.trim();
+};
 
 const 收集图片资源引用 = (
     value: unknown,
     refs: Set<string>,
     seen: WeakSet<object> = new WeakSet()
 ): void => {
-    const text = 取文本(value);
+    const text = 取可扫描文本(value);
     if (text) {
         if (是否图片资源引用(text)) {
             refs.add(text);
@@ -81,7 +87,11 @@ export const use图片资源回源预取 = (...sources: unknown[]): void => {
 
         void run().then((results) => {
             if (cancelled) return;
-            const hasLoaded = (results || []).some((item) => item.status === 'fulfilled' && 取文本(item.value).length > 0);
+            const hasLoaded = (results || []).some((item) => (
+                item.status === 'fulfilled'
+                && typeof item.value === 'string'
+                && item.value.length > 0
+            ));
             if (hasLoaded) {
                 forceRefresh((value) => value + 1);
             }

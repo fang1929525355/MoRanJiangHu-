@@ -396,6 +396,33 @@ const 构建ComfyUI工作流模块 = (
     };
 };
 
+const 双人成行V11酒馆预设模块: 创意工坊模块条目 = {
+    id: 'tavern-preset-double-journey-v11',
+    type: 'tavern_preset',
+    formatVersion: 2,
+    workshopKind: 'standard_module',
+    title: '双人成行v11.0墨染江湖适配版',
+    subtitle: '玩家贡献 · SillyTavern 酒馆预设',
+    description: '玩家贡献的双人成行 v11 墨染江湖适配预设，在云端工坊不可用时仍可离线选择。',
+    tags: ['酒馆预设', 'SillyTavern', '双人成行'],
+    payload: {
+        schema: 'moranjianghu-creative-workshop-tavern-preset',
+        version: 1,
+        presetPath: '/tavern-presets/double-journey-v11.json'
+    },
+    usagePrompt: '在设置里的酒馆预设下拉框选择后直接启用；预设内的提示词启用状态和正则脚本开关会随 JSON 保留。',
+    safetyNotes: ['该预设来自玩家上传内容，启用后请按当前模型能力复核提示词和正则脚本效果。'],
+    injectionPreview: [
+        '类型：SillyTavern 酒馆预设',
+        '版本：双人成行 v11.0 墨染江湖适配版',
+        '包含：prompts、prompt_order、generation 参数、regex_scripts 扩展',
+        '开关状态：保留 prompt_order enabled 与 regex_scripts disabled 状态'
+    ],
+    source: 'builtin',
+    contributor: '匿名玩家',
+    anonymous: true
+};
+
 const Izumi0623酒馆预设模块: 创意工坊模块条目 = {
     id: 'tavern-preset-izumi-0623',
     type: 'tavern_preset',
@@ -1260,6 +1287,7 @@ const 原始创意工坊模块列表: 创意工坊模块条目[] = [
     宝可梦题材模块,
     宝可梦世界规则模块,
     宝可梦能力模块,
+    双人成行V11酒馆预设模块,
     Izumi0623酒馆预设模块,
     构建ComfyUI工作流模块('comfy-workflow-default-main', '默认普通 ComfyUI 工作流', '通用写实', 'main', 默认ComfyUI工作流JSON, '官方默认普通生图 workflow，适合 NPC、物品和常规画面。'),
     构建ComfyUI工作流模块('comfy-workflow-default-scene', '默认场景 ComfyUI 工作流', '场景氛围', 'scene', 默认ComfyUI工作流JSON, '官方默认场景生图 workflow，适合环境、地点和横竖屏场景图。'),

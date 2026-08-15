@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     接口设置结构,
     接口供应商类型,
@@ -144,9 +144,10 @@ const 匹配模型输出推荐 = (modelRaw: string): 模型输出推荐项 | nul
     return 模型输出推荐数据.find((item) => item.matchers.some((matcher) => matcher.test(model))) || null;
 };
 
-const 是否GeminiDeepResearch配置 = (modelRaw: string, baseUrlRaw: string): boolean => {
-    return /deep-research/i.test(modelRaw || '') && /gemini|generativelanguage|googleapis/i.test(baseUrlRaw || '');
-};
+export const 是否GeminiDeepResearch配置 = (modelRaw: string, baseUrlRaw: string): boolean => (
+    /deep-research/i.test(modelRaw || '')
+    && /gemini|generativelanguage|googleapis/i.test(baseUrlRaw || '')
+);
 
 const 提取模型版本数字 = (model: string): number[] => (
     (model || '')
@@ -178,8 +179,16 @@ export const 选择最佳可用模型 = (models: string[]): string => {
     return candidates.sort((a, b) => scoreModel(b) - scoreModel(a) || b.localeCompare(a))[0] || '';
 };
 
+export const 解析模型列表后的选择 = (currentModelRaw: string, models: string[]): string => {
+    const currentModel = (currentModelRaw || '').trim();
+    return currentModel || 选择最佳可用模型(models);
+};
+
 const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
     const [form, setForm] = useState<接口设置结构>(() => 规范化接口设置(settings));
+    // 同步追踪最新 form，避免异步请求返回后用旧闭包覆盖用户在等待期间手动填写的模型。
+    const formRef = useRef(form);
+    formRef.current = form;
     const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
     const [mainModelOptions, setMainModelOptions] = useState<string[]>([]);
     const [loadingMainModels, setLoadingMainModels] = useState(false);
@@ -288,17 +297,29 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
     };
 
     const handleFetchMainModels = async () => {
+        const requestConfigId = activeConfig?.id || null;
         setLoadingMainModels(true);
         setMessage('');
         const result = await fetchModelsFromCurrentConfig();
         if (result) {
             setMainModelOptions(result);
-            const bestModel = 选择最佳可用模型(result);
-            if (bestModel) {
-                updateMainModel(bestModel);
-                setMessage(`主剧情模型列表获取成功，已自动选择 ${bestModel}。`);
+            // 异步返回后从最新 form 读取当前模型，防止用户在等待期间手动填写后被覆盖
+            const latestForm = formRef.current;
+            const latestActiveConfig = latestForm.configs.find((cfg) => cfg.id === latestForm.activeConfigId) || latestForm.configs[0] || null;
+            const currentModel = ((latestActiveConfig?.model || '').trim() || (latestForm.功能模型占位.主剧情使用模型 || '').trim());
+            const sameConfig = requestConfigId && latestActiveConfig?.id === requestConfigId;
+            if (!currentModel && sameConfig) {
+                const selectedModel = 解析模型列表后的选择(currentModel, result);
+                if (selectedModel) {
+                    updateMainModel(selectedModel);
+                    setMessage(`主剧情模型列表获取成功，已自动选择 ${selectedModel}。`);
+                } else {
+                    setMessage('主剧情模型列表获取成功。');
+                }
             } else {
-                setMessage('主剧情模型列表获取成功。');
+                setMessage(currentModel
+                    ? `主剧情模型列表获取成功，已保留当前选择 ${currentModel}。`
+                    : '主剧情模型列表获取成功。');
             }
         }
         setLoadingMainModels(false);
@@ -367,25 +388,37 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
         let modelForTest = (activeConfig.model || '').trim() || (form.功能模型占位.主剧情使用模型 || '').trim();
         let configForTest = activeConfig;
         try {
-            setMessage('正在获取模型列表并选择最佳模型...');
+            setMessage('正在获取模型列表并验证当前模型...');
             const models = await fetchModelsFromCurrentConfig();
             if (models && models.length > 0) {
                 setMainModelOptions(models);
-                const shouldKeepManualModel = 是否GeminiDeepResearch配置(modelForTest, configForTest.baseUrl);
-                const bestModel = shouldKeepManualModel ? '' : 选择最佳可用模型(models);
-                if (bestModel) {
-                    modelForTest = bestModel;
-                    const nextConfig = { ...activeConfig, model: bestModel, updatedAt: Date.now() };
-                    configForTest = nextConfig;
-                    setForm((prev) => ({
-                        ...prev,
-                        activeConfigId: activeConfig.id,
-                        configs: prev.configs.map((cfg) => cfg.id === activeConfig.id ? nextConfig : cfg),
-                        功能模型占位: {
-                            ...prev.功能模型占位,
-                            主剧情使用模型: bestModel
-                        }
-                    }));
+                // 异步返回后从最新 form 重新读取模型，防止用户在等待期间手动填写后被覆盖
+                const latestForm = formRef.current;
+                const latestActiveConfig = latestForm.configs.find((cfg) => cfg.id === latestForm.activeConfigId) || latestForm.configs[0] || null;
+                const sameConfig = latestActiveConfig?.id === activeConfig.id;
+                if (!sameConfig) {
+                    setMessage('接口配置已切换，已取消旧配置的连接测试，请重新测试当前配置。');
+                    return;
+                }
+                const latestModel = (latestActiveConfig?.model || '').trim() || (latestForm.功能模型占位.主剧情使用模型 || '').trim();
+                configForTest = latestActiveConfig || activeConfig;
+                modelForTest = latestModel;
+                if (!latestModel) {
+                    const selectedModel = 解析模型列表后的选择(latestModel, models);
+                    if (selectedModel) {
+                        modelForTest = selectedModel;
+                        const nextConfig = { ...(latestActiveConfig || activeConfig), model: selectedModel, updatedAt: Date.now() };
+                        configForTest = nextConfig;
+                        setForm((prev) => ({
+                            ...prev,
+                            activeConfigId: activeConfig.id,
+                            configs: prev.configs.map((cfg) => cfg.id === activeConfig.id ? nextConfig : cfg),
+                            功能模型占位: {
+                                ...prev.功能模型占位,
+                                主剧情使用模型: selectedModel
+                            }
+                        }));
+                    }
                 }
             }
             const matched = 匹配模型输出推荐(modelForTest);

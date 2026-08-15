@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { 选择最佳可用模型 } from '../components/features/Settings/ApiSettings';
+import { 是否GeminiDeepResearch配置, 解析模型列表后的选择, 选择最佳可用模型 } from '../components/features/Settings/ApiSettings';
 import { 创建接口配置模板, 构建OpenAI兼容模型列表候选地址, 获取剧情回忆接口配置, 获取世界演变接口配置, 获取规划分析接口配置, 规范化接口设置, 推断供应商, 供应商标签 } from '../utils/apiConfig';
 
 describe('接口模型自动选择', () => {
@@ -30,6 +30,31 @@ describe('接口模型自动选择', () => {
             'gpt-5-mini',
             'gpt-5'
         ])).toBe('gpt-5');
+    });
+
+    it('Deep Research 协议提示仍能独立识别，不参与模型自动选择', () => {
+        expect(是否GeminiDeepResearch配置(
+            'gemini-2.5-pro-deep-research',
+            'https://generativelanguage.googleapis.com/v1beta'
+        )).toBe(true);
+        expect(是否GeminiDeepResearch配置(
+            'agy-gpt-oss-120b-medium',
+            'https://example.com/v1'
+        )).toBe(false);
+    });
+
+    it('获取列表或测试连接时保留用户当前选择，不自动切换成评分更高的模型', () => {
+        expect(解析模型列表后的选择('agy-gpt-oss-120b-medium', [
+            'gemini-2.5-pro',
+            'agy-gpt-oss-120b-medium'
+        ])).toBe('agy-gpt-oss-120b-medium');
+    });
+
+    it('只有当前模型为空时才自动选择一个可用模型', () => {
+        expect(解析模型列表后的选择('', [
+            'gemini-2.5-flash',
+            'gemini-2.5-pro'
+        ])).toBe('gemini-2.5-pro');
     });
 });
 

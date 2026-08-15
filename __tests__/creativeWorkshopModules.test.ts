@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { 创意工坊模块分区, 创意工坊模块可发布到社区, 创意工坊模块列表, 获取创意工坊模块来源标签 } from '../data/creativeWorkshopModules';
+import { 规范化酒馆预设 } from '../utils/tavernPreset';
 import { 标准化开局预设方案, 构建预设表单恢复结果 } from '../utils/customNewGamePresets';
 import { 题材模式顺序 } from '../utils/topicModeProfiles';
 import { 获取题材预设背景, 获取题材预设天赋 } from '../data/presets';
@@ -26,6 +29,36 @@ describe('creativeWorkshopModules', () => {
         expect(获取创意工坊模块来源标签(izumi0623!)).toBe('社区贡献');
         expect(izumi0623?.payload?.presetPath).toBe('/tavern-presets/izumi-0623.json');
         expect(izumi0623?.tags).toEqual(expect.arrayContaining(['酒馆预设', 'SillyTavern']));
+    });
+
+    it('双人成行 v11 作为账号迁移后的离线兜底继续可用', () => {
+        const tavernEntries = 创意工坊模块列表.filter((entry) => entry.type === 'tavern_preset');
+        const doubleJourney = tavernEntries.find((entry) => entry.id === 'tavern-preset-double-journey-v11');
+
+        expect(doubleJourney).toBeTruthy();
+        expect(doubleJourney?.title).toBe('双人成行v11.0墨染江湖适配版');
+        expect(doubleJourney?.source).toBe('builtin');
+        expect(doubleJourney?.subtitle).toBe('玩家贡献 · SillyTavern 酒馆预设');
+        expect(doubleJourney?.anonymous).toBe(true);
+        expect(获取创意工坊模块来源标签(doubleJourney!)).toBe('社区贡献');
+        expect(doubleJourney?.payload?.presetPath).toBe('/tavern-presets/double-journey-v11.json');
+    });
+
+    it('双人成行 v11 本地 JSON 可被运行时完整加载', () => {
+        const payload = JSON.parse(fs.readFileSync(
+            path.join(process.cwd(), 'public/tavern-presets/double-journey-v11.json'),
+            'utf8'
+        ));
+        const preset = 规范化酒馆预设(payload);
+        const promptIds = new Set(preset?.prompts.map((item) => item.identifier));
+        const missingOrderIds = (preset?.prompt_order || [])
+            .flatMap((group) => group.order)
+            .filter((item) => !promptIds.has(item.identifier));
+
+        expect(preset?.prompts).toHaveLength(255);
+        expect(preset?.prompt_order).toHaveLength(1);
+        expect(preset?.extensions?.regex_scripts).toHaveLength(28);
+        expect(missingOrderIds).toHaveLength(0);
     });
 
     it('本地导入的酒馆预设允许显示发布入口', () => {

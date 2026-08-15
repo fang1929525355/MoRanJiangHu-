@@ -25,7 +25,7 @@ import DataUrlSafeImage from '../../ui/DataUrlSafeImage';
 import { 获取命中模型词组转化器预设, 规范化接口设置 } from '../../../utils/apiConfig';
 import { 自动场景横屏尺寸选项, 自动场景竖屏尺寸选项 } from '../../../utils/imageSizeOptions';
 import { IconScroll } from '../../ui/Icons';
-import { 获取本地图片图床迁移状态, 订阅本地图片图床迁移状态, 获取用户图库全部条目, 删除用户图库条目, 用户图库条目 } from '../../../services/dbService';
+import { 获取本地图片图床迁移状态, 订阅本地图片图床迁移状态, 分页读取用户图库, 删除用户图库条目, 用户图库条目 } from '../../../services/dbService';
 import { 读取图片资源 } from '../../../services/dbService';
 import ImageMigrationStatusPanel from './ImageMigrationStatusPanel';
 import { NPC是否男性或男娘 } from '../../../utils/npcGenderFlags';
@@ -428,7 +428,6 @@ const ImageManagerModal: React.FC<Props> = ({
     onExtractCharacterAnchor,
     onClose
 }) => {
-    use图片资源回源预取(socialList, playerCharacter, sceneArchive, currentPersistentWallpaper, apiConfig);
     const 显示境界 = cultivationSystemEnabled !== false;
     const [filters, setFilters] = React.useState<图片管理筛选条件>({
         目标类型: '全部',
@@ -470,6 +469,9 @@ const ImageManagerModal: React.FC<Props> = ({
     const [manualFlowStage, setManualFlowStage] = React.useState<手动流程阶段>('idle');
     const [manualSubmitAt, setManualSubmitAt] = React.useState<number>(0);
     const [galleryEntries, setGalleryEntries] = React.useState<用户图库条目[]>([]);
+    const [galleryCursor, setGalleryCursor] = React.useState('');
+    const [galleryHasMore, setGalleryHasMore] = React.useState(false);
+    const [galleryLoadingMore, setGalleryLoadingMore] = React.useState(false);
     const [galleryFilterMode, setGalleryFilterMode] = React.useState<string>('全部');
     const [galleryPreviewEntry, setGalleryPreviewEntry] = React.useState<用户图库条目 | null>(null);
     const [galleryPreviewOriginal, setGalleryPreviewOriginal] = React.useState<string>('');
@@ -1325,32 +1327,57 @@ const ImageManagerModal: React.FC<Props> = ({
         return () => { cancelled = true; };
     }, [galleryPreviewEntry]);
 
+    const galleryPageSize = 48;
+    const 筛选有效图库条目 = React.useCallback(async (entries: 用户图库条目[]) => {
+        const valid: 用户图库条目[] = [];
+        for (const entry of entries) {
+            // 存入用户图库时会剥掉 wuxia-asset:// 前缀存裸 assetId，
+            // 所以不能只凭 是否图片资源引用 判断有效性。
+            // 只清理完全没有引用（assetId 和 imageUrl 都为空）的空记录。
+            const hasAssetId = Boolean(entry.assetId && entry.assetId.trim());
+            const hasImageUrl = Boolean(entry.imageUrl && entry.imageUrl.trim());
+            if (hasAssetId || hasImageUrl) {
+                valid.push(entry);
+            } else {
+                try { await 删除用户图库条目(entry.id); } catch { }
+            }
+        }
+        return valid;
+    }, []);
+
     const refreshGallery = React.useCallback(async (silent = false) => {
         try {
-            const entries = await 获取用户图库全部条目();
-            const valid: 用户图库条目[] = [];
-            for (const e of entries) {
-                if (!e.assetId && e.imageUrl) {
-                    try { await 删除用户图库条目(e.id); } catch { }
-                    continue;
-                }
-                if (是否图片资源引用(e.assetId) || e.assetId.startsWith('data:')) {
-                    valid.push(e);
-                } else {
-                    try { await 删除用户图库条目(e.id); } catch { }
-                }
-            }
-            setGalleryEntries(valid);
+            const entries = await 分页读取用户图库({ limit: galleryPageSize });
+            setGalleryEntries(await 筛选有效图库条目(entries));
+            setGalleryCursor(entries[entries.length - 1]?.id || '');
+            setGalleryHasMore(entries.length >= galleryPageSize);
         } catch {
             if (!silent) setGalleryPreviewError('读取图库失败');
         }
-    }, []);
+    }, [筛选有效图库条目]);
+
+    const loadMoreGallery = React.useCallback(async () => {
+        if (galleryLoadingMore) return;
+        setGalleryLoadingMore(true);
+        try {
+            const entries = await 分页读取用户图库({
+                limit: galleryPageSize,
+                beforeId: galleryCursor || undefined
+            });
+            const valid = await 筛选有效图库条目(entries);
+            setGalleryEntries((current) => [...current, ...valid]);
+            setGalleryCursor(entries[entries.length - 1]?.id || galleryCursor);
+            setGalleryHasMore(entries.length >= galleryPageSize);
+        } catch {
+            setGalleryPreviewError('继续读取图库失败');
+        } finally {
+            setGalleryLoadingMore(false);
+        }
+    }, [galleryCursor, galleryLoadingMore, 筛选有效图库条目]);
 
     React.useEffect(() => {
         if (activeTab !== 'itemGallery') return;
         void refreshGallery(true);
-        const id = window.setInterval(() => void refreshGallery(true), 15_000);
-        return () => window.clearInterval(id);
     }, [activeTab, refreshGallery]);
 
     const handleDeleteGalleryEntry = React.useCallback(async (entry: 用户图库条目) => {
@@ -3943,6 +3970,18 @@ const ImageManagerModal: React.FC<Props> = ({
                             })
                         )}
                     </div>
+                    {galleryHasMore && (
+                        <div className="flex justify-center py-4">
+                            <button
+                                type="button"
+                                onClick={() => void loadMoreGallery()}
+                                disabled={galleryLoadingMore}
+                                className="px-5 py-2 rounded border border-wuxia-gold/40 bg-wuxia-gold/10 text-wuxia-gold text-xs hover:bg-wuxia-gold/20 disabled:opacity-50"
+                            >
+                                {galleryLoadingMore ? '正在加载…' : '加载更多'}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
