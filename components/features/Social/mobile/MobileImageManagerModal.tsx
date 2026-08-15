@@ -26,7 +26,7 @@ import ToggleSwitch from '../../../ui/ToggleSwitch';
 import DataUrlSafeImage from '../../../ui/DataUrlSafeImage';
 import { 获取命中模型词组转化器预设, 规范化接口设置 } from '../../../../utils/apiConfig';
 import { 自动场景横屏尺寸选项, 自动场景竖屏尺寸选项 } from '../../../../utils/imageSizeOptions';
-import { 获取本地图片图床迁移状态, 订阅本地图片图床迁移状态, 获取用户图库全部条目, 删除用户图库条目, 用户图库条目 } from '../../../../services/dbService';
+import { 获取本地图片图床迁移状态, 订阅本地图片图床迁移状态, 分页读取用户图库, 删除用户图库条目, 用户图库条目 } from '../../../../services/dbService';
 import ImageMigrationStatusPanel from '../ImageMigrationStatusPanel';
 import { NPC是否男性或男娘 } from '../../../../utils/npcGenderFlags';
 import { 构建角色锚点绑定选项 } from '../../../../utils/characterAnchorOptions';
@@ -377,7 +377,6 @@ const MobileImageManagerModal: React.FC<Props> = ({
     onExportPresets,
     initialTab
 }) => {
-    use图片资源回源预取(socialList, playerCharacter, sceneArchive, currentPersistentWallpaper, apiConfig);
     const initialTabRef = React.useRef(initialTab);
     const [activeTab, setActiveTab] = React.useState<页面标签类型>(initialTabRef.current || 'manual');
     const [busyActionKey, setBusyActionKey] = React.useState('');
@@ -3274,22 +3273,41 @@ const RulesTabContent: React.FC<TabProps> = ({
 };
 
 const ItemGalleryTabContent: React.FC = () => {
+    const pageSize = 24;
     const [entries, setEntries] = React.useState<用户图库条目[]>([]);
+    const [cursor, setCursor] = React.useState('');
+    const [hasMore, setHasMore] = React.useState(false);
+    const [loadingMore, setLoadingMore] = React.useState(false);
     const [filterMode, setFilterMode] = React.useState<string>('全部');
 
     const refresh = React.useCallback(async () => {
         try {
-            const all = await 获取用户图库全部条目();
-            setEntries(all);
+            const page = await 分页读取用户图库({ limit: pageSize });
+            setEntries(page);
+            setCursor(page[page.length - 1]?.id || '');
+            setHasMore(page.length >= pageSize);
         } catch {
             setEntries([]);
+            setCursor('');
+            setHasMore(false);
         }
     }, []);
 
+    const loadMore = React.useCallback(async () => {
+        if (loadingMore) return;
+        setLoadingMore(true);
+        try {
+            const page = await 分页读取用户图库({ limit: pageSize, beforeId: cursor || undefined });
+            setEntries((current) => [...current, ...page]);
+            setCursor(page[page.length - 1]?.id || cursor);
+            setHasMore(page.length >= pageSize);
+        } finally {
+            setLoadingMore(false);
+        }
+    }, [cursor, loadingMore]);
+
     React.useEffect(() => {
         void refresh();
-        const id = window.setInterval(() => void refresh(), 15_000);
-        return () => window.clearInterval(id);
     }, [refresh]);
 
     const handleDelete = async (entry: 用户图库条目) => {
@@ -3344,6 +3362,18 @@ const ItemGalleryTabContent: React.FC = () => {
                                 >✕</button>
                             </div>
                         ))}
+                    </div>
+                )}
+                {hasMore && (
+                    <div className="flex justify-center py-3">
+                        <button
+                            type="button"
+                            onClick={() => void loadMore()}
+                            disabled={loadingMore}
+                            className="rounded border border-violet-400/40 bg-violet-500/10 px-4 py-1.5 text-[11px] font-semibold text-violet-100 disabled:opacity-50"
+                        >
+                            {loadingMore ? '正在加载…' : '加载更多'}
+                        </button>
                     </div>
                 )}
             </div>

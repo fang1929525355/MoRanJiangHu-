@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { 创意工坊模块分区, 创意工坊模块可发布到社区, 创意工坊模块列表, 获取创意工坊模块来源标签 } from '../data/creativeWorkshopModules';
+import { 规范化酒馆预设 } from '../utils/tavernPreset';
 import { 标准化开局预设方案, 构建预设表单恢复结果 } from '../utils/customNewGamePresets';
 import { 题材模式顺序 } from '../utils/topicModeProfiles';
 import { 获取题材预设背景, 获取题材预设天赋 } from '../data/presets';
@@ -26,6 +29,58 @@ describe('creativeWorkshopModules', () => {
         expect(获取创意工坊模块来源标签(izumi0623!)).toBe('社区贡献');
         expect(izumi0623?.payload?.presetPath).toBe('/tavern-presets/izumi-0623.json');
         expect(izumi0623?.tags).toEqual(expect.arrayContaining(['酒馆预设', 'SillyTavern']));
+    });
+
+    it('双人成行 v11 作为账号迁移后的离线兜底继续可用', () => {
+        const tavernEntries = 创意工坊模块列表.filter((entry) => entry.type === 'tavern_preset');
+        const doubleJourney = tavernEntries.find((entry) => entry.id === 'tavern-preset-double-journey-v11');
+
+        expect(doubleJourney).toBeTruthy();
+        expect(doubleJourney?.title).toBe('双人成行v11.0墨染江湖适配版');
+        expect(doubleJourney?.source).toBe('builtin');
+        expect(doubleJourney?.subtitle).toBe('玩家贡献 · SillyTavern 酒馆预设');
+        expect(doubleJourney?.anonymous).toBe(true);
+        expect(获取创意工坊模块来源标签(doubleJourney!)).toBe('社区贡献');
+        expect(doubleJourney?.payload?.presetPath).toBe('/tavern-presets/double-journey-v11.json');
+    });
+
+    it('双人成行 v11 本地 JSON 可按模块公开路径完整加载', () => {
+        const doubleJourney = 创意工坊模块列表.find((entry) => entry.id === 'tavern-preset-double-journey-v11');
+        const presetPath = String(doubleJourney?.payload?.presetPath || '');
+        const localPresetPath = path.join(process.cwd(), 'public', presetPath.replace(/^\/+/, ''));
+        const payload = JSON.parse(fs.readFileSync(localPresetPath, 'utf8'));
+        const preset = 规范化酒馆预设(payload);
+        const promptIds = new Set(preset?.prompts.map((item) => item.identifier));
+        const orderedPrompts = (preset?.prompt_order || []).flatMap((group) => group.order);
+        const missingOrderIds = orderedPrompts.filter((item) => !promptIds.has(item.identifier));
+        const rawRegexScripts = Array.isArray(payload?.extensions?.regex_scripts)
+            ? payload.extensions.regex_scripts
+            : [];
+        const normalizedRegexScripts = Array.isArray(preset?.extensions?.regex_scripts)
+            ? preset.extensions.regex_scripts
+            : [];
+
+        expect(presetPath).toBe('/tavern-presets/double-journey-v11.json');
+        expect(preset?.prompts).toHaveLength(255);
+        expect(preset?.prompt_order).toHaveLength(1);
+        expect(preset?.generationParams).toEqual(payload.generationParams);
+        expect(preset?.generationParams).toMatchObject({
+            temperature: 1,
+            top_p: 0.98,
+            top_k: 64,
+            max_tokens: 30000,
+            max_context: 2000000,
+            assistant_prefill: '思考已结束。'
+        });
+        expect(orderedPrompts.some((item) => item.enabled === true)).toBe(true);
+        expect(orderedPrompts.some((item) => item.enabled === false)).toBe(true);
+        expect(normalizedRegexScripts).toHaveLength(28);
+        expect(normalizedRegexScripts.map((item: any) => item.disabled)).toEqual(
+            rawRegexScripts.map((item: any) => item.disabled)
+        );
+        expect(normalizedRegexScripts.some((item: any) => item.disabled === true)).toBe(true);
+        expect(normalizedRegexScripts.some((item: any) => item.disabled === false)).toBe(true);
+        expect(missingOrderIds).toHaveLength(0);
     });
 
     it('本地导入的酒馆预设允许显示发布入口', () => {

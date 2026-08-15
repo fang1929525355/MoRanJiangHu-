@@ -2319,13 +2319,31 @@ export type 存档谱系轻量视图 = {
  */
 export const 投影存档谱系轻量视图 = (raw: Partial<存档结构> & { id?: number }, fallbackId?: number): 存档谱系轻量视图 => {
     const history = Array.isArray(raw?.历史记录) ? raw.历史记录 : [];
+    const 投影边界消息 = (item: any): Partial<NonNullable<存档结构['历史记录']>[number]> | undefined => {
+        if (!item || typeof item !== 'object') return undefined;
+        const content = typeof item.content === 'string' ? item.content.slice(0, 256).trim() : '';
+        return {
+            role: item.role,
+            ...(content ? { content } : {}),
+            ...(item.structuredResponse ? { structuredResponse: {} as any } : {})
+        } as Partial<NonNullable<存档结构['历史记录']>[number]>;
+    };
     const firstUserInput = history
-        .find((item: any) => item?.role === 'user' && typeof item?.content === 'string' && item.content.trim());
+        .find((item: any) => item?.role === 'user' && typeof item?.content === 'string' && /\S/.test(item.content));
+    const metadata = (raw?.元数据 && typeof raw.元数据 === 'object') ? { ...raw.元数据 } : ({} as 存档结构['元数据']);
+    if (metadata) {
+        metadata.历史记录条数 = history.length;
+        metadata.游戏回合数 = 读取存档游玩回合数(raw);
+    }
+    const boundaryHistory = [history[0], firstUserInput]
+        .filter((item, index, list) => Boolean(item) && list.indexOf(item) === index)
+        .map(投影边界消息)
+        .filter(Boolean) as 存档谱系轻量视图['历史记录'];
     return {
         id: typeof raw.id === 'number' ? raw.id : Number(fallbackId) || 0,
         时间戳: Number(raw?.时间戳 || 0),
         类型: raw?.类型 === 'auto' ? 'auto' : 'manual',
-        元数据: (raw?.元数据 && typeof raw.元数据 === 'object') ? { ...raw.元数据 } : ({} as 存档结构['元数据']),
+        元数据: metadata,
         游戏初始时间: typeof raw?.游戏初始时间 === 'string' ? raw.游戏初始时间 : undefined,
         角色数据: (raw as any)?.角色数据?.姓名 ? { 姓名: (raw as any).角色数据.姓名 } : undefined,
         环境信息: (raw as any)?.环境信息
@@ -2337,9 +2355,7 @@ export const 投影存档谱系轻量视图 = (raw: Partial<存档结构> & { id
             }
             : undefined,
         // 仅保留谱系算法实际会触碰的两条边界元素，避免把整段历史正文加载进内存。
-        历史记录: history.length > 0
-            ? [history[0], firstUserInput as NonNullable<typeof firstUserInput>].filter(Boolean) as 存档谱系轻量视图['历史记录']
-            : []
+        历史记录: boundaryHistory
     };
 };
 
@@ -2408,43 +2424,14 @@ const 是新谱系存档 = (save: Partial<存档结构> | null | undefined): boo
     Boolean(save?.元数据?.存档系列ID && save?.元数据?.存档谱系版本)
 );
 
-const 校正并写回本地存档谱系 = async (db: IDBDatabase, saves?: 存档结构[]): Promise<ReturnType<typeof 修复本地存档谱系列表<存档结构>>> => {
-    // 调用方未传入完整存档时，优先使用轻量谱系视图做检测，避免把所有完整存档
-    // （含 base64 图片、长历史）一次性读进内存导致移动端 OOM。
-    //
-    // 轻量视图的历史记录不完整，无法准确计算回合数。因此轻量扫描只用做快速检测：
-    // 若谱系连接关系正确（changed=false），直接跳过；若检测到需要修复，则回退到
-    // 完整存档路径重做，保证回合数和分支输入从完整历史正确计算。
-    // 实际场景中 99% 的调用都是谱系已正确、不需要修复的，轻量扫描足以快速通过。
-    if (!saves) {
-        const lightweightViews = await 读取存档谱系轻量视图();
-        const sorted = [...lightweightViews].sort((a, b) => Number(a.时间戳 || 0) - Number(b.时间戳 || 0)) as 存档结构[];
-        const probe = 修复本地存档谱系列表(sorted);
-        if (!probe.changed) {
-            return { saves: sorted, changed: false, repairedGroups: 0, repairedNodes: 0 };
-        }
-        // 轻量扫描检测到需修复，回退到完整存档路径保证正确性
-        const fullSaves = await 读取存档列表();
-        saves = fullSaves;
-    }
-
-    // [致命修复] 如果传入的 saves 是轻量视图（历史记录被截断），绝不能直接写回 IndexedDB。
-    // 旧代码在 启动旧存档谱系迁移 中传入轻量视图作为 saves 参数，
-    // 校正后用 saveStore.put(save) 写回，用只有2条历史记录的轻量视图覆盖了完整存档，
-    // 导致所有存档历史记录被截断为只剩第一句话。
-    // 检测轻量视图：历史记录存在但长度<=2 且没有 assistant 的 structuredResponse
-    const 是轻量视图 = Array.isArray(saves) && saves.some((save: any) => {
-        const historyLength = Array.isArray(save?.历史记录) ? save.历史记录.length : 0;
-        return historyLength > 0 && historyLength <= 2
-            && !save?.历史记录?.some((item: any) => item?.role === 'assistant' && (item as any)?.structuredResponse);
-    });
-    if (是轻量视图) {
-        // 回退到完整存档路径，避免轻量视图覆盖完整存档
-        const fullSaves = await 读取存档列表();
-        saves = fullSaves;
-    }
-
-    let current = [...saves].sort((a, b) => Number(a.时间戳 || 0) - Number(b.时间戳 || 0));
+const 校正并写回本地存档谱系 = async (db: IDBDatabase): Promise<ReturnType<typeof 修复本地存档谱系列表<存档谱系轻量视图>>> => {
+    const initial = (await 读取存档谱系轻量视图())
+        .sort((a, b) => Number(a.时间戳 || 0) - Number(b.时间戳 || 0));
+    const originalMetadata = new Map(initial.map((save) => [
+        save.id,
+        JSON.stringify(save.元数据 || {})
+    ]));
+    let current = initial;
     let repaired = 修复本地存档谱系列表(current);
     let repairedGroups = 0;
     let repairedNodes = 0;
@@ -2458,19 +2445,33 @@ const 校正并写回本地存档谱系 = async (db: IDBDatabase, saves?: 存档
         repaired = 修复本地存档谱系列表(current);
     }
     if (changed) {
-        await new Promise<void>((resolve, reject) => {
-            const transaction = db.transaction([STORE_NAME, SAVE_SUMMARIES_STORE], 'readwrite');
-            const saveStore = transaction.objectStore(STORE_NAME);
-            const summaryStore = transaction.objectStore(SAVE_SUMMARIES_STORE);
-            current.forEach((save) => {
-                if (typeof save.id !== 'number') return;
-                saveStore.put(save);
-                const summary = 构建存档摘要记录(save, save.id);
+        const changedViews = current.filter((view) => (
+            originalMetadata.get(view.id) !== JSON.stringify(view.元数据 || {})
+        ));
+        for (const view of changedViews) {
+            const fullSave = await 读取存档(view.id);
+            if (!fullSave) continue;
+            const updatedSave: 存档结构 = {
+                ...fullSave,
+                元数据: {
+                    ...(fullSave.元数据 || {}),
+                    ...(view.元数据 || {})
+                }
+            };
+            await new Promise<void>((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME, SAVE_SUMMARIES_STORE], 'readwrite');
+                const saveStore = transaction.objectStore(STORE_NAME);
+                const summaryStore = transaction.objectStore(SAVE_SUMMARIES_STORE);
+                saveStore.put(updatedSave);
+                const summary = 构建存档摘要记录(updatedSave, view.id);
                 if (summary) summaryStore.put(summary);
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = () => reject(transaction.error);
             });
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = () => reject(transaction.error);
-        });
+            if (isNativeCapacitorEnvironment()) {
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+        }
     }
     return {
         saves: current,
@@ -2505,7 +2506,7 @@ export const 启动旧存档谱系迁移 = async (): Promise<旧存档谱系迁�
         const sorted = [...allSaves].sort((a, b) => Number(a.时间戳 || 0) - Number(b.时间戳 || 0));
         const legacySaves = sorted.filter((save) => !是新谱系存档(save) && typeof save.id === 'number');
         if (legacySaves.length <= 0) {
-            const repaired = await 校正并写回本地存档谱系(db, sorted);
+            const repaired = await 校正并写回本地存档谱系(db);
             return 写入旧存档谱系迁移状态({
                 stage: 'completed',
                 totalSaves: sorted.length,
@@ -2529,7 +2530,7 @@ export const 启动旧存档谱系迁移 = async (): Promise<旧存档谱系迁�
         });
 
         // candidates 只用到谱系元数据字段，轻量视图足以支撑补全存档谱系元数据。
-        const convertedOrExisting: 存档结构[] = sorted.filter((save) => 是新谱系存档(save));
+        const convertedOrExisting: 存档谱系轻量视图[] = sorted.filter((save) => 是新谱系存档(save)) as unknown as 存档谱系轻量视图[];
         let converted = 0;
         let failed = 0;
         for (const saveView of legacySaves) {
@@ -2557,10 +2558,13 @@ export const 启动旧存档谱系迁移 = async (): Promise<旧存档谱系迁�
                 ? save.角色数据.姓名.trim()
                 : '未知角色';
             try {
+                const saveViewForHash = 投影存档谱系轻量视图(save, saveId);
                 const withHash: 存档结构 = {
                     ...save,
                     元数据: {
                         ...(save.元数据 || {}),
+                        历史记录条数: saveViewForHash.元数据?.历史记录条数,
+                        游戏回合数: saveViewForHash.元数据?.游戏回合数,
                         存档哈希: 计算存档同步哈希(save)
                     }
                 };
@@ -2575,7 +2579,7 @@ export const 启动旧存档谱系迁移 = async (): Promise<旧存档谱系迁�
                     transaction.oncomplete = () => resolve();
                     transaction.onerror = () => reject(transaction.error);
                 });
-                convertedOrExisting.push(convertedSave);
+                convertedOrExisting.push(投影存档谱系轻量视图(convertedSave, convertedSave.id));
                 converted += 1;
             } catch (error: any) {
                 failed += 1;
@@ -2591,7 +2595,7 @@ export const 启动旧存档谱系迁移 = async (): Promise<旧存档谱系迁�
             await new Promise((resolve) => setTimeout(resolve, isNativeCapacitorEnvironment() ? 180 : 40));
         }
 
-        const repaired = await 校正并写回本地存档谱系(db, convertedOrExisting);
+        const repaired = await 校正并写回本地存档谱系(db);
 
         return 写入旧存档谱系迁移状态({
             stage: failed > 0 ? 'failed' : 'completed',
@@ -3602,6 +3606,32 @@ export const 查询用户图库图片 = async (
         const index = store.index('by_item_mode_workshop');
         const req = index.get([itemName, mode, workshopModuleId]);
         req.onsuccess = () => resolve((req.result as 用户图库条目) || null);
+        req.onerror = () => reject(req.error);
+    });
+};
+
+export const 分页读取用户图库 = async (options: {
+    limit: number;
+    beforeId?: string;
+}): Promise<用户图库条目[]> => {
+    const db = await 初始化数据库();
+    const limit = Math.max(1, Math.floor(Number(options.limit) || 1));
+    const beforeId = typeof options.beforeId === 'string' ? options.beforeId.trim() : '';
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction([USER_IMAGE_GALLERY_STORE], 'readonly');
+        const store = tx.objectStore(USER_IMAGE_GALLERY_STORE);
+        const entries: 用户图库条目[] = [];
+        const range = beforeId ? IDBKeyRange.upperBound(beforeId, true) : null;
+        const req = store.openCursor(range, 'prev');
+        req.onsuccess = () => {
+            const cursor = req.result;
+            if (!cursor || entries.length >= limit) {
+                resolve(entries);
+                return;
+            }
+            entries.push(cursor.value as 用户图库条目);
+            cursor.continue();
+        };
         req.onerror = () => reject(req.error);
     });
 };

@@ -321,55 +321,61 @@ const 规范化Reasoning模板 = (raw: any): Reasoning模板结构 | null => {
 const 提取生成参数 = (raw: any): 酒馆预设生成参数结构 | undefined => {
     if (!raw || typeof raw !== 'object') return undefined;
 
+    const source = raw.generationParams && typeof raw.generationParams === 'object'
+        ? raw.generationParams
+        : raw;
     const params: 酒馆预设生成参数结构 = {};
     let hasAny = false;
 
-    if (typeof raw.temperature === 'number' && Number.isFinite(raw.temperature)) {
-        params.temperature = raw.temperature;
+    if (typeof source.temperature === 'number' && Number.isFinite(source.temperature)) {
+        params.temperature = source.temperature;
         hasAny = true;
     }
-    if (typeof raw.top_p === 'number' && Number.isFinite(raw.top_p)) {
-        params.top_p = raw.top_p;
+    if (typeof source.top_p === 'number' && Number.isFinite(source.top_p)) {
+        params.top_p = source.top_p;
         hasAny = true;
     }
-    if (typeof raw.top_k === 'number' && Number.isFinite(raw.top_k)) {
-        params.top_k = raw.top_k;
+    if (typeof source.top_k === 'number' && Number.isFinite(source.top_k)) {
+        params.top_k = source.top_k;
         hasAny = true;
     }
-    if (typeof raw.frequency_penalty === 'number' && Number.isFinite(raw.frequency_penalty)) {
-        params.frequency_penalty = raw.frequency_penalty;
+    if (typeof source.frequency_penalty === 'number' && Number.isFinite(source.frequency_penalty)) {
+        params.frequency_penalty = source.frequency_penalty;
         hasAny = true;
     }
-    if (typeof raw.presence_penalty === 'number' && Number.isFinite(raw.presence_penalty)) {
-        params.presence_penalty = raw.presence_penalty;
+    if (typeof source.presence_penalty === 'number' && Number.isFinite(source.presence_penalty)) {
+        params.presence_penalty = source.presence_penalty;
         hasAny = true;
     }
-    if (typeof raw.repetition_penalty === 'number' && Number.isFinite(raw.repetition_penalty)) {
-        params.repetition_penalty = raw.repetition_penalty;
+    if (typeof source.repetition_penalty === 'number' && Number.isFinite(source.repetition_penalty)) {
+        params.repetition_penalty = source.repetition_penalty;
         hasAny = true;
     }
-    if (typeof raw.openai_max_tokens === 'number' && Number.isFinite(raw.openai_max_tokens) && raw.openai_max_tokens > 0) {
-        params.max_tokens = raw.openai_max_tokens;
+    const maxTokens = source.max_tokens ?? source.openai_max_tokens;
+    if (typeof maxTokens === 'number' && Number.isFinite(maxTokens) && maxTokens > 0) {
+        params.max_tokens = maxTokens;
         hasAny = true;
     }
-    if (typeof raw.openai_max_context === 'number' && Number.isFinite(raw.openai_max_context) && raw.openai_max_context > 0) {
-        params.max_context = raw.openai_max_context;
+    const maxContext = source.max_context ?? source.openai_max_context;
+    if (typeof maxContext === 'number' && Number.isFinite(maxContext) && maxContext > 0) {
+        params.max_context = maxContext;
         hasAny = true;
     }
-    if (typeof raw.stream_openai === 'boolean') {
-        params.stream = raw.stream_openai;
+    const stream = source.stream ?? source.stream_openai;
+    if (typeof stream === 'boolean') {
+        params.stream = stream;
         hasAny = true;
     }
-    if (typeof raw.assistant_prefill === 'string' && raw.assistant_prefill.trim()) {
-        params.assistant_prefill = raw.assistant_prefill.trim();
+    if (typeof source.assistant_prefill === 'string' && source.assistant_prefill.trim()) {
+        params.assistant_prefill = source.assistant_prefill.trim();
         hasAny = true;
     }
-    if (typeof raw.continue_prefill === 'boolean') {
-        params.continue_prefill = raw.continue_prefill;
+    if (typeof source.continue_prefill === 'boolean') {
+        params.continue_prefill = source.continue_prefill;
         hasAny = true;
     }
-    if (typeof raw.custom_prompt_post_processing === 'string' && raw.custom_prompt_post_processing.trim()) {
-        params.custom_prompt_post_processing = raw.custom_prompt_post_processing.trim();
+    if (typeof source.custom_prompt_post_processing === 'string' && source.custom_prompt_post_processing.trim()) {
+        params.custom_prompt_post_processing = source.custom_prompt_post_processing.trim();
         hasAny = true;
     }
 

@@ -25,6 +25,26 @@ describe('imageAssets', () => {
         expect(提取图片资源引用列表({ 图片URL: remoteUrl })).toContain(fallbackRef);
     });
 
+    it('扫描图片引用时跳过超长剧情和 base64 文本，不为无关大字符串创建 trim 副本', () => {
+        const originalTrim = String.prototype.trim;
+        let longStringTrimCalls = 0;
+        String.prototype.trim = function trimWithCounter() {
+            if (this.length > 16 * 1024) longStringTrimCalls += 1;
+            return originalTrim.call(this);
+        };
+
+        try {
+            expect(提取图片资源引用列表({
+                剧情正文: `  ${'长剧情'.repeat(20000)}  `,
+                原始图片: `data:image/png;base64,${'A'.repeat(100000)}`,
+                图片URL: 'wuxia-asset://npc-avatar-small'
+            })).toContain('wuxia-asset://npc-avatar-small');
+            expect(longStringTrimCalls).toBe(0);
+        } finally {
+            String.prototype.trim = originalTrim;
+        }
+    });
+
     it('uses the local cached copy before a registered remote fallback URL', () => {
         const remoteUrl = 'https://image.bacon159.pp.ua/api/v1/file/player-avatar.png';
         const fallbackRef = 创建图片资源引用('player-avatar-local');

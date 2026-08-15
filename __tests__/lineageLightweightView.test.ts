@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { 投影存档谱系轻量视图, type 存档谱系轻量视图 } from '../services/dbService';
 
 describe('投影存档谱系轻量视图', () => {
@@ -183,5 +185,108 @@ describe('投影存档谱系轻量视图', () => {
         const result = 修复本地存档谱系列表(views as any);
         expect(result.changed).toBe(false);
         expect(result.saves.length).toBe(2);
+    });
+
+    it('边界历史含 structuredResponse 时仍使用轻量视图中的准确回合数', async () => {
+        const { 修复本地存档谱系列表 } = await import('../utils/saveLineage');
+        const boundaryHistory = [
+            { role: 'assistant', structuredResponse: { logs: [] } } as any,
+            { role: 'user', content: '继续' } as any
+        ];
+        const views: 存档谱系轻量视图[] = [
+            {
+                id: 11,
+                时间戳: 1779000011000,
+                类型: 'manual',
+                元数据: {
+                    存档哈希: 'root-hash',
+                    存档系列ID: 'series-structured-boundary',
+                    存档父节点哈希: '',
+                    存档根节点哈希: 'root-hash',
+                    存档谱系深度: 0,
+                    存档谱系版本: 1,
+                    历史记录条数: 10,
+                    游戏回合数: 0,
+                    存档分支输入: '开局'
+                } as any,
+                历史记录: boundaryHistory
+            },
+            {
+                id: 12,
+                时间戳: 1779000012000,
+                类型: 'auto',
+                元数据: {
+                    存档哈希: 'child-hash',
+                    存档系列ID: 'series-structured-boundary',
+                    存档父节点哈希: 'root-hash',
+                    存档根节点哈希: 'root-hash',
+                    存档谱系深度: 1,
+                    存档谱系版本: 1,
+                    历史记录条数: 20,
+                    游戏回合数: 5,
+                    存档分支输入: '继续'
+                } as any,
+                历史记录: boundaryHistory
+            }
+        ];
+
+        const result = 修复本地存档谱系列表(views as any);
+
+        expect(result.changed).toBe(false);
+        expect(result.saves[1].元数据?.游戏回合数).toBe(5);
+    });
+
+    it('边界历史也只保留谱系签名字段，不引用大正文或 structuredResponse', () => {
+        const hugeContent = '长正文'.repeat(20000);
+        const view = 投影存档谱系轻量视图({
+            id: 6,
+            类型: 'manual',
+            时间戳: 1779000006000,
+            元数据: {},
+            历史记录: [
+                {
+                    role: 'assistant',
+                    content: hugeContent,
+                    structuredResponse: { logs: [{ raw: hugeContent }] }
+                } as any,
+                { role: 'user', content: `行动${hugeContent}` }
+            ]
+        } as any, 6);
+
+        expect(JSON.stringify(view.历史记录).length).toBeLessThan(2048);
+        expect((view.历史记录?.[0] as any)?.structuredResponse).toEqual({});
+        expect(String(view.历史记录?.[0]?.content || '').length).toBeLessThanOrEqual(256);
+        expect(String(view.历史记录?.[1]?.content || '').length).toBeLessThanOrEqual(256);
+    });
+
+    it('轻量投影保留准确的历史条数与游戏回合数供谱系排序使用', () => {
+        const view = 投影存档谱系轻量视图({
+            id: 5,
+            类型: 'manual',
+            时间戳: 1779000005000,
+            元数据: {},
+            历史记录: [
+                { role: 'user', content: '开局' },
+                { role: 'assistant', structuredResponse: { logs: [] } } as any,
+                { role: 'user', content: '继续' },
+                { role: 'assistant', structuredResponse: { logs: [] } } as any,
+                { role: 'user', content: '再继续' },
+                { role: 'assistant', structuredResponse: { logs: [] } } as any,
+            ]
+        } as any, 5);
+
+        expect(view.元数据?.历史记录条数).toBe(6);
+        expect(view.元数据?.游戏回合数).toBe(2);
+        expect(view.历史记录).toHaveLength(1);
+    });
+
+    it('旧档迁移的存档哈希必须基于完整存档计算', () => {
+        const source = fs.readFileSync(path.join(process.cwd(), 'services/dbService.ts'), 'utf8');
+        const start = source.indexOf('export const 启动旧存档谱系迁移');
+        const end = source.indexOf('export const 获取旧存档谱系迁移状态', start);
+        const migrationSource = source.slice(start, end);
+
+        expect(migrationSource).toContain('存档哈希: 计算存档同步哈希(save)');
+        expect(migrationSource).not.toContain('计算存档同步哈希(saveViewForHash as unknown as Partial<存档结构>)');
     });
 });

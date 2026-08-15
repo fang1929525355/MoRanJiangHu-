@@ -15,13 +15,22 @@ const 读取历史用户输入 = (save: Partial<存档结构>, startIndex = 0): 
     return 截断连线文本((user as any)?.content || '');
 };
 
-const 读取历史长度 = (save: Partial<存档结构>): number => (
-    Array.isArray(save.历史记录) ? save.历史记录.length : 0
-);
+const 读取历史长度 = (save: Partial<存档结构>): number => {
+    const history = Array.isArray(save.历史记录) ? save.历史记录 : [];
+    const explicit = Number((save.元数据 as any)?.历史记录条数);
+    if (Number.isFinite(explicit) && explicit > history.length) return Math.floor(explicit);
+    return history.length;
+};
 
 const 读取首条历史签名 = (save: Partial<存档结构>): string => {
     const history = Array.isArray(save.历史记录) ? save.历史记录 : [];
-    return JSON.stringify(history[0] || null);
+    const first = history[0] as any;
+    if (!first || typeof first !== 'object') return 'null';
+    return JSON.stringify({
+        role: first.role,
+        content: typeof first.content === 'string' ? first.content.slice(0, 256).trim() : '',
+        structuredResponse: Boolean(first.structuredResponse)
+    });
 };
 
 const 是同一开局候选 = (save: Partial<存档结构>, candidate: Partial<存档结构>): boolean => {
@@ -43,8 +52,9 @@ const 读取谱系回合数 = (save: Partial<存档结构>): number => {
     // 这种场景下轻量视图的元数据回合数已经在保存时被正确写入，
     // 不需要从历史重新计算。
     const historyLength = Array.isArray(save?.历史记录) ? save.历史记录.length : 0;
-    const isLikelyLightweightView = historyLength > 0 && historyLength <= 2
-        && !save?.历史记录?.some((item: any) => item?.role === 'assistant' && (item as any)?.structuredResponse);
+    const explicitHistoryLength = Number((save?.元数据 as any)?.历史记录条数);
+    const isLikelyLightweightView = Number.isFinite(explicitHistoryLength)
+        && explicitHistoryLength > historyLength;
     if (isLikelyLightweightView) {
         const explicit = Number((save?.元数据 as any)?.游戏回合数);
         if (Number.isFinite(explicit) && explicit >= 0) return Math.floor(explicit);
@@ -91,7 +101,7 @@ export const 选择存档父节点 = (
     const seriesId = 读取存档系列ID(save);
     const currentHash = 读取存档谱系哈希(save);
     const currentAutoNodeId = readText((save.元数据 as any)?.自动存档节点ID);
-    const historyCount = Array.isArray(save.历史记录) ? save.历史记录.length : 0;
+    const historyCount = 读取历史长度(save);
     const timestamp = Number(save.时间戳 || 0);
     const explicitParentHash = readText((save.元数据 as any)?.存档父节点哈希);
     if (explicitParentHash) {
@@ -102,10 +112,10 @@ export const 选择存档父节点 = (
         .filter((item) => 读取存档谱系哈希(item) && 读取存档谱系哈希(item) !== currentHash)
         .filter((item) => !currentAutoNodeId || readText((item.元数据 as any)?.自动存档节点ID) !== currentAutoNodeId)
         .filter((item) => 读取存档系列ID(item) === seriesId)
-        .filter((item) => (Array.isArray(item.历史记录) ? item.历史记录.length : 0) <= historyCount)
+        .filter((item) => 读取历史长度(item) <= historyCount)
         .filter((item) => Number(item.时间戳 || 0) <= timestamp || timestamp <= 0)
         .sort((a, b) => {
-            const byHistory = (Array.isArray(b.历史记录) ? b.历史记录.length : 0) - (Array.isArray(a.历史记录) ? a.历史记录.length : 0);
+            const byHistory = 读取历史长度(b) - 读取历史长度(a);
             if (byHistory !== 0) return byHistory;
             return Number(b.时间戳 || 0) - Number(a.时间戳 || 0);
         })[0] || null;
@@ -151,7 +161,7 @@ export const 补全存档谱系元数据 = <T extends Partial<存档结构>>(
     const explicitDepth = Number(metadata.存档谱系深度);
     const parent = 选择存档父节点({ ...save, 元数据: metadata } as Partial<存档结构>, candidates);
     const parentHash = parent ? 读取存档谱系哈希(parent) : explicitParentHash;
-    const parentHistoryCount = parent && Array.isArray(parent.历史记录) ? parent.历史记录.length : 0;
+    const parentHistoryCount = parent ? 读取历史长度(parent) : 0;
     const existingBranchInput = readText(metadata.存档分支输入);
     const branchInput = parent
         ? 读取历史用户输入(save, parentHistoryCount)

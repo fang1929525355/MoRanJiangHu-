@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
 
-import { 选择最佳可用模型 } from '../components/features/Settings/ApiSettings';
+import React from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import ApiSettings, { 是否GeminiDeepResearch配置, 解析模型列表后的选择, 选择最佳可用模型 } from '../components/features/Settings/ApiSettings';
+import * as textAIService from '../services/ai/text';
 import { 创建接口配置模板, 构建OpenAI兼容模型列表候选地址, 获取剧情回忆接口配置, 获取世界演变接口配置, 获取规划分析接口配置, 规范化接口设置, 推断供应商, 供应商标签 } from '../utils/apiConfig';
+import { 获取OpenAI兼容模型列表 } from '../utils/openAIModelListFetcher';
+
+vi.mock('../services/ai/text', () => ({
+    testConnection: vi.fn()
+}));
+
+vi.mock('../utils/openAIModelListFetcher', () => ({
+    获取OpenAI兼容模型列表: vi.fn()
+}));
 
 describe('接口模型自动选择', () => {
     it('优先选择同渠道返回列表中版本号更大的高能力模型', () => {
@@ -30,6 +44,217 @@ describe('接口模型自动选择', () => {
             'gpt-5-mini',
             'gpt-5'
         ])).toBe('gpt-5');
+    });
+
+    it('Deep Research 协议提示仍能独立识别，不参与模型自动选择', () => {
+        expect(是否GeminiDeepResearch配置(
+            'gemini-2.5-pro-deep-research',
+            'https://generativelanguage.googleapis.com/v1beta'
+        )).toBe(true);
+        expect(是否GeminiDeepResearch配置(
+            'agy-gpt-oss-120b-medium',
+            'https://example.com/v1'
+        )).toBe(false);
+    });
+
+    it('获取列表或测试连接时保留用户当前选择，不自动切换成评分更高的模型', () => {
+        expect(解析模型列表后的选择('agy-gpt-oss-120b-medium', [
+            'gemini-2.5-pro',
+            'agy-gpt-oss-120b-medium'
+        ])).toBe('agy-gpt-oss-120b-medium');
+    });
+
+    it('只有当前模型为空时才自动选择一个可用模型', () => {
+        expect(解析模型列表后的选择('', [
+            'gemini-2.5-flash',
+            'gemini-2.5-pro'
+        ])).toBe('gemini-2.5-pro');
+    });
+});
+
+describe('接口模型异步请求竞态', () => {
+    const fetchModelsMock = vi.mocked(获取OpenAI兼容模型列表);
+    const testConnectionMock = vi.mocked(textAIService.testConnection);
+
+    const createDeferred = <T,>() => {
+        let resolve!: (value: T) => void;
+        let reject!: (reason?: unknown) => void;
+        const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+            resolve = resolvePromise;
+            reject = rejectPromise;
+        });
+        return { promise, resolve, reject };
+    };
+
+    const createConfig = (id: string, name: string, baseUrl: string, apiKey: string) => ({
+        ...创建接口配置模板('openai_compatible'),
+        id,
+        名称: name,
+        baseUrl,
+        apiKey,
+        model: ''
+    });
+
+    const renderSettings = () => render(React.createElement(ApiSettings, {
+        settings: 规范化接口设置({
+            activeConfigId: 'config-a',
+            configs: [
+                createConfig('config-a', '配置 A', 'https://a.example.test/v1', 'key-a'),
+                createConfig('config-b', '配置 B', 'https://b.example.test/v1', 'key-b')
+            ],
+            功能模型占位: {
+                主剧情使用模型: ''
+            }
+        }),
+        onSave: vi.fn()
+    }));
+
+    beforeEach(() => {
+        fetchModelsMock.mockReset();
+        testConnectionMock.mockReset();
+    });
+
+    afterEach(() => {
+        cleanup();
+    });
+
+    it('配置 A 返回模型前切换到 B 时，不把 A 的列表或推荐模型写入 B', async () => {
+        const deferred = createDeferred<string[]>();
+        fetchModelsMock.mockReturnValueOnce(deferred.promise);
+        renderSettings();
+
+        fireEvent.click(screen.getByRole('button', { name: '获取列表' }));
+        fireEvent.click(screen.getByRole('button', { name: /配置 B/ }));
+
+        await act(async () => {
+            deferred.resolve(['gemini-2.5-pro']);
+            await deferred.promise;
+        });
+
+        await waitFor(() => expect(screen.getByText('接口配置已切换或发生变化，已丢弃旧模型列表。')).toBeTruthy());
+        expect(screen.getByPlaceholderText('可直接手动输入模型名称')).toHaveProperty('value', 'gpt-4o-mini');
+        expect(screen.queryByText('gemini-2.5-pro')).toBeNull();
+        expect(testConnectionMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['接口地址 (Base URL)', 'https://changed.example.test/v1'],
+        ['密钥 (API Key)', 'changed-key']
+    ])('同一配置等待期间修改%s时，丢弃旧模型响应', async (label, nextValue) => {
+        const deferred = createDeferred<string[]>();
+        fetchModelsMock.mockReturnValueOnce(deferred.promise);
+        renderSettings();
+
+        fireEvent.click(screen.getByRole('button', { name: '获取列表' }));
+        fireEvent.change(screen.getByLabelText(label), { target: { value: nextValue } });
+
+        await act(async () => {
+            deferred.resolve(['gemini-2.5-pro']);
+            await deferred.promise;
+        });
+
+        await waitFor(() => expect(screen.getByText('接口配置已切换或发生变化，已丢弃旧模型列表。')).toBeTruthy());
+        expect(screen.getByPlaceholderText('可直接手动输入模型名称')).toHaveProperty('value', 'gpt-4o-mini');
+        expect(screen.queryByText('gemini-2.5-pro')).toBeNull();
+    });
+
+    it('连接测试获取模型期间切换配置时，不触发旧配置的连接请求', async () => {
+        const deferred = createDeferred<string[]>();
+        fetchModelsMock.mockReturnValueOnce(deferred.promise);
+        renderSettings();
+
+        fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+        fireEvent.click(screen.getByRole('button', { name: /配置 B/ }));
+
+        await act(async () => {
+            deferred.resolve(['gemini-2.5-pro']);
+            await deferred.promise;
+        });
+
+        await waitFor(() => expect(screen.getByText('接口配置已切换或发生变化，已取消旧配置的连接测试，请重新测试当前配置。')).toBeTruthy());
+        expect(testConnectionMock).not.toHaveBeenCalled();
+        expect(screen.getByPlaceholderText('可直接手动输入模型名称')).toHaveProperty('value', 'gpt-4o-mini');
+    });
+
+    it.each([
+        ['接口地址 (Base URL)', 'https://changed.example.test/v1'],
+        ['密钥 (API Key)', 'changed-key']
+    ])('连接请求已发出后修改%s时，丢弃旧连接结果', async (label, nextValue) => {
+        const connectionDeferred = createDeferred<{ ok: boolean; detail: string }>();
+        fetchModelsMock.mockResolvedValueOnce(['gpt-4o-mini']);
+        testConnectionMock.mockReturnValueOnce(connectionDeferred.promise);
+        renderSettings();
+
+        fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+        await waitFor(() => expect(testConnectionMock).toHaveBeenCalledTimes(1));
+        fireEvent.change(screen.getByLabelText(label), { target: { value: nextValue } });
+
+        await act(async () => {
+            connectionDeferred.resolve({ ok: true, detail: 'OK' });
+            await connectionDeferred.promise;
+        });
+
+        await waitFor(() => expect(screen.getByText('接口配置已切换或发生变化，已丢弃旧配置的连接测试结果，请重新测试当前配置。')).toBeTruthy());
+        expect(screen.queryByText('连接测试成功')).toBeNull();
+    });
+
+    it('最大输出 Token 校验失败时保留提示且不发送连接请求', async () => {
+        fetchModelsMock.mockResolvedValueOnce(['gpt-4o-mini']);
+        renderSettings();
+
+        fireEvent.click(screen.getByRole('button', { name: '64K' }));
+        fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+        await waitFor(() => expect(screen.getByText(/gpt-4o-mini 官方最大输出约为 16384/)).toBeTruthy());
+        expect(testConnectionMock).not.toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: '测试连接' })).not.toHaveProperty('disabled', true);
+    });
+
+    it('连接请求已发出后修改模型时，丢弃旧模型的连接结果', async () => {
+        const connectionDeferred = createDeferred<{ ok: boolean; detail: string }>();
+        fetchModelsMock.mockResolvedValueOnce(['gpt-4o-mini', 'gemini-2.5-pro']);
+        testConnectionMock.mockReturnValueOnce(connectionDeferred.promise);
+        renderSettings();
+
+        fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+        await waitFor(() => expect(testConnectionMock).toHaveBeenCalledTimes(1));
+        fireEvent.change(screen.getByPlaceholderText('可直接手动输入模型名称'), {
+            target: { value: 'gemini-2.5-pro' }
+        });
+
+        await act(async () => {
+            connectionDeferred.resolve({ ok: true, detail: 'OK' });
+            await connectionDeferred.promise;
+        });
+
+        await waitFor(() => expect(screen.getByText('主剧情模型已发生变化，已丢弃旧模型的连接测试结果，请重新测试当前模型。')).toBeTruthy());
+        expect(screen.queryByText('连接测试成功')).toBeNull();
+    });
+
+    it('后发连接测试会作废旧模型列表请求，旧结果不覆盖当前状态', async () => {
+        const listDeferred = createDeferred<string[]>();
+        const connectionDeferred = createDeferred<{ ok: boolean; detail: string }>();
+        fetchModelsMock
+            .mockReturnValueOnce(listDeferred.promise)
+            .mockResolvedValueOnce(['gpt-4o-mini']);
+        testConnectionMock.mockReturnValueOnce(connectionDeferred.promise);
+        renderSettings();
+
+        fireEvent.click(screen.getByRole('button', { name: '获取列表' }));
+        fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+        await waitFor(() => expect(testConnectionMock).toHaveBeenCalledTimes(1));
+
+        await act(async () => {
+            listDeferred.resolve(['gemini-2.5-pro']);
+            await listDeferred.promise;
+        });
+        expect(screen.queryByText('接口配置已切换或发生变化，已丢弃旧模型列表。')).toBeNull();
+
+        await act(async () => {
+            connectionDeferred.resolve({ ok: true, detail: 'OK' });
+            await connectionDeferred.promise;
+        });
+        await waitFor(() => expect(screen.getByText('连接测试成功')).toBeTruthy());
     });
 });
 
