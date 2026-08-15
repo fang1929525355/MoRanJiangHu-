@@ -121,6 +121,8 @@
 - 只提交安全模板，例如 `.env.production.example` 和 `.dev.vars.example`。
 - 前端构建期变量使用 `VITE_` 前缀，会被写入构建产物，所以这里只能放公开 client id 或公开 API base URL。
 - Cloudflare 运行时密钥应通过 `npm run cf:secrets:bulk -- .env.production` 或单个 `wrangler secret put ...` 命令设置。
+- **重要——Cloudflare 账号迁移**：项目已从旧账号 `648558021@qq.com`（账号 ID `af087b3ace8e434ac24273df5b8b9e51`）迁移到新账号 `1524640484@qq.com`（账号 ID `5d34b67de994f61284cd81176d6f1382`）。Worker、Pages 项目、KV 命名空间和 D1 数据库均已迁移到新账号。所有 wrangler 命令应使用 `wrangler.152.jsonc`（内含 `account_id: 5d34b67de994f61284cd81176d6f1382`）。不要使用 `wrangler.jsonc`（旧账号配置，无 `account_id`）进行生产操作。旧账号的 Pages/Worker 密钥已过期，不应再使用；始终通过迁移目标凭据（`CF_MIGRATE_TARGET_GLOBAL_API_EMAIL=1524640484@qq.com`、`CF_MIGRATE_TARGET_GLOBAL_API_KEY`、`CF_MIGRATE_TARGET_ACCOUNT_ID`）将密钥同步到新账号的 Worker。
+- **Vite import.meta.env 静态替换规则**：Vite 只在构建期静态替换*直接*的 `import.meta.env.VITE_*` 属性访问（如 `import.meta.env.VITE_GITHUB_CLIENT_ID`）。当用 `(import.meta as any).env?.VITE_*` 加上 `as any` 类型转换和可选链时，Vite 无法在构建期匹配该模式，会在产物里坍缩成对一个空对象 `{}` 的运行时访问，导致环境变量值在生产包里变成 `undefined`。这是一个隐蔽 bug：开发服务器正常（回退到运行时 `import.meta.env`），但生产构建会彻底丢失该值。运行时代码中一定要用直接的 `import.meta.env.VITE_*` 访问方式，绝不要用 `(import.meta as any).env?.VITE_*`。
 - 每次环境变量新增、删除或修改后，都要刷新本机 `.env.production`，重新加密，并把加密包同步到对象存储。
 - `wrangler.jsonc` 只放绑定和非敏感变量，例如 KV 绑定、键名前缀、静态资源绑定、公开仓库默认值；不要把运行时密钥写进 `wrangler.jsonc`。
 - 当前需要的 Cloudflare secrets 包括 `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET`、`GITHUB_NATIVE_CLIENT_ID`、`GITHUB_NATIVE_CLIENT_SECRET`、`FANDOM_PRESET_GITHUB_TOKEN`、`IMAGE_HOST_TOKEN`、`MORAN_OPENLIST_AUTH_TOKEN`、`ONLINE_ADMIN_PASSWORD`、`MORAN_B2_APPLICATION_KEY_ID`、`MORAN_B2_APPLICATION_KEY` 和 `MORAN_B2_BUCKET_ID`。

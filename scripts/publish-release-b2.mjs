@@ -497,7 +497,8 @@ try {
     'release-manifest/latest.json',
     '--binding=RELEASE_MANIFEST',
     `--path=${kvManifestPath}`,
-    '--remote'
+    '--remote',
+    '--config', 'wrangler.152.jsonc'
   ];
   const kvResult = spawnSync(
     wranglerCommand,

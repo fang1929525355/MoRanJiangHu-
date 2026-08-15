@@ -5,7 +5,9 @@ const readEnvString = (value: unknown): string => (
 );
 
 export const getSyncApiBaseUrl = (): string => {
-    const raw = readEnvString((import.meta as any).env?.VITE_SYNC_API_BASE_URL);
+    // Vite only statically replaces direct `import.meta.env.VITE_*` access.
+    // Dynamic `(import.meta as any).env?.VITE_*` collapses to an empty object in production bundles.
+    const raw = readEnvString(import.meta.env.VITE_SYNC_API_BASE_URL);
     return raw.replace(/\/+$/, '');
 };
 

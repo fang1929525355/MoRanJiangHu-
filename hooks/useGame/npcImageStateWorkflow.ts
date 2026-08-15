@@ -3,7 +3,7 @@ import { 获取图片展示地址, 图片资源记录含可恢复地址, 压缩�
 import { recordDiagnosticLog } from '../../services/diagnosticLog';
 
 const 调试日志 = (message: string, data?: unknown) => {
-    if ((import.meta as any).env.DEV) {
+    if (import.meta.env.DEV) {
         console.log(message, data);
     }
     recordDiagnosticLog('debug', message, data);

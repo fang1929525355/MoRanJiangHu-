@@ -1,12 +1,11 @@
 {
-  "versionCode": 646,
-  "versionName": "1.0.646",
+  "versionCode": 647,
+  "versionName": "1.0.647",
   "releaseChannel": "stable",
   "releaseNotes": [
-    "修复自定义模型（类脑、one-api 等 glm 中转站）发消息 404：填写的接口地址会被原样尊重，不再被错误改写成智谱私有地址导致发不出消息。",
-    "修复开局“非流式输出”设置不生效：在设置里开启“启用非流式输出”后，开局剧情也会走非流式，长文本输出更稳定、不再中途断开。",
-    "修复行动选项误报缺失：AI 偶尔省略格式标签时，系统会自动补齐结构，不再把原本正常的剧情误判为缺少行动选项而强制重生成。",
-    "接口兼容性增强：智谱、类脑等接口的地址识别更精准，路径中带 bigmodel.cn 的中转站不再被误当成智谱官方；行动选项的英文别名（options / choice 等）也能正确识别。",
+    "修复 GitHub 云端同步授权失败（提示 redirect_uri 不匹配）的问题：已同步迁移后的 Cloudflare 账号密钥，OAuth 回调地址现在能与 GitHub App 登记地址正确匹配。",
+    "修复 APK 内前端环境变量在打包后丢失的问题：Vite 构建期变量现在能正确内联到生产包，GitHub 同步功能在 APK 端不再因缺少 Client ID 而无法工作。",
+    "增强 OAuth 错误提示：遇到回调地址不一致时会显示具体的 redirect_uri 和 client 类型，方便排查。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
@@ -711,13 +710,12 @@
   "multiDeviceSyncGuideUrl": "https://msjh.bacon159.pp.ua/tutorials.html#sync",
   "tutorialsUrl": "https://msjh.bacon159.pp.ua/tutorials.html",
   "changes": [
-    "修复自定义模型（类脑、one-api 等 glm 中转站）发消息 404：填写的接口地址会被原样尊重，不再被错误改写成智谱私有地址导致发不出消息。",
-    "修复开局“非流式输出”设置不生效：在设置里开启“启用非流式输出”后，开局剧情也会走非流式，长文本输出更稳定、不再中途断开。",
-    "修复行动选项误报缺失：AI 偶尔省略格式标签时，系统会自动补齐结构，不再把原本正常的剧情误判为缺少行动选项而强制重生成。",
-    "接口兼容性增强：智谱、类脑等接口的地址识别更精准，路径中带 bigmodel.cn 的中转站不再被误当成智谱官方；行动选项的英文别名（options / choice 等）也能正确识别。",
+    "修复 GitHub 云端同步授权失败（提示 redirect_uri 不匹配）的问题：已同步迁移后的 Cloudflare 账号密钥，OAuth 回调地址现在能与 GitHub App 登记地址正确匹配。",
+    "修复 APK 内前端环境变量在打包后丢失的问题：Vite 构建期变量现在能正确内联到生产包，GitHub 同步功能在 APK 端不再因缺少 Client ID 而无法工作。",
+    "增强 OAuth 错误提示：遇到回调地址不一致时会显示具体的 redirect_uri 和 client 类型，方便排查。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
-  "notes": "修复自定义模型（类脑、one-api 等 glm 中转站）发消息 404：填写的接口地址会被原样尊重，不再被错误改写成智谱私有地址导致发不出消息。\n修复开局“非流式输出”设置不生效：在设置里开启“启用非流式输出”后，开局剧情也会走非流式，长文本输出更稳定、不再中途断开。\n修复行动选项误报缺失：AI 偶尔省略格式标签时，系统会自动补齐结构，不再把原本正常的剧情误判为缺少行动选项而强制重生成。\n接口兼容性增强：智谱、类脑等接口的地址识别更精准，路径中带 bigmodel.cn 的中转站不再被误当成智谱官方；行动选项的英文别名（options / choice 等）也能正确识别。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-08-07T22:34:42.661+08:00"
+  "notes": "修复 GitHub 云端同步授权失败（提示 redirect_uri 不匹配）的问题：已同步迁移后的 Cloudflare 账号密钥，OAuth 回调地址现在能与 GitHub App 登记地址正确匹配。\n修复 APK 内前端环境变量在打包后丢失的问题：Vite 构建期变量现在能正确内联到生产包，GitHub 同步功能在 APK 端不再因缺少 Client ID 而无法工作。\n增强 OAuth 错误提示：遇到回调地址不一致时会显示具体的 redirect_uri 和 client 类型，方便排查。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
+  "releasePublishedAt": "2026-08-15T14:15:25.339+08:00"
 }

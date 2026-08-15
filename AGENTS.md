@@ -123,6 +123,8 @@
 - Commit only safe templates such as `.env.production.example` and `.dev.vars.example`.
 - Frontend build-time variables use the `VITE_` prefix and can be embedded into built assets, so only put public client IDs or public API base URLs there.
 - Cloudflare runtime secrets should be set with `npm run cf:secrets:bulk -- .env.production` or individual `wrangler secret put ...` commands.
+- **IMPORTANT — Cloudflare Account Migration**: The project has migrated from the old account `648558021@qq.com` (account ID `af087b3ace8e434ac24273df5b8b9e51`) to the new account `1524640484@qq.com` (account ID `5d34b67de994f61284cd81176d6f1382`). The Worker, Pages project, KV namespaces, and D1 databases have all been migrated to the new account. Use `wrangler.152.jsonc` (which has `account_id: 5d34b67de994f61284cd81176d6f1382`) for all wrangler commands targeting the new account. Do not use `wrangler.jsonc` (the old-account config without `account_id`) for production operations unless you know the old account is still needed. The old account's Pages secrets and Worker secrets are stale and should not be used; always sync secrets to the new account's Worker via the migrate-target credentials (`CF_MIGRATE_TARGET_GLOBAL_API_EMAIL=1524640484@qq.com`, `CF_MIGRATE_TARGET_GLOBAL_API_KEY`, `CF_MIGRATE_TARGET_ACCOUNT_ID`).
+- **Vite import.meta.env Static Replacement Rule**: Vite only statically replaces *direct* `import.meta.env.VITE_*` property access (e.g., `import.meta.env.VITE_GITHUB_CLIENT_ID`). When you write `(import.meta as any).env?.VITE_*` with a cast and optional chaining, Vite cannot match the pattern at build time; it collapses to a runtime access on an empty object `{}`, so the env value becomes `undefined` in production bundles. This is a silent bug: the dev server works (it falls through to runtime `import.meta.env`), but production builds lose the value entirely. Always use direct `import.meta.env.VITE_*` access in runtime code. Never use `(import.meta as any).env?.VITE_*`.
 - Whenever environment variables are added, removed, or changed, refresh the local `.env.production`, re-encrypt it, and resync the encrypted bundle to object storage.
 - `wrangler.jsonc` should contain bindings and non-sensitive vars such as KV bindings, key prefixes, static asset bindings, and public repository defaults; do not put runtime secrets in `wrangler.jsonc`.
 - Current required Cloudflare secrets include `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_NATIVE_CLIENT_ID`, `GITHUB_NATIVE_CLIENT_SECRET`, `FANDOM_PRESET_GITHUB_TOKEN`, `IMAGE_HOST_TOKEN`, `MORAN_OPENLIST_AUTH_TOKEN`, `ONLINE_ADMIN_PASSWORD`, `MORAN_B2_APPLICATION_KEY_ID`, `MORAN_B2_APPLICATION_KEY`, and `MORAN_B2_BUCKET_ID`.
@@ -884,13 +886,15 @@ B2 APK distribution was decommissioned on 2026-07-13. Some legacy helper code an
 
 ### Cloudflare Secrets (Current)
 
-- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — GitHub OAuth
-- `GITHUB_NATIVE_CLIENT_ID`, `GITHUB_NATIVE_CLIENT_SECRET` — GitHub native OAuth
+- **Account**: `1524640484@qq.com` (account ID `5d34b67de994f61284cd81176d6f1382`). The old account `648558021@qq.com` is deprecated; its Pages/Worker secrets no longer serve production traffic.
+- **Worker config**: `wrangler.152.jsonc` is the production config for the new account. `wrangler.jsonc` is the legacy config for the old account and should not be used for deploys.
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — GitHub OAuth (primary, callback `https://msjh.bacon159.pp.ua/oauth/github/callback`)
+- `GITHUB_BACKUP_CLIENT_ID`, `GITHUB_BACKUP_CLIENT_SECRET` — GitHub OAuth backup (callback `https://msjh.bacon.de5.net/oauth/github/callback`)
+- `GITHUB_NATIVE_CLIENT_ID`, `GITHUB_NATIVE_CLIENT_SECRET` — GitHub native APK OAuth
 - `FANDOM_PRESET_GITHUB_TOKEN` — GitHub token for fandom preset repo access
 - `IMAGE_HOST_TOKEN` — Image host authentication
 - `MORAN_OPENLIST_AUTH_TOKEN` — OpenList/AList API token for OneDrive proxy
 - `ONLINE_ADMIN_PASSWORD` — Online admin panel access
-- B2 secrets may still exist in Cloudflare for legacy cleanup, but they are no longer part of the active APK distribution path.
 
 ### OneDrive Data Layout
 

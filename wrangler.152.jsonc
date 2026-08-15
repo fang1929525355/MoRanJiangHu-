@@ -1,0 +1,58 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "moranjianghu",
+  "account_id": "5d34b67de994f61284cd81176d6f1382",
+  "main": ".tmp-worker-build/worker-entry.ts",
+  "compatibility_date": "2026-04-21",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "routes": [
+    {
+      "pattern": "msjh.bacon159.pp.ua/*",
+      "zone_name": "bacon159.pp.ua"
+    },
+    {
+      "pattern": "msjh.bacon.de5.net/*",
+      "zone_name": "bacon.de5.net"
+    }
+  ],
+  "vars": {
+    "ONLINE_SESSIONS_R2_PREFIX": "moranjianghu/online",
+    "FANDOM_PRESET_REPO_OWNER": "ypq123456789",
+    "FANDOM_PRESET_REPO_NAME": "MoRanJiangHu",
+    "FANDOM_PRESET_BASE_BRANCH": "main",
+    "MORAN_OPENLIST_API_BASE_URL": "http://159.138.7.126:5244",
+    "MORAN_OPENLIST_DIRECT_BASE_URL": "http://159.138.7.126:5244",
+    "MORAN_GITHUB_RELEASE_ACCELERATOR": "https://gh-proxy.com"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "RELEASE_MANIFEST",
+      "id": "3ddd8970a16746fbba800eaec6edc3cd"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "moranjianghu-db-backup",
+      "database_id": "d72fe8c8-c46d-4e16-9594-67beaeab7592"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ONLINE_SESSIONS_DO",
+        "class_name": "OnlineSessionsDO"
+      }
+    ]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

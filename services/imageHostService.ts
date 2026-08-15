@@ -41,7 +41,7 @@ const readEnvText = (value: unknown): string => (
 
 export const buildImageHostProxyUrl = (path: string): string => {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const configuredBase = readEnvText((import.meta as any).env?.VITE_SYNC_API_BASE_URL);
+    const configuredBase = readEnvText(import.meta.env.VITE_SYNC_API_BASE_URL);
     if (configuredBase) return `${configuredBase}${normalizedPath}`;
     if (typeof window === 'undefined') return normalizedPath;
     if (/^https?:$/i.test(window.location.protocol)) return normalizedPath;

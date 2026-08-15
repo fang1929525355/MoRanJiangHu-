@@ -12,8 +12,12 @@ const OAUTH_STATE_KEY = 'github_oauth_pending_state';
 const GITHUB_OAUTH_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 const GITHUB_OAUTH_SCOPE = 'repo';
 const WEB_CALLBACK_PATH = '/oauth/github/callback';
+// APK 默认走网页桥接回调。GitHub OAuth App 只能登记一个 callback URL，
+// 当前主站/APK 桥接统一使用主域名；备用域名仅给 web_backup client 使用。
 const DEFAULT_NATIVE_APP_LINK = 'https://msjh.bacon159.pp.ua/oauth/github/callback';
 const DEFAULT_NATIVE_DEEP_LINK = 'com.moranjianghu.game://oauth/github/callback';
+const DEFAULT_PRIMARY_ORIGIN = 'https://msjh.bacon159.pp.ua';
+const DEFAULT_BACKUP_ORIGIN = 'https://msjh.bacon.de5.net';
 
 type GitHubOAuthSessionStatus = 'idle' | 'waiting' | 'exchanging' | 'success' | 'error';
 type GitHubOAuthClientType = 'web' | 'web_backup' | 'native';
@@ -318,17 +322,17 @@ const buildNativeBridgeDeepLink = (callbackUrl: string): string | null => {
 };
 
 const getNativeDirectRedirectUri = () => {
-    const configured = readEnvString((import.meta as any).env?.VITE_GITHUB_OAUTH_REDIRECT_URI);
+    const configured = readEnvString(import.meta.env.VITE_GITHUB_OAUTH_REDIRECT_URI);
     return configured || DEFAULT_NATIVE_DEEP_LINK;
 };
 
 const getNativeBridgeRedirectUri = () => {
-    const configured = readEnvString((import.meta as any).env?.VITE_GITHUB_OAUTH_BRIDGE_REDIRECT_URI);
+    const configured = readEnvString(import.meta.env.VITE_GITHUB_OAUTH_BRIDGE_REDIRECT_URI);
     return configured || DEFAULT_NATIVE_APP_LINK;
 };
 
 const shouldUseNativeDirectRedirect = () => (
-    readEnvString((import.meta as any).env?.VITE_GITHUB_OAUTH_USE_DIRECT_DEEP_LINK).toLowerCase() === 'true'
+    readEnvString(import.meta.env.VITE_GITHUB_OAUTH_USE_DIRECT_DEEP_LINK).toLowerCase() === 'true'
 );
 
 const resolveWebOAuthClient = ({
@@ -345,15 +349,23 @@ const resolveWebOAuthClient = ({
     backupOrigin?: string;
 }) => {
     const normalizedCurrentOrigin = currentOrigin.replace(/\/+$/, '');
-    const normalizedPrimaryOrigin = readEnvString(primaryOrigin).replace(/\/+$/, '') || 'https://msjh.bacon159.pp.ua';
-    const normalizedBackupOrigin = readEnvString(backupOrigin).replace(/\/+$/, '') || 'https://msjh.bacon.de5.net';
+    const normalizedPrimaryOrigin = readEnvString(primaryOrigin).replace(/\/+$/, '') || DEFAULT_PRIMARY_ORIGIN;
+    const normalizedBackupOrigin = readEnvString(backupOrigin).replace(/\/+$/, '') || DEFAULT_BACKUP_ORIGIN;
     const useBackupClient = normalizedCurrentOrigin === normalizedBackupOrigin && readEnvString(backupClientId).length > 0;
+    // Always pin redirect_uri to the OAuth App's registered origin.
+    // Localhost / preview / capacitor origins must not be sent to GitHub.
+    const redirectOrigin = useBackupClient ? normalizedBackupOrigin : normalizedPrimaryOrigin;
+    const redirectUri = new URL(WEB_CALLBACK_PATH, `${redirectOrigin}/`).toString();
     const currentCallbackUri = new URL(WEB_CALLBACK_PATH, currentOrigin).toString();
     return {
         clientId: useBackupClient ? readEnvString(backupClientId) : primaryClientId,
         clientType: useBackupClient ? 'web_backup' : 'web',
-        redirectUri: currentCallbackUri,
-        expectedCallbackUris: [currentCallbackUri]
+        redirectUri,
+        // Accept either the registered callback or same-path callbacks that land on the current origin
+        // after a proxy/host rewrite, then normalize back to redirectUri during exchange.
+        expectedCallbackUris: currentCallbackUri === redirectUri
+            ? [redirectUri]
+            : [redirectUri, currentCallbackUri]
     } as const;
 };
 
@@ -373,19 +385,21 @@ const resolveGitHubOAuthClientIds = ({
 });
 
 const getWebOAuthClient = (primaryClientId: string, backupClientId?: string) => {
-    const currentOrigin = typeof window === 'undefined' ? 'https://msjh.bacon159.pp.ua' : window.location.origin;
+    const currentOrigin = typeof window === 'undefined' ? DEFAULT_PRIMARY_ORIGIN : window.location.origin;
     return resolveWebOAuthClient({
         currentOrigin,
         primaryClientId,
         backupClientId,
-        primaryOrigin: (import.meta as any).env?.VITE_GITHUB_PRIMARY_ORIGIN,
-        backupOrigin: (import.meta as any).env?.VITE_GITHUB_BACKUP_ORIGIN
+        primaryOrigin: import.meta.env.VITE_GITHUB_PRIMARY_ORIGIN,
+        backupOrigin: import.meta.env.VITE_GITHUB_BACKUP_ORIGIN
     });
 };
 
-const getWebRedirectUri = () => {
-    if (typeof window === 'undefined') return WEB_CALLBACK_PATH;
-    return new URL(WEB_CALLBACK_PATH, window.location.origin).toString();
+const getWebRedirectUri = (primaryClientId = '', backupClientId = '') => {
+    if (typeof window === 'undefined') {
+        return new URL(WEB_CALLBACK_PATH, `${DEFAULT_PRIMARY_ORIGIN}/`).toString();
+    }
+    return getWebOAuthClient(primaryClientId, backupClientId).redirectUri;
 };
 
 export function useGitHubOAuth() {
@@ -397,8 +411,8 @@ export function useGitHubOAuth() {
     const handledCallbackUrlRef = useRef('');
 
     const isNativeApp = isNativeCapacitorEnvironment();
-    const buildWebGitHubClientId = readEnvString((import.meta as any).env?.VITE_GITHUB_CLIENT_ID);
-    const buildBackupGitHubClientId = readEnvString((import.meta as any).env?.VITE_GITHUB_BACKUP_CLIENT_ID);
+    const buildWebGitHubClientId = readEnvString(import.meta.env.VITE_GITHUB_CLIENT_ID);
+    const buildBackupGitHubClientId = readEnvString(import.meta.env.VITE_GITHUB_BACKUP_CLIENT_ID);
     const runtimeConfigLoaded = isNativeApp || buildWebGitHubClientId.length > 0 || runtimeConfig !== null;
     const { webGitHubClientId, backupGitHubClientId } = resolveGitHubOAuthClientIds({
         buildWebClientId: buildWebGitHubClientId,
@@ -407,7 +421,7 @@ export function useGitHubOAuth() {
         runtimeBackupClientId: runtimeConfig?.githubBackupClientId
     });
     const webOAuthClient = !isNativeApp ? getWebOAuthClient(webGitHubClientId, backupGitHubClientId) : null;
-    const nativeGitHubClientId = readEnvString((import.meta as any).env?.VITE_GITHUB_NATIVE_CLIENT_ID);
+    const nativeGitHubClientId = readEnvString(import.meta.env.VITE_GITHUB_NATIVE_CLIENT_ID);
     const hasNativeGitHubClientId = nativeGitHubClientId.length > 0;
     const nativeDirectRedirectEnabled = isNativeApp && hasNativeGitHubClientId && shouldUseNativeDirectRedirect();
     const oauthClientType: GitHubOAuthClientType = nativeDirectRedirectEnabled ? 'native' : 'web';
@@ -416,11 +430,11 @@ export function useGitHubOAuth() {
     const syncApiBaseUrl = useMemo(() => getSyncApiBaseUrl(), []);
     const missingNativeSyncApiBaseUrl = isNativeApp && isMissingNativeSyncApiBaseUrl();
     const oauthRedirectUri = useMemo(() => {
-        if (!isNativeApp) return getWebRedirectUri();
+        if (!isNativeApp) return getWebRedirectUri(webGitHubClientId, backupGitHubClientId);
         return oauthClientType === 'native'
             ? getNativeDirectRedirectUri()
             : getNativeBridgeRedirectUri();
-    }, [isNativeApp, oauthClientType]);
+    }, [backupGitHubClientId, isNativeApp, oauthClientType, webGitHubClientId]);
     const nativeDeepLinkUri = useMemo(() => getNativeDirectRedirectUri(), []);
 
     const resetOAuthSession = useCallback(() => {
@@ -585,7 +599,15 @@ export function useGitHubOAuth() {
             );
             finishWithToken(nextToken);
         } catch (callbackFailure) {
-            const message = normalizeErrorMessage(callbackFailure, 'GitHub 登录失败');
+            const rawMessage = normalizeErrorMessage(callbackFailure, 'GitHub 登录失败');
+            const message = /redirect_uri MUST match the registered callback URL/i.test(rawMessage)
+                ? [
+                    'GitHub 回调地址与 OAuth App 登记不一致。',
+                    `当前使用的 redirect_uri：${pendingState.redirectUri}`,
+                    `clientType：${pendingState.clientType}`,
+                    '请确认 Cloudflare 中的 GITHUB_CLIENT_ID / GITHUB_BACKUP_CLIENT_ID / GITHUB_NATIVE_CLIENT_ID 与前端一致，且对应 App 的 Authorization callback URL 已登记该地址。'
+                ].join('\n')
+                : rawMessage;
             clearPendingOAuthState();
             setError(message);
             setOAuthSession((current) => ({
@@ -694,7 +716,7 @@ export function useGitHubOAuth() {
         const useNativeDirectCallback = isNativeApp && oauthClientType === 'native' && shouldUseNativeDirectRedirect();
         const webOAuthClient = !isNativeApp ? getWebOAuthClient(webGitHubClientId, backupGitHubClientId) : null;
         const redirectUri = !isNativeApp
-            ? webOAuthClient?.redirectUri || getWebRedirectUri()
+            ? webOAuthClient?.redirectUri || getWebRedirectUri(webGitHubClientId, backupGitHubClientId)
             : useNativeDirectCallback
                 ? getNativeDirectRedirectUri()
                 : getNativeBridgeRedirectUri();
