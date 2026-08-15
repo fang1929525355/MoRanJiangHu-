@@ -189,6 +189,7 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
     // 同步追踪最新 form，避免异步请求返回后用旧闭包覆盖用户在等待期间手动填写的模型。
     const formRef = useRef(form);
     formRef.current = form;
+    const asyncOperationIdRef = useRef(0);
     const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
     const [mainModelOptions, setMainModelOptions] = useState<string[]>([]);
     const [loadingMainModels, setLoadingMainModels] = useState(false);
@@ -278,37 +279,51 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
         return null;
     };
 
-    const fetchModelsFromCurrentConfig = async (): Promise<string[] | null> => {
-        if (!activeConfig) {
-            setMessage('请先创建并选择一个接口配置。');
-            return null;
-        }
-        try {
-            const result = await 获取OpenAI兼容模型列表({
-                baseUrl: activeConfig.baseUrl,
-                apiKey: activeConfig.apiKey,
-                供应商: activeConfig.供应商
-            });
-            return result;
-        } catch (e: any) {
-            setMessage(`获取失败：${e.message}`);
-            return null;
-        }
+    const fetchModelsFromConfig = async (config: 单接口配置结构): Promise<string[]> => (
+        获取OpenAI兼容模型列表({
+            baseUrl: config.baseUrl,
+            apiKey: config.apiKey,
+            供应商: config.供应商
+        })
+    );
+
+    const 读取最新活动配置 = (): 单接口配置结构 | null => {
+        const latestForm = formRef.current;
+        return latestForm.configs.find((cfg) => cfg.id === latestForm.activeConfigId) || null;
     };
 
+    const 请求来源一致 = (request: 单接口配置结构, current: 单接口配置结构 | null): boolean => (
+        Boolean(current)
+        && request.id === current?.id
+        && request.baseUrl === current?.baseUrl
+        && request.apiKey === current?.apiKey
+        && request.供应商 === current?.供应商
+    );
+
     const handleFetchMainModels = async () => {
-        const requestConfigId = activeConfig?.id || null;
+        const requestConfig = activeConfig;
+        if (!requestConfig) {
+            setMessage('请先创建并选择一个接口配置。');
+            return;
+        }
+        const operationId = ++asyncOperationIdRef.current;
+        setTestingConnection(false);
         setLoadingMainModels(true);
         setMessage('');
-        const result = await fetchModelsFromCurrentConfig();
-        if (result) {
-            setMainModelOptions(result);
-            // 异步返回后从最新 form 读取当前模型，防止用户在等待期间手动填写后被覆盖
+        try {
+            const result = await fetchModelsFromConfig(requestConfig);
+            if (operationId !== asyncOperationIdRef.current) return;
+
             const latestForm = formRef.current;
-            const latestActiveConfig = latestForm.configs.find((cfg) => cfg.id === latestForm.activeConfigId) || latestForm.configs[0] || null;
+            const latestActiveConfig = 读取最新活动配置();
+            if (!请求来源一致(requestConfig, latestActiveConfig)) {
+                setMessage('接口配置已切换或发生变化，已丢弃旧模型列表。');
+                return;
+            }
+
+            setMainModelOptions(result);
             const currentModel = ((latestActiveConfig?.model || '').trim() || (latestForm.功能模型占位.主剧情使用模型 || '').trim());
-            const sameConfig = requestConfigId && latestActiveConfig?.id === requestConfigId;
-            if (!currentModel && sameConfig) {
+            if (!currentModel) {
                 const selectedModel = 解析模型列表后的选择(currentModel, result);
                 if (selectedModel) {
                     updateMainModel(selectedModel);
@@ -317,12 +332,17 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                     setMessage('主剧情模型列表获取成功。');
                 }
             } else {
-                setMessage(currentModel
-                    ? `主剧情模型列表获取成功，已保留当前选择 ${currentModel}。`
-                    : '主剧情模型列表获取成功。');
+                setMessage(`主剧情模型列表获取成功，已保留当前选择 ${currentModel}。`);
+            }
+        } catch (e: any) {
+            if (operationId === asyncOperationIdRef.current) {
+                setMessage(`获取失败：${e.message}`);
+            }
+        } finally {
+            if (operationId === asyncOperationIdRef.current) {
+                setLoadingMainModels(false);
             }
         }
-        setLoadingMainModels(false);
     };
 
     const handleCreateConfig = () => {
@@ -378,48 +398,74 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
     };
 
     const handleTestConnection = async () => {
-        if (!activeConfig) return;
-        if (!activeConfig.apiKey || !activeConfig.baseUrl) {
+        const requestConfig = activeConfig;
+        if (!requestConfig) return;
+        if (!requestConfig.apiKey || !requestConfig.baseUrl) {
             setMessage('请先填写当前配置的 API Key 和 Base URL');
             return;
         }
+        const operationId = ++asyncOperationIdRef.current;
+        setLoadingMainModels(false);
         setMessage('');
         setTestingConnection(true);
-        let modelForTest = (activeConfig.model || '').trim() || (form.功能模型占位.主剧情使用模型 || '').trim();
-        let configForTest = activeConfig;
+        let cancelled = false;
+        let modelForTest = (requestConfig.model || '').trim() || (formRef.current.功能模型占位.主剧情使用模型 || '').trim();
+        let configForTest = requestConfig;
+        const 当前请求仍有效 = (expectedModel?: string): boolean => {
+            if (operationId !== asyncOperationIdRef.current) return false;
+            const latestForm = formRef.current;
+            const latestConfig = 读取最新活动配置();
+            if (!请求来源一致(requestConfig, latestConfig)) return false;
+            if (expectedModel === undefined) return true;
+            const latestModel = (latestConfig?.model || '').trim() || (latestForm.功能模型占位.主剧情使用模型 || '').trim();
+            return latestModel === expectedModel;
+        };
         try {
             setMessage('正在获取模型列表并验证当前模型...');
-            const models = await fetchModelsFromCurrentConfig();
+            const models = await fetchModelsFromConfig(requestConfig).catch(() => null);
+            if (operationId !== asyncOperationIdRef.current) return;
+
+            const latestForm = formRef.current;
+            const latestActiveConfig = 读取最新活动配置();
+            if (!请求来源一致(requestConfig, latestActiveConfig)) {
+                cancelled = true;
+                setMessage('接口配置已切换或发生变化，已取消旧配置的连接测试，请重新测试当前配置。');
+                return;
+            }
             if (models && models.length > 0) {
                 setMainModelOptions(models);
-                // 异步返回后从最新 form 重新读取模型，防止用户在等待期间手动填写后被覆盖
-                const latestForm = formRef.current;
-                const latestActiveConfig = latestForm.configs.find((cfg) => cfg.id === latestForm.activeConfigId) || latestForm.configs[0] || null;
-                const sameConfig = latestActiveConfig?.id === activeConfig.id;
-                if (!sameConfig) {
-                    setMessage('接口配置已切换，已取消旧配置的连接测试，请重新测试当前配置。');
-                    return;
-                }
                 const latestModel = (latestActiveConfig?.model || '').trim() || (latestForm.功能模型占位.主剧情使用模型 || '').trim();
-                configForTest = latestActiveConfig || activeConfig;
+                configForTest = latestActiveConfig || requestConfig;
                 modelForTest = latestModel;
                 if (!latestModel) {
                     const selectedModel = 解析模型列表后的选择(latestModel, models);
                     if (selectedModel) {
                         modelForTest = selectedModel;
-                        const nextConfig = { ...(latestActiveConfig || activeConfig), model: selectedModel, updatedAt: Date.now() };
+                        const nextConfig = { ...(latestActiveConfig || requestConfig), model: selectedModel, updatedAt: Date.now() };
                         configForTest = nextConfig;
                         setForm((prev) => ({
                             ...prev,
-                            activeConfigId: activeConfig.id,
-                            configs: prev.configs.map((cfg) => cfg.id === activeConfig.id ? nextConfig : cfg),
+                            activeConfigId: requestConfig.id,
+                            configs: prev.configs.map((cfg) => cfg.id === requestConfig.id ? nextConfig : cfg),
                             功能模型占位: {
                                 ...prev.功能模型占位,
                                 主剧情使用模型: selectedModel
                             }
                         }));
+                        formRef.current = {
+                            ...latestForm,
+                            activeConfigId: requestConfig.id,
+                            configs: latestForm.configs.map((cfg) => cfg.id === requestConfig.id ? nextConfig : cfg),
+                            功能模型占位: {
+                                ...latestForm.功能模型占位,
+                                主剧情使用模型: selectedModel
+                            }
+                        };
                     }
                 }
+            } else {
+                configForTest = latestActiveConfig || requestConfig;
+                modelForTest = (configForTest.model || '').trim() || (latestForm.功能模型占位.主剧情使用模型 || '').trim();
             }
             const matched = 匹配模型输出推荐(modelForTest);
             if (
@@ -438,6 +484,15 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                 ...configForTest,
                 model: modelForTest
             });
+            if (!当前请求仍有效(modelForTest)) {
+                if (operationId !== asyncOperationIdRef.current) return;
+                cancelled = true;
+                const latestConfig = 读取最新活动配置();
+                setMessage(请求来源一致(requestConfig, latestConfig)
+                    ? '主剧情模型已发生变化，已丢弃旧模型的连接测试结果，请重新测试当前模型。'
+                    : '接口配置已切换或发生变化，已丢弃旧配置的连接测试结果，请重新测试当前配置。');
+                return;
+            }
             const title = result.ok ? '连接测试成功' : '连接测试失败';
             const meta = [
                 `配置: ${configForTest.名称 || configForTest.id}`,
@@ -459,6 +514,12 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                 ok: result.ok
             });
         } catch (e: any) {
+            if (operationId !== asyncOperationIdRef.current) return;
+            if (!当前请求仍有效(modelForTest)) {
+                cancelled = true;
+                setMessage('接口配置或模型已发生变化，已丢弃旧配置的连接测试结果，请重新测试当前配置。');
+                return;
+            }
             setTestResultModal({
                 open: true,
                 title: '连接测试失败',
@@ -466,8 +527,10 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                 ok: false
             });
         } finally {
-            setMessage('');
-            setTestingConnection(false);
+            if (operationId === asyncOperationIdRef.current) {
+                if (!cancelled) setMessage('');
+                setTestingConnection(false);
+            }
         }
     };
 
@@ -574,6 +637,7 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                                 <label className="text-sm font-bold text-wuxia-cyan">接口地址 (Base URL)</label>
                                 <input
                                     type="text"
+                                    aria-label="接口地址 (Base URL)"
                                     value={activeConfig.baseUrl}
                                     onChange={(e) => updateActiveConfig({ baseUrl: e.target.value })}
                                     placeholder="https://api.openai.com/v1"
@@ -585,6 +649,7 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                                 <label className="text-sm font-bold text-wuxia-cyan">密钥 (API Key)</label>
                                 <input
                                     type="password"
+                                    aria-label="密钥 (API Key)"
                                     value={activeConfig.apiKey}
                                     onChange={(e) => updateActiveConfig({ apiKey: e.target.value })}
                                     placeholder={activeConfig.供应商 === 'mimo_token_plan' ? 'tp-...' : 'sk-...'}

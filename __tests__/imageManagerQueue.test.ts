@@ -43,6 +43,16 @@ describe('image manager queue tab composition', () => {
         expect(desktop).toContain('if (hasAssetId || hasImageUrl)');
         expect(desktop).not.toContain("entry.assetId.startsWith('data:')");
     });
+
+    it('URL-only 图库记录直接预览远程图片，本地资源缺失或解码失败时回退到 imageUrl', () => {
+        const desktop = readSource('components/features/Social/ImageManagerModal.tsx');
+        expect(desktop).toContain('if (!assetId && imageUrl)');
+        expect(desktop).toContain('setGalleryPreviewOriginal(imageUrl)');
+        expect(desktop).toContain('} else if (imageUrl) {');
+        expect(desktop).toContain('onError={() => {');
+        expect(desktop).toContain('galleryPreviewOriginal !== imageUrl');
+        expect(desktop).toContain('图片加载失败，且无可用的远程兜底地址。');
+    });
     it('does not stack the desktop queue tab with a separate history tab', () => {
         const source = readSource('components/features/Social/ImageManagerModal.tsx');
 

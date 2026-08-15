@@ -1302,25 +1302,42 @@ const ImageManagerModal: React.FC<Props> = ({
             return;
         }
         let cancelled = false;
+        setGalleryPreviewOriginal('');
         (async () => {
             try {
                 setGalleryPreviewError('');
-                const result = await 读取图片资源(galleryPreviewEntry.assetId);
+                const assetId = typeof galleryPreviewEntry.assetId === 'string' ? galleryPreviewEntry.assetId.trim() : '';
+                const imageUrl = typeof galleryPreviewEntry.imageUrl === 'string' ? galleryPreviewEntry.imageUrl.trim() : '';
+                if (!assetId && imageUrl) {
+                    if (!cancelled) setGalleryPreviewOriginal(imageUrl);
+                    return;
+                }
+                if (!assetId) {
+                    if (!cancelled) setGalleryPreviewError('图库记录没有可用的图片引用。');
+                    return;
+                }
+                const result = await 读取图片资源(assetId);
                 if (!cancelled) {
-                    if (是否图片资源引用(result)) {
-                        const fallback = 读取图片资源远程兜底地址(galleryPreviewEntry.assetId);
+                    if (result && 是否图片资源引用(result)) {
+                        const fallback = 读取图片资源远程兜底地址(assetId) || imageUrl;
                         if (fallback) {
                             setGalleryPreviewOriginal(fallback);
                         } else {
                             setGalleryPreviewError('图片引用无效，且无远程兜底地址。');
                         }
-                    } else {
+                    } else if (result) {
                         setGalleryPreviewOriginal(result);
+                    } else if (imageUrl) {
+                        setGalleryPreviewOriginal(imageUrl);
+                    } else {
+                        setGalleryPreviewError('图片资源不存在，且无远程兜底地址。');
                     }
                 }
             } catch (err: any) {
                 if (!cancelled) {
-                    setGalleryPreviewError(err?.message || '加载原图失败');
+                    const imageUrl = typeof galleryPreviewEntry.imageUrl === 'string' ? galleryPreviewEntry.imageUrl.trim() : '';
+                    if (imageUrl) setGalleryPreviewOriginal(imageUrl);
+                    else setGalleryPreviewError(err?.message || '加载原图失败');
                 }
             }
         })();
@@ -4015,7 +4032,22 @@ const ImageManagerModal: React.FC<Props> = ({
                                 {galleryPreviewError ? (
                                     <div className="text-red-400 text-xs p-4 text-center">{galleryPreviewError}</div>
                                 ) : galleryPreviewOriginal ? (
-                                    <DataUrlSafeImage src={galleryPreviewOriginal} alt={galleryPreviewEntry.itemName} className="max-w-full max-h-full object-contain" />
+                                    <DataUrlSafeImage
+                                        src={galleryPreviewOriginal}
+                                        alt={galleryPreviewEntry.itemName}
+                                        className="max-w-full max-h-full object-contain"
+                                        onError={() => {
+                                            const imageUrl = typeof galleryPreviewEntry.imageUrl === 'string'
+                                                ? galleryPreviewEntry.imageUrl.trim()
+                                                : '';
+                                            if (imageUrl && galleryPreviewOriginal !== imageUrl) {
+                                                setGalleryPreviewOriginal(imageUrl);
+                                                setGalleryPreviewError('');
+                                            } else {
+                                                setGalleryPreviewError('图片加载失败，且无可用的远程兜底地址。');
+                                            }
+                                        }}
+                                    />
                                 ) : (
                                     <div className="text-gray-500 text-xs">加载中...</div>
                                 )}

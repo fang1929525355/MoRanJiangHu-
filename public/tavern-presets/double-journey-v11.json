@@ -5108,5 +5108,18 @@
         "executionStatus": "已安全执行"
       }
     ]
+  },
+  "generationParams": {
+    "temperature": 1,
+    "top_p": 0.98,
+    "top_k": 64,
+    "frequency_penalty": 0,
+    "presence_penalty": 0,
+    "repetition_penalty": 1,
+    "max_tokens": 30000,
+    "max_context": 2000000,
+    "stream": false,
+    "assistant_prefill": "思考已结束。",
+    "continue_prefill": false
   }
 }

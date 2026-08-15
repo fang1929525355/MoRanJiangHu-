@@ -44,20 +44,42 @@ describe('creativeWorkshopModules', () => {
         expect(doubleJourney?.payload?.presetPath).toBe('/tavern-presets/double-journey-v11.json');
     });
 
-    it('双人成行 v11 本地 JSON 可被运行时完整加载', () => {
-        const payload = JSON.parse(fs.readFileSync(
-            path.join(process.cwd(), 'public/tavern-presets/double-journey-v11.json'),
-            'utf8'
-        ));
+    it('双人成行 v11 本地 JSON 可按模块公开路径完整加载', () => {
+        const doubleJourney = 创意工坊模块列表.find((entry) => entry.id === 'tavern-preset-double-journey-v11');
+        const presetPath = String(doubleJourney?.payload?.presetPath || '');
+        const localPresetPath = path.join(process.cwd(), 'public', presetPath.replace(/^\/+/, ''));
+        const payload = JSON.parse(fs.readFileSync(localPresetPath, 'utf8'));
         const preset = 规范化酒馆预设(payload);
         const promptIds = new Set(preset?.prompts.map((item) => item.identifier));
-        const missingOrderIds = (preset?.prompt_order || [])
-            .flatMap((group) => group.order)
-            .filter((item) => !promptIds.has(item.identifier));
+        const orderedPrompts = (preset?.prompt_order || []).flatMap((group) => group.order);
+        const missingOrderIds = orderedPrompts.filter((item) => !promptIds.has(item.identifier));
+        const rawRegexScripts = Array.isArray(payload?.extensions?.regex_scripts)
+            ? payload.extensions.regex_scripts
+            : [];
+        const normalizedRegexScripts = Array.isArray(preset?.extensions?.regex_scripts)
+            ? preset.extensions.regex_scripts
+            : [];
 
+        expect(presetPath).toBe('/tavern-presets/double-journey-v11.json');
         expect(preset?.prompts).toHaveLength(255);
         expect(preset?.prompt_order).toHaveLength(1);
-        expect(preset?.extensions?.regex_scripts).toHaveLength(28);
+        expect(preset?.generationParams).toEqual(payload.generationParams);
+        expect(preset?.generationParams).toMatchObject({
+            temperature: 1,
+            top_p: 0.98,
+            top_k: 64,
+            max_tokens: 30000,
+            max_context: 2000000,
+            assistant_prefill: '思考已结束。'
+        });
+        expect(orderedPrompts.some((item) => item.enabled)).toBe(true);
+        expect(orderedPrompts.some((item) => !item.enabled)).toBe(true);
+        expect(normalizedRegexScripts).toHaveLength(28);
+        expect(normalizedRegexScripts.map((item: any) => item.disabled)).toEqual(
+            rawRegexScripts.map((item: any) => item.disabled)
+        );
+        expect(normalizedRegexScripts.some((item: any) => item.disabled === true)).toBe(true);
+        expect(normalizedRegexScripts.some((item: any) => item.disabled === false)).toBe(true);
         expect(missingOrderIds).toHaveLength(0);
     });
 
