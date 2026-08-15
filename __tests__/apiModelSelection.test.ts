@@ -198,6 +198,18 @@ describe('接口模型异步请求竞态', () => {
         expect(screen.queryByText('连接测试成功')).toBeNull();
     });
 
+    it('最大输出 Token 校验失败时保留提示且不发送连接请求', async () => {
+        fetchModelsMock.mockResolvedValueOnce(['gpt-4o-mini']);
+        renderSettings();
+
+        fireEvent.click(screen.getByRole('button', { name: '64K' }));
+        fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+        await waitFor(() => expect(screen.getByText(/gpt-4o-mini 官方最大输出约为 16384/)).toBeTruthy());
+        expect(testConnectionMock).not.toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: '测试连接' })).not.toHaveProperty('disabled', true);
+    });
+
     it('连接请求已发出后修改模型时，丢弃旧模型的连接结果', async () => {
         const connectionDeferred = createDeferred<{ ok: boolean; detail: string }>();
         fetchModelsMock.mockResolvedValueOnce(['gpt-4o-mini', 'gemini-2.5-pro']);

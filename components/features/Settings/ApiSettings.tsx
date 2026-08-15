@@ -409,6 +409,7 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
         setMessage('');
         setTestingConnection(true);
         let cancelled = false;
+        let keepMessage = false;
         let modelForTest = (requestConfig.model || '').trim() || (formRef.current.功能模型占位.主剧情使用模型 || '').trim();
         let configForTest = requestConfig;
         const 当前请求仍有效 = (expectedModel?: string): boolean => {
@@ -473,10 +474,12 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                 && typeof configForTest.maxTokens === 'number'
                 && configForTest.maxTokens > matched.officialMaxOutput
             ) {
+                keepMessage = true;
                 setMessage(`${modelForTest} 官方最大输出约为 ${matched.officialMaxOutput}，当前设置 ${configForTest.maxTokens} 过高，请调整。`);
                 return;
             }
             if (!modelForTest) {
+                keepMessage = true;
                 setMessage('请先填写主剧情模型或配置默认模型');
                 return;
             }
@@ -517,7 +520,10 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
             if (operationId !== asyncOperationIdRef.current) return;
             if (!当前请求仍有效(modelForTest)) {
                 cancelled = true;
-                setMessage('接口配置或模型已发生变化，已丢弃旧配置的连接测试结果，请重新测试当前配置。');
+                const latestConfig = 读取最新活动配置();
+                setMessage(请求来源一致(requestConfig, latestConfig)
+                    ? '主剧情模型已发生变化，已丢弃旧模型的连接测试结果，请重新测试当前模型。'
+                    : '接口配置已切换或发生变化，已丢弃旧配置的连接测试结果，请重新测试当前配置。');
                 return;
             }
             setTestResultModal({
@@ -528,7 +534,7 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
             });
         } finally {
             if (operationId === asyncOperationIdRef.current) {
-                if (!cancelled) setMessage('');
+                if (!cancelled && !keepMessage) setMessage('');
                 setTestingConnection(false);
             }
         }

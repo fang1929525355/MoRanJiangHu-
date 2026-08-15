@@ -53,6 +53,16 @@ describe('image manager queue tab composition', () => {
         expect(desktop).toContain('galleryPreviewOriginal !== imageUrl');
         expect(desktop).toContain('图片加载失败，且无可用的远程兜底地址。');
     });
+    it('图库列表错误独立显示并提供重试，加载按钮禁用态保持日间可读', () => {
+        const desktop = readSource('components/features/Social/ImageManagerModal.tsx');
+        expect(desktop).toContain("const [galleryError, setGalleryError] = React.useState('');");
+        expect(desktop).toContain("setGalleryError('读取图库失败，请重试。')");
+        expect(desktop).toContain("setGalleryError('继续读取图库失败，请重试。')");
+        expect(desktop).toContain('onClick={() => void refreshGallery()}');
+        expect(desktop).toContain('disabled:text-gray-100');
+        expect(desktop).not.toContain('disabled:opacity-50');
+    });
+
     it('does not stack the desktop queue tab with a separate history tab', () => {
         const source = readSource('components/features/Social/ImageManagerModal.tsx');
 

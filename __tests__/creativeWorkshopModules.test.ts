@@ -72,8 +72,8 @@ describe('creativeWorkshopModules', () => {
             max_context: 2000000,
             assistant_prefill: '思考已结束。'
         });
-        expect(orderedPrompts.some((item) => item.enabled)).toBe(true);
-        expect(orderedPrompts.some((item) => !item.enabled)).toBe(true);
+        expect(orderedPrompts.some((item) => item.enabled === true)).toBe(true);
+        expect(orderedPrompts.some((item) => item.enabled === false)).toBe(true);
         expect(normalizedRegexScripts).toHaveLength(28);
         expect(normalizedRegexScripts.map((item: any) => item.disabled)).toEqual(
             rawRegexScripts.map((item: any) => item.disabled)

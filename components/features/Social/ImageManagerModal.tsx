@@ -476,6 +476,7 @@ const ImageManagerModal: React.FC<Props> = ({
     const [galleryPreviewEntry, setGalleryPreviewEntry] = React.useState<用户图库条目 | null>(null);
     const [galleryPreviewOriginal, setGalleryPreviewOriginal] = React.useState<string>('');
     const [galleryPreviewError, setGalleryPreviewError] = React.useState('');
+    const [galleryError, setGalleryError] = React.useState('');
 
     const 手动尺寸基准: Record<'1:1' | '3:4' | '9:16' | '16:9', { 宽: number; 高: number; 描述: string }> = {
         '1:1': { 宽: 1024, 高: 1024, 描述: '1:1 正方' },
@@ -1362,14 +1363,16 @@ const ImageManagerModal: React.FC<Props> = ({
         return valid;
     }, []);
 
-    const refreshGallery = React.useCallback(async (silent = false) => {
+    const refreshGallery = React.useCallback(async () => {
+        setGalleryError('');
         try {
             const entries = await 分页读取用户图库({ limit: galleryPageSize });
             setGalleryEntries(await 筛选有效图库条目(entries));
             setGalleryCursor(entries[entries.length - 1]?.id || '');
             setGalleryHasMore(entries.length >= galleryPageSize);
+            setGalleryError('');
         } catch {
-            if (!silent) setGalleryPreviewError('读取图库失败');
+            setGalleryError('读取图库失败，请重试。');
         }
     }, [筛选有效图库条目]);
 
@@ -1385,8 +1388,9 @@ const ImageManagerModal: React.FC<Props> = ({
             setGalleryEntries((current) => [...current, ...valid]);
             setGalleryCursor(entries[entries.length - 1]?.id || galleryCursor);
             setGalleryHasMore(entries.length >= galleryPageSize);
+            setGalleryError('');
         } catch {
-            setGalleryPreviewError('继续读取图库失败');
+            setGalleryError('继续读取图库失败，请重试。');
         } finally {
             setGalleryLoadingMore(false);
         }
@@ -1394,15 +1398,16 @@ const ImageManagerModal: React.FC<Props> = ({
 
     React.useEffect(() => {
         if (activeTab !== 'itemGallery') return;
-        void refreshGallery(true);
+        void refreshGallery();
     }, [activeTab, refreshGallery]);
 
     const handleDeleteGalleryEntry = React.useCallback(async (entry: 用户图库条目) => {
         try {
             await 删除用户图库条目(entry.id);
             setGalleryEntries((prev) => prev.filter((e) => e.id !== entry.id));
+            setGalleryError('');
         } catch (err: any) {
-            setGalleryPreviewError(err?.message || '删除失败');
+            setGalleryError(err?.message || '删除图库条目失败，请重试。');
         }
     }, []);
 
@@ -3947,6 +3952,19 @@ const ImageManagerModal: React.FC<Props> = ({
                     </div>
                 </div>
 
+                {galleryError && (
+                    <div className="mb-4 flex shrink-0 items-center justify-between gap-3 rounded border border-red-500/40 bg-red-950/30 px-3 py-2 text-xs text-red-200">
+                        <span>{galleryError}</span>
+                        <button
+                            type="button"
+                            onClick={() => void refreshGallery()}
+                            className="shrink-0 rounded border border-red-300/60 bg-red-900/50 px-3 py-1.5 font-bold text-white hover:bg-red-800"
+                        >
+                            重试
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
                     <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                         {filteredGalleryEntries.length === 0 ? (
@@ -3993,7 +4011,7 @@ const ImageManagerModal: React.FC<Props> = ({
                                 type="button"
                                 onClick={() => void loadMoreGallery()}
                                 disabled={galleryLoadingMore}
-                                className="px-5 py-2 rounded border border-wuxia-gold/40 bg-wuxia-gold/10 text-wuxia-gold text-xs hover:bg-wuxia-gold/20 disabled:opacity-50"
+                                className="px-5 py-2 rounded border border-wuxia-gold/40 bg-wuxia-gold/10 text-wuxia-gold text-xs hover:bg-wuxia-gold/20 disabled:cursor-wait disabled:border-gray-500 disabled:bg-gray-800 disabled:text-gray-100"
                             >
                                 {galleryLoadingMore ? '正在加载…' : '加载更多'}
                             </button>
