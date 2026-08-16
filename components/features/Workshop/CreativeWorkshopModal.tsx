@@ -1831,7 +1831,8 @@ const CreativeWorkshopModal: React.FC<Props> = ({ open, onClose, onNovelDecompos
             let refreshWarning = '';
             const nextEntries = (await 列出创意工坊模块({
                 forceRefresh: options?.forceRefresh === true,
-                onRefreshFallback: (message) => { refreshWarning = message; }
+                onRefreshFallback: (message) => { refreshWarning = message; },
+                onDataWarning: (message) => { refreshWarning = message; }
             })).filter((entry) => 可展示工坊类型集合.has(entry.type));
             if (requestId !== refreshRequestIdRef.current) return;
             if (refreshWarning) setStatus(refreshWarning);

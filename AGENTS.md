@@ -958,6 +958,17 @@ When onboarding another AI assistant (Cursor, Claude, etc.) to work on this proj
   - Regression tests added in `__tests__/dbStoreAtomicWrite.test.ts` (8 cases, all passing), including "write failure must keep the old chunked value readable".
 - Memory: the old-account Worker still exists (workers.dev disabled, zone moved, no traffic) and old D1 `moranjianghu-db` is now a frozen backup. Do not write to it. If D1 data ever looks empty after an account/domain migration, diff key sets and row counts between accounts before assuming data loss.
 
+## 2026-08-16 Hardening Follow-up: Parity Check, D1 Backups, Same-Origin AI Relay
+
+- Data-integrity hardening (code, not yet deployed):
+  - `functions/api/workshop/modules.ts` `readIndex()` no longer swallows failures silently: bucket unavailable, unreadable legacy index, failed delta listing, and corrupt delta rows all log errors, and the GET response now carries a `warning` field when data may be incomplete; `CreativeWorkshopModal` surfaces it via the existing status line.
+  - `scripts/verify-d1-parity.mjs` compares business tables across the two D1 databases (row counts, key sets, updated_at). Keys present only in the old DB are the "incomplete snapshot" signal. Run it after any future account/DB migration. It retries requests (a plain run once produced a false diff due to a network hiccup).
+  - `scripts/backup-d1-to-onedrive.mjs` exports the production D1 (`moranjianghu-db-backup`) and uploads to OneDrive `/Onedrive/MoRanJiangHu/d1-backups/`, keeping the newest 8. First real backup (41 MB, size-verified) was taken 2026-08-16. Run it periodically; there is no scheduler yet.
+- Web CORS relay (code, not yet deployed):
+  - New endpoint `functions/api/ai-relay/[[path]].ts`: same-origin relay for browser-blocked third-party AI calls (direct fetch gets TypeError/Failed-to-fetch when the upstream has no CORS). Streams SSE responses through. Guards: http/https only, ports 80/443 only, own domains blocked, private/loopback IP literals blocked (SSRF), upstream path whitelist (`chat/completions`, `completions`, `messages`, `models`, `embeddings`, `responses`, `images/generations`, `images/edits`, `audio/speech`, `count_tokens`), 2 MB body cap, no redirect following. Authorization is forwarded only, never stored or logged.
+  - Frontend `services/ai/corsRelay.ts`: web (non-APK) only; direct fetch first, and on network-layer failure it retries once via the relay. `请求模型文本` failures now include a CORS guidance message. Model-list fetching appends relay candidates after direct candidates in `构建OpenAI兼容模型列表候选地址` (all 10+ settings components inherit this). Toggle in ApiSettings (`网页版跨域自动中转`, default on, stored in localStorage `msjh_ai_cors_relay_mode`).
+  - Tests: `__tests__/aiRelayCors.test.ts` (12 cases: endpoint guards, forwarding, error passthrough, corsRelay logic). `__tests__/apiModelSelection.test.ts` assertions updated for the appended relay candidates.
+
 ## Notes
 
 - AGENTS.md

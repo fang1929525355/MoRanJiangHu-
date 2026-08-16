@@ -282,15 +282,19 @@ describe('小米 MiMo 接口配置', () => {
 });
 
 describe('OpenAI 兼容模型列表地址', () => {
+    // 网页环境下会在直连候选之后追加同域中转候选（/api/ai-relay?target=...）作为跨域兜底，
+    // 直连候选的顺序与内容保持不变；以下用例只断言直连前缀，中转追加行为见 aiRelayCors.test.ts。
     it('优先使用百度千帆 v2 的模型列表地址，避免错误插入 /v1', () => {
-        expect(构建OpenAI兼容模型列表候选地址('https://qianfan.baidubce.com/v2/')).toEqual([
+        const candidates = 构建OpenAI兼容模型列表候选地址('https://qianfan.baidubce.com/v2/');
+        expect(candidates.slice(0, 2)).toEqual([
             'https://qianfan.baidubce.com/v2/models',
             'https://qianfan.baidubce.com/models'
         ]);
     });
 
     it('优先使用自定义 OpenAI 兼容版本路径的模型列表地址，避免错误插入 /v1', () => {
-        expect(构建OpenAI兼容模型列表候选地址('https://example.com/api/paas/v4')).toEqual([
+        const candidates = 构建OpenAI兼容模型列表候选地址('https://example.com/api/paas/v4');
+        expect(candidates.slice(0, 3)).toEqual([
             'https://example.com/api/paas/v4/models',
             'https://example.com/api/paas/models',
             'https://example.com/models'
@@ -298,7 +302,8 @@ describe('OpenAI 兼容模型列表地址', () => {
     });
 
     it('保留普通 OpenAI 兼容地址的 v1/models 兼容探测顺序', () => {
-        expect(构建OpenAI兼容模型列表候选地址('https://example.com/v1')).toEqual([
+        const candidates = 构建OpenAI兼容模型列表候选地址('https://example.com/v1');
+        expect(candidates.slice(0, 2)).toEqual([
             'https://example.com/v1/models',
             'https://example.com/models'
         ]);

@@ -946,3 +946,14 @@ B2 APK 分发已于 2026-07-13 废弃。部分遗留辅助代码和环境变量�
   - `get()` 在清单的分块缺失时通过 `console.error` 记录 `orphan chunk manifest`，损坏可在 Worker observability 日志中看到，不再静默。
   - 回归测试在 `__tests__/dbStoreAtomicWrite.test.ts`（8 个用例全部通过），包含"写入失败时旧分块值必须仍可读"。
 - 记忆：旧账号 Worker 仍存在（workers.dev 已禁用、zone 已迁走、无流量），旧 D1 `moranjianghu-db` 现在是冻结备份，禁止写入。今后账号/域名迁移后若 D1 数据看起来为空，先对比两个账号的键集合与行数，再判断是否真的丢数据。
+
+## 2026-08-16 加固跟进：双库校验、D1 备份、同域 AI 中转
+
+- 数据完整性加固（代码完成，尚未部署）：
+  - `functions/api/workshop/modules.ts` 的 `readIndex()` 不再静默吞错：存储不可用、主索引不可读、增量列表读取失败、增量行损坏均记录错误日志，GET 响应在数据可能不完整时携带 `warning` 字段；`CreativeWorkshopModal` 通过现有状态栏展示该提示。
+  - `scripts/verify-d1-parity.mjs` 对比两个 D1 数据库业务表的行数、键集合、updated_at。"仅存在于旧库的键"就是"残缺快照"信号。今后任何账号/数据库迁移后必须运行。脚本带请求重试（曾因网络抖动产生一次假差异）。
+  - `scripts/backup-d1-to-onedrive.mjs` 导出生产 D1（`moranjianghu-db-backup`）并上传到 OneDrive `/Onedrive/MoRanJiangHu/d1-backups/`，保留最近 8 份。2026-08-16 已完成首份真实备份（41MB，字节数校验通过）。建议定期运行，暂无定时器。
+- 网页版跨域中转（代码完成，尚未部署）：
+  - 新端点 `functions/api/ai-relay/[[path]].ts`：为被浏览器跨域拦截的第三方 AI 请求做同域中转（直连报 TypeError/Failed to fetch 时使用）。SSE 流式响应原样透传。防护：仅 http/https、仅 80/443 端口、禁止指向自家域名、禁止私有/回环 IP 字面量（SSRF）、上游路径白名单（`chat/completions`、`completions`、`messages`、`models`、`embeddings`、`responses`、`images/generations`、`images/edits`、`audio/speech`、`count_tokens`）、请求体上限 2MB、不跟随重定向。Authorization 仅透传，不落盘不记录。
+  - 前端 `services/ai/corsRelay.ts`：仅网页环境（APK 原生不启用）；直连优先，网络层失败时自动经同域中转重试一次。`请求模型文本` 失败时附带跨域引导文案。模型列表拉取在 `构建OpenAI兼容模型列表候选地址` 中于直连候选之后追加中转候选（全部 10+ 个设置组件自动继承）。开关在接口设置中（`网页版跨域自动中转`，默认开启，存 localStorage `msjh_ai_cors_relay_mode`）。
+  - 测试：`__tests__/aiRelayCors.test.ts`（12 用例：端点防护、转发、错误透传、corsRelay 逻辑）。`__tests__/apiModelSelection.test.ts` 断言已更新以包含追加的中转候选。

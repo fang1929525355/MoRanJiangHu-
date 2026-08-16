@@ -13,6 +13,7 @@ import {
     规范化接口设置
 } from '../../../utils/apiConfig';
 import { 获取OpenAI兼容模型列表 } from '../../../utils/openAIModelListFetcher';
+import { 读取跨域中转模式, 写入跨域中转模式 } from '../../../services/ai/corsRelay';
 
 interface Props {
     settings: 接口设置结构;
@@ -186,6 +187,7 @@ export const 解析模型列表后的选择 = (currentModelRaw: string, models: 
 
 const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
     const [form, setForm] = useState<接口设置结构>(() => 规范化接口设置(settings));
+    const [跨域中转启用, set跨域中转启用] = useState<boolean>(() => 读取跨域中转模式() !== 'off');
     // 同步追踪最新 form，避免异步请求返回后用旧闭包覆盖用户在等待期间手动填写的模型。
     const formRef = useRef(form);
     formRef.current = form;
@@ -887,6 +889,27 @@ const ApiSettings: React.FC<Props> = ({ settings, onSave }) => {
                         </div>
                     )}
                 </div>
+            </div>
+
+            <div className="rounded-md border border-cyan-500/20 bg-cyan-950/10 p-4 space-y-2">
+                <div>
+                    <h4 className="font-bold font-serif text-cyan-200">网页版跨域自动中转</h4>
+                    <div className="text-[11px] text-gray-400 leading-5">
+                        仅对网页版生效（APK 不受浏览器跨域限制）。部分第三方接口未开放浏览器跨域（CORS），网页直连会报 Failed to fetch；开启后系统会在直连被拦截时自动经本站同域中转重试一次。中转仅转发请求，不保存密钥。若你使用的接口不允许经过第三方服务器，可关闭此开关。
+                    </div>
+                </div>
+                <label className="flex items-center justify-between gap-3 text-xs text-gray-300">
+                    <span>启用跨域自动中转（推荐开启）</span>
+                    <input
+                        type="checkbox"
+                        checked={跨域中转启用}
+                        onChange={(event) => {
+                            写入跨域中转模式(event.target.checked ? 'auto' : 'off');
+                            set跨域中转启用(event.target.checked);
+                        }}
+                        className="h-4 w-4 accent-cyan-400"
+                    />
+                </label>
             </div>
 
             {是否DeepSeek模式 && (

@@ -43,6 +43,7 @@ const 看起来像HTML页面 = (text: string): boolean => /^\s*<!doctype\s+html\
 interface 列出创意工坊模块选项 {
     forceRefresh?: boolean;
     onRefreshFallback?: (message: string) => void;
+    onDataWarning?: (message: string) => void;
 }
 
 interface 云端创意工坊模块缓存载荷 {
@@ -544,6 +545,9 @@ export const 列出创意工坊模块 = async (options: 列出创意工坊模块
                 cloudEntries = (payload.entries.map((entry: unknown) => 规范化当前模块(entry, 'cloud')).filter(Boolean) as 创意工坊模块条目[])
                     .filter((entry) => !已迁移旧版创意工坊云端模块ID集合.has(entry.id));
                 保存云端创意工坊模块缓存(cloudEntries);
+                if (typeof payload.warning === 'string' && payload.warning.trim()) {
+                    options.onDataWarning?.(payload.warning.trim());
+                }
                 break;
             }
         } catch {

@@ -19,6 +19,7 @@
     ExpandedCurrencySystem
 } from '../models/system';
 import { 加载并展开货币系统 } from './currencySystemLoader';
+import { 中转可用, 构建AI中转地址 } from '../services/ai/corsRelay';
 import { 默认ComfyUI工作流JSON, 默认NSFWComfyUI工作流JSON } from '../data/defaultComfyWorkflow';
 import { 默认文章优化提示词 } from '../prompts/runtime/defaults';
 import {
@@ -63,7 +64,7 @@ export const 请求协议覆盖标签: Record<请求协议覆盖类型, string> 
     glm: '智谱 GLM 协议'
 };
 
-export const 构建OpenAI兼容模型列表候选地址 = (baseUrlRaw: unknown): string[] => {
+const 构建OpenAI兼容模型列表候选地址直连 = (baseUrlRaw: unknown): string[] => {
     const base = 清理OpenAI兼容地址末尾斜杠(baseUrlRaw);
     if (!base) return [];
 
@@ -99,6 +100,15 @@ export const 构建OpenAI兼容模型列表候选地址 = (baseUrlRaw: unknown):
     pushUnique(candidates, `${normalized}/models`);
     pushUnique(candidates, `${endpointBase}/models`);
     return candidates;
+};
+
+// 网页版模型列表拉取兜底：直连候选全部失败时（常见为浏览器跨域拦截），
+// 依次追加同域中转候选，设置组件"逐个尝试直到成功"的循环会自动命中。
+export const 构建OpenAI兼容模型列表候选地址 = (baseUrlRaw: unknown): string[] => {
+    const direct = 构建OpenAI兼容模型列表候选地址直连(baseUrlRaw);
+    if (direct.length <= 0 || !中转可用()) return direct;
+    const relayed = direct.map((url) => 构建AI中转地址(url)).filter((url) => !direct.includes(url));
+    return [...direct, ...relayed];
 };
 
 const GPT_IMAGE_2_通用正面提示词 = 'best quality, masterpiece, very aesthetic, amazing quality, highres, absurdres, ultra detailed, 8k, premium quality key visual, cinematic rendering, high-end character key art, polished digital painting, luxury visual quality, delicate skin shading, natural luminous skin, realistic material response, silk gloss, metal highlights, glass-like reflections, jewel-like sparkle, soft glow, dramatic rim lighting, cinematic lighting, volumetric light, atmospheric depth, shallow depth of field, rich color grading, elegant composition, clean composition, immersive atmosphere, refined details, smooth polished rendering, cover art quality, ultra high definition rendering, rich detail, clear subject focus';

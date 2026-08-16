@@ -4,6 +4,7 @@ import { isNativeCapacitorEnvironment } from '../../utils/nativeRuntime';
 import { OpenAI兼容地址已包含版本路径, 去除OpenAI兼容聊天端点 } from '../../utils/openAICompatibleEndpoint';
 import { 小米MiMo稳定输出预设 } from '../../prompts/providers/xiaomiMiMoStablePreset';
 import { GLM稳定输出预设 } from '../../prompts/providers/glmStablePreset';
+import { fetchWithCorsRelay, 疑似浏览器跨域失败, 中转可用 } from './corsRelay';
 
 export type 通用消息角色 = 'system' | 'user' | 'assistant';
 
@@ -1488,7 +1489,7 @@ const 请求GeminiInteractions文本 = async (
         store: true
     });
 
-    const createResponse = await fetch(endpoint, {
+    const { response: createResponse } = await fetchWithCorsRelay(endpoint, {
         method: 'POST',
         headers,
         body: requestBody,
@@ -1777,11 +1778,13 @@ const 请求OpenAI家族文本 = async (
             }
         }
 
-        const response = await fetch(endpoint, {
+        const { response, viaRelay } = await fetchWithCorsRelay(endpoint, {
             method: 'POST',
             headers: requestHeaders,
             body: requestBody,
             signal
+        }, () => {
+            写入流式诊断日志('direct fetch blocked (suspected CORS), retrying via same-origin relay', { endpoint });
         });
 
         if (!response.ok) {
@@ -1896,28 +1899,43 @@ export const 请求模型文本 = async (
     );
     const { injectedMessages, checkTag, messageCount, totalChars } = 注入上下文完整性校验标记(normalizedMessages, apiConfig);
 
-    const result = await 带重试执行(`请求模型文本(${protocol})`, async () => {
-        return 请求OpenAI家族文本(
-            apiConfig,
-            protocol,
-            injectedMessages,
-            resolvedTemperature,
-            options.signal,
-            options.streamOptions,
-            effectiveResponseFormat,
-            options.errorDetailLimit,
-            {
-                includeReasoning: options.includeReasoning,
-                disableThinking: options.disableThinking,
-                stripReasoning: options.stripReasoning,
-                prefixMode: options.prefixMode
-            }
-        );
-    }, {
-        signal: options.signal,
-        retries: 2,
-        baseDelayMs: 800
-    });
+    let result: string;
+    try {
+        result = await 带重试执行(`请求模型文本(${protocol})`, async () => {
+            return 请求OpenAI家族文本(
+                apiConfig,
+                protocol,
+                injectedMessages,
+                resolvedTemperature,
+                options.signal,
+                options.streamOptions,
+                effectiveResponseFormat,
+                options.errorDetailLimit,
+                {
+                    includeReasoning: options.includeReasoning,
+                    disableThinking: options.disableThinking,
+                    stripReasoning: options.stripReasoning,
+                    prefixMode: options.prefixMode
+                }
+            );
+        }, {
+            signal: options.signal,
+            retries: 2,
+            baseDelayMs: 800
+        });
+    } catch (error) {
+        if (疑似浏览器跨域失败(error)) {
+            const relayHint = 中转可用()
+                ? '（已自动尝试同域中转仍失败）'
+                : '（网页版可在接口设置中开启"网页版跨域自动中转"）';
+            throw new Error(
+                `无法连接到接口服务器${relayHint}。可能原因：接口地址填写错误、服务未开放、密钥无效，或该接口在浏览器端被跨域（CORS）拦截。` +
+                `建议：核对 Base URL 与 API Key；网页版用户可改用 APK 版本（不受跨域限制）；或更换支持浏览器跨域的接口。` +
+                `原始错误：${读取错误消息(error) || 'Failed to fetch'}`
+            );
+        }
+        throw error;
+    }
 
     检查上下文完整性(result, checkTag, apiConfig, messageCount, totalChars);
     return 移除上下文完整性校验标记(result, checkTag);

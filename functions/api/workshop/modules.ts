@@ -230,30 +230,57 @@ const buildKeys = (env: any, id: string) => {
 const getIndexEntriesPrefix = (env: any): string => `${getPrefix(env)}/index/entries/`;
 const getIndexEntryKey = (env: any, id: string): string => `${getIndexEntriesPrefix(env)}${id}.json`;
 
-const readIndex = async (env: any): Promise<WorkshopModuleEntry[]> => {
+const readIndex = async (env: any): Promise<{ entries: WorkshopModuleEntry[]; warning?: string }> => {
     const bucket = getBucket(env);
-    if (!bucket) return [];
+    if (!bucket) {
+        console.error('[workshop] storage bucket unavailable — returning empty list');
+        return { entries: [], warning: '创意工坊存储未配置，列表可能不完整。' };
+    }
     const legacyObject = await bucket.get(`${getPrefix(env)}/index/latest.json`);
     const legacyParsed = legacyObject ? await legacyObject.json().catch(() => null) as { entries?: WorkshopModuleEntry[] } | null : null;
+    if (legacyObject && !legacyParsed) {
+        console.error('[workshop] legacy index/latest.json is unreadable (orphan/corrupt chunk manifest)');
+    }
     const entries = new Map<string, WorkshopModuleEntry>((Array.isArray(legacyParsed?.entries) ? legacyParsed.entries : []).map((entry) => [entry.id, entry]));
-    if (typeof bucket.list !== 'function') return Array.from(entries.values());
+    if (typeof bucket.list !== 'function') return { entries: Array.from(entries.values()) };
     let cursor: string | undefined;
+    let listFailures = 0;
+    let corruptDeltas = 0;
     do {
-        const listed = await bucket.list({ prefix: getIndexEntriesPrefix(env), cursor, limit: 1000 }).catch(() => null);
+        const listed = await bucket.list({ prefix: getIndexEntriesPrefix(env), cursor, limit: 1000 }).catch((error: unknown) => {
+            listFailures += 1;
+            console.error('[workshop] index delta list failed:', error);
+            return null;
+        });
         if (!listed || !Array.isArray(listed.objects)) break;
         const keys = listed.objects.map((object: any) => object?.key).filter((key: unknown): key is string => typeof key === 'string');
         for (let offset = 0; offset < keys.length; offset += 50) {
-            const objects = await Promise.all(keys.slice(offset, offset + 50).map((key) => bucket.get(key)));
-            for (const object of objects) {
+            const pageKeys = keys.slice(offset, offset + 50);
+            const objects = await Promise.all(pageKeys.map((key) => bucket.get(key)));
+            for (let i = 0; i < objects.length; i++) {
+                const object = objects[i];
                 const delta = object ? await object.json().catch(() => null) as { id?: string; deleted?: boolean; entry?: WorkshopModuleEntry } | null : null;
-                if (!delta?.id) continue;
+                if (!delta?.id) {
+                    if (object) {
+                        corruptDeltas += 1;
+                        console.error('[workshop] index delta row is corrupt and was skipped:', pageKeys[i]);
+                    }
+                    continue;
+                }
                 if (delta.deleted) entries.delete(delta.id);
                 else if (delta.entry) entries.set(delta.id, delta.entry);
             }
         }
         cursor = listed.truncated ? listed.cursor : undefined;
     } while (cursor);
-    return Array.from(entries.values()).sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt))).slice(0, 500);
+    const warnings: string[] = [];
+    if (legacyObject && !legacyParsed) warnings.push('工坊主索引读取失败，仅显示增量数据。');
+    if (listFailures > 0) warnings.push('工坊增量索引读取失败，最新投稿可能未显示。');
+    if (corruptDeltas > 0) warnings.push(`有 ${corruptDeltas} 条投稿索引记录损坏被跳过。`);
+    return {
+        entries: Array.from(entries.values()).sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt))).slice(0, 500),
+        warning: warnings.length > 0 ? warnings.join(' ') : undefined
+    };
 };
 
 const upsertIndexEntry = async (env: any, entry: WorkshopModuleEntry): Promise<void> => {
@@ -412,14 +439,14 @@ export async function onRequestGet({ request, env }: any): Promise<Response> {
     try {
         const url = new URL(request.url);
         const action = readString(url.searchParams.get('action'));
-        const entries = await readIndex(env);
+        const { entries, warning } = await readIndex(env);
         if (action === 'download') {
             const id = readString(url.searchParams.get('id'));
             const entry = entries.find((item) => item.id === id);
             if (!entry) return jsonResponse({ error: '未找到该创意工坊模块' }, 404);
             return jsonResponse({ ok: true, module: entry });
         }
-        return jsonResponse({ ok: true, entries });
+        return jsonResponse({ ok: true, entries, warning });
     } catch (error: any) {
         return jsonResponse({ error: error?.message || '读取创意工坊失败' }, 500);
     }
@@ -431,7 +458,7 @@ export async function onRequestPost({ request, env }: any): Promise<Response> {
         if (!bucket) return jsonResponse({ error: '创意工坊存储未配置' }, 500);
         const body = await request.json();
         const action = readString(body?.action) || 'create';
-        const existingEntries = await readIndex(env);
+        const { entries: existingEntries } = await readIndex(env);
 
         if (action === 'update' || action === 'delete') {
             const user = await authenticateWorkshopUser(env, body?.auth);
