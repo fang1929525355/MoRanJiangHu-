@@ -186,7 +186,11 @@ export const getDbBucket = (db: any, tableName: string): R2LikeBucket => {
                     ).bind(chunkKey(key, i)).first();
                     if (!chunkRow) {
                         // Missing chunk — treat as data not found rather than
-                        // returning a partial/corrupt value.
+                        // returning a partial/corrupt value, but surface the
+                        // corruption in logs so it cannot fail silently again.
+                        console.error(
+                            `[dbStore] orphan chunk manifest: key=${key} is missing chunk ${i} of ${manifest.chunks}`
+                        );
                         return null;
                     }
                     parts.push(chunkRow.value || '');
@@ -211,33 +215,28 @@ export const getDbBucket = (db: any, tableName: string): R2LikeBucket => {
             const json = typeof value === 'string' ? value : JSON.stringify(value);
             const byteLen = utf8ByteLength(json);
 
-            // Clean up any existing chunk rows for this key (from a previous
-            // chunked write or an overwrite that now fits in one row).
+            // Capture the previous chunk layout BEFORE writing. Stale chunk
+            // rows are deleted AFTER the new value is durable. Deleting first
+            // is unsafe: if the subsequent write fails, the manifest row
+            // survives without its chunk rows and every future get() returns
+            // null (orphan manifest — silently loses the whole value).
             const existingRow: any = await db.prepare(
                 `SELECT value FROM ${tableName} WHERE key = ?`
             ).bind(key).first();
-            if (existingRow) {
-                const oldManifest = isChunkManifest(existingRow.value || '');
-                if (oldManifest) {
-                    const deleteStatements: any[] = [];
-                    for (let i = 0; i < oldManifest.chunks; i++) {
-                        deleteStatements.push(
-                            db.prepare(`DELETE FROM ${tableName} WHERE key = ?`).bind(chunkKey(key, i))
-                        );
-                    }
-                    // Batch-delete old chunks (respecting the 100-statement limit).
-                    await batchAll(db, deleteStatements);
-                }
-            }
+            const oldManifest = existingRow ? isChunkManifest(existingRow.value || '') : null;
 
-            if (byteLen <= D1_CHUNK_THRESHOLD) {
-                // Fits in a single D1 row — write directly.
+            const chunks = byteLen > D1_CHUNK_THRESHOLD ? splitByUtf8Bytes(json, D1_CHUNK_SIZE) : null;
+
+            if (!chunks) {
+                // Fits in a single D1 row — write directly (atomically replaces
+                // any previous manifest row for this key).
                 await db.prepare(
                     `INSERT OR REPLACE INTO ${tableName} (key, value, updated_at) VALUES (?, ?, ?)`
                 ).bind(key, json, new Date().toISOString()).run();
             } else {
-                // Too large — split into chunk rows + a manifest row.
-                const chunks = splitByUtf8Bytes(json, D1_CHUNK_SIZE);
+                // Too large — split into chunk rows + a manifest row. All rows
+                // go out in one batch call so the replacement is atomic; if
+                // this fails, the previous manifest and chunks are untouched.
                 const manifest: ChunkManifest = {
                     _chunked: true,
                     chunks: chunks.length,
@@ -259,6 +258,26 @@ export const getDbBucket = (db: any, tableName: string): R2LikeBucket => {
                     );
                 }
                 await batchAll(db, statements);
+            }
+
+            // Best-effort cleanup of chunk rows left over from a previous,
+            // larger chunked write. Cleanup failure must NOT fail the put():
+            // the new value is already durable, stale chunk rows are invisible
+            // to get()/list(), and the next successful put() retries cleanup.
+            if (oldManifest) {
+                const staleKeys: string[] = [];
+                for (let i = chunks ? chunks.length : 0; i < oldManifest.chunks; i++) {
+                    staleKeys.push(chunkKey(key, i));
+                }
+                if (staleKeys.length > 0) {
+                    try {
+                        await batchAll(db, staleKeys.map((staleKey) =>
+                            db.prepare(`DELETE FROM ${tableName} WHERE key = ?`).bind(staleKey)
+                        ));
+                    } catch (error) {
+                        console.warn(`[dbStore] stale chunk cleanup failed for key=${key}:`, error);
+                    }
+                }
             }
         },
 

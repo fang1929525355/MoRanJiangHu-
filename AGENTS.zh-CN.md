@@ -929,3 +929,20 @@ B2 APK 分发已于 2026-07-13 废弃。部分遗留辅助代码和环境变量�
   - `MSJH_IMAGE_BACKEND_SYNC_TOKEN`：后端注册表上报 token，必须作为 Secret 保存，禁止写入仓库。
 - 墨色江湖前端应使用通用云端后端注册表路径 `/api/image-backend/sync`；`/api/image-backend/cnb-sync` 只保留向后兼容。
 - 不要把真实 Cloud Studio token、同步 token、或包含秘密的预览 URL 写进 AGENTS 文件、提交、日志、截图或客户更新说明。
+
+## 2026-08-16 创意工坊清空事故与 D1 双库分叉恢复
+
+- 症状：两个公开域名的 `/api/workshop/modules` 返回 `{"ok":true,"entries":[]}`，玩家反馈社区模式包全部消失。
+- 根因链：
+  - 创意工坊数据存于 D1 表 `workshop_data`，键 `moranjianghu/workshop/modules/index/latest.json`。超过 700KB 的值会被拆成 1 行清单 + 若干 `::chunk-N` 分块行（见 `functions/api/_shared/dbStore.ts`）。
+  - 2026-08-09 的账号迁移把域名 zone 移入新账号，流量切到新账号 Worker，其绑定的 D1 是 `moranjianghu-db-backup`（id `d72fe8c8-...`）。这个库是 2026-06-28/29 前后复制的**残缺快照**：索引清单行被复制了，但它的 2 个分块行（以及 2 条 TOPIC 投稿行）没有。`get()` 把"清单在、分块缺失"当作数据不存在，于是 zone 迁移当天创意工坊列表静默变空。
+  - 旧账号 D1 `moranjianghu-db`（id `0a9c1910-...`）在 2026-08-09 前一直在接真实写入（投稿、联机账号注册），数据完整：2026-07-10 重建的 3.5MB、10 分块索引加后续增量行。
+- 2026-08-16 执行的恢复（纯数据操作，未部署）：
+  - 先备份新库（`.tmp-workshop-recovery/newdb_backup_20260816.sql`）和旧库 workshop 表（`.tmp-workshop-recovery/workshop_data_old.sql`）；两者均为本地文件，禁止提交。
+  - 旧库 → 新库同步：`workshop_data`/`workshop_novel_data` 全量覆盖（52+27 行）；`cloud_play_data`/`diagnostic_reports`/`online_hourly_history`/`apk_download_daily` 按 `updated_at` 取新做并集合并。
+  - 验证双域名均恢复 16 个模块（11 个模式包、2 个酒馆预设、3 个生图工作流），`action=download` 能正确重组分块数据。
+- 根治代码修复（本地完成，尚未部署）：
+  - `functions/api/_shared/dbStore.ts` 的 `put()` 原来先删旧分块再写新值；写入批次一旦失败（D1 503/瞬时错误）就会留下孤儿清单，整条数据静默丢失。现改为先原子写入新值、后清理多余分块，清理失败只告警不报错。
+  - `get()` 在清单的分块缺失时通过 `console.error` 记录 `orphan chunk manifest`，损坏可在 Worker observability 日志中看到，不再静默。
+  - 回归测试在 `__tests__/dbStoreAtomicWrite.test.ts`（8 个用例全部通过），包含"写入失败时旧分块值必须仍可读"。
+- 记忆：旧账号 Worker 仍存在（workers.dev 已禁用、zone 已迁走、无流量），旧 D1 `moranjianghu-db` 现在是冻结备份，禁止写入。今后账号/域名迁移后若 D1 数据看起来为空，先对比两个账号的键集合与行数，再判断是否真的丢数据。

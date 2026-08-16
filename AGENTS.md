@@ -941,6 +941,23 @@ When onboarding another AI assistant (Cursor, Claude, etc.) to work on this proj
 - MoRanJiangHu frontend should use the generic cloud backend registry path `/api/image-backend/sync`; keep `/api/image-backend/cnb-sync` only as backward compatibility.
 - Do not record real Cloud Studio tokens, sync tokens, or preview URLs that contain secrets in AGENTS files, commits, logs, screenshots, or customer changelogs.
 
+## 2026-08-16 Creative Workshop Empty-List Incident And D1 Split-Brain Recovery
+
+- Symptom: `/api/workshop/modules` returned `{"ok":true,"entries":[]}` on both public domains; players reported all community mode packs gone.
+- Root cause chain:
+  - Workshop modules live in D1 table `workshop_data`, key `moranjianghu/workshop/modules/index/latest.json`. Values over 700KB are stored as one manifest row + `::chunk-N` rows (`functions/api/_shared/dbStore.ts`).
+  - The 2026-08-09 account migration moved the domain zones to the new account, so traffic switched to the new-account Worker bound to D1 `moranjianghu-db-backup` (id `d72fe8c8-...`). That database was an **incomplete snapshot** copied around 2026-06-28/29: the index manifest row was copied but its 2 chunk rows (and 2 TOPIC entries) were not. `get()` treats "manifest present, chunk missing" as data-not-found, so the workshop list silently became empty on the day of the zone migration.
+  - The old-account D1 `moranjianghu-db` (id `0a9c1910-...`) kept receiving real writes (submissions, cloud-play registrations) until 2026-08-09 and still held the complete data: a 3.5MB 10-chunk index rebuilt on 2026-07-10 plus delta rows.
+- Recovery performed on 2026-08-16 (data-only, no deploy):
+  - Backed up the new DB (`.tmp-workshop-recovery/newdb_backup_20260816.sql`) and the old workshop table (`.tmp-workshop-recovery/workshop_data_old.sql`); both are local-only, never commit them.
+  - Synced old → new: `workshop_data`/`workshop_novel_data` full overwrite (52+27 rows), `cloud_play_data`/`diagnostic_reports`/`online_hourly_history`/`apk_download_daily` union-merge keeping the newer `updated_at` side.
+  - Verified both domains returned 16 modules (11 topic packs, 2 tavern presets, 3 comfy workflows) and `action=download` reassembles chunked entries correctly.
+- Root-cause code fix (local, not yet deployed):
+  - `functions/api/_shared/dbStore.ts` `put()` used to delete old chunk rows BEFORE writing the new value; if the write batch failed (D1 503/transient), an orphan manifest remained and the whole value was lost silently. Now it writes the new value first (atomic batch) and only deletes stale chunks afterwards, with cleanup failures swallowed as warnings.
+  - `get()` now logs `orphan chunk manifest` via `console.error` when a manifest's chunks are missing, so corruption is visible in Worker observability instead of failing silently.
+  - Regression tests added in `__tests__/dbStoreAtomicWrite.test.ts` (8 cases, all passing), including "write failure must keep the old chunked value readable".
+- Memory: the old-account Worker still exists (workers.dev disabled, zone moved, no traffic) and old D1 `moranjianghu-db` is now a frozen backup. Do not write to it. If D1 data ever looks empty after an account/domain migration, diff key sets and row counts between accounts before assuming data loss.
+
 ## Notes
 
 - AGENTS.md
