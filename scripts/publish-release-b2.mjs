@@ -491,9 +491,12 @@ if (skipB2ApkUpload) {
 const kvManifestPath = path.join(os.tmpdir(), `moranjianghu-kv-manifest-${Date.now()}.json`);
 try {
   fs.writeFileSync(kvManifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-  const wranglerCommand = process.platform === 'win32' ? 'cmd.exe' : 'npx';
+  // 直接用 node 运行仓库内 wrangler：本机上 `cmd.exe /c npx wrangler` 存在解析/ PATH 问题，
+  // 曾导致 KV 清单静默写失败（2026-08-16 v1.0.650 发布时两次复现）。
+  const wranglerEntry = path.join(rootDir, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
   const wranglerArgs = [
-    'wrangler', 'kv', 'key', 'put',
+    wranglerEntry,
+    'kv', 'key', 'put',
     'release-manifest/latest.json',
     '--binding=RELEASE_MANIFEST',
     `--path=${kvManifestPath}`,
@@ -501,14 +504,14 @@ try {
     '--config', 'wrangler.152.jsonc'
   ];
   const kvResult = spawnSync(
-    wranglerCommand,
-    process.platform === 'win32' ? ['/c', 'npx', ...wranglerArgs] : wranglerArgs,
-    { cwd: rootDir, encoding: 'utf8', timeout: 60000 }
+    process.execPath,
+    wranglerArgs,
+    { cwd: rootDir, encoding: 'utf8', timeout: 120000 }
   );
   if (kvResult.status === 0) {
     console.log('[KV] manifest written to RELEASE_MANIFEST/release-manifest/latest.json');
   } else {
-    console.warn('[KV] manifest write failed (non-fatal):', (kvResult.stderr || kvResult.stdout || '').slice(0, 300));
+    console.warn('[KV] manifest write failed (non-fatal):', (kvResult.stderr || kvResult.stdout || '').slice(0, 500));
   }
 } finally {
   fs.rmSync(kvManifestPath, { force: true });
