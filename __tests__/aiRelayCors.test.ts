@@ -62,6 +62,7 @@ describe('AI 同域中转端点防护', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1);
             const [calledUrl, init] = fetchMock.mock.calls[0];
             expect(calledUrl).toBe(target);
+            expect((init as any).redirect).toBe('manual'); // Workers 不支持 redirect:'error'
             expect((init as any).headers.get('Authorization')).toBe('Bearer sk-test');
             expect(res.headers.get('X-MSJH-Relay')).toBe('1');
         } finally {

@@ -110,7 +110,12 @@ const relay = async (request: Request): Promise<Response> => {
         return jsonError('仅支持 GET/POST', 405);
     }
 
-    const upstream = await fetch(target.toString(), init);
+    // Workers 的 fetch 不支持 redirect:'error'，用 manual 并显式拒绝 3xx，
+    // 防止重定向跳转绕过上方的主机/路径校验。
+    const upstream = await fetch(target.toString(), { ...init, redirect: 'manual' });
+    if (upstream.status >= 300 && upstream.status < 400) {
+        return jsonError('上游返回了重定向，中转不支持跟随重定向', 502);
+    }
     const responseHeaders = new Headers();
     const contentType = upstream.headers.get('Content-Type');
     if (contentType) responseHeaders.set('Content-Type', contentType);
