@@ -262,6 +262,7 @@ const InputArea: React.FC<Props> = ({
     const [queueCollapsed, setQueueCollapsed] = useState(true);
     const [mobileInputExpanded, setMobileInputExpanded] = useState(false);
     const mobileTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const desktopTextareaRef = useRef<HTMLTextAreaElement>(null);
     const [showQuickRestartMenu, setShowQuickRestartMenu] = useState(false);
     const [errorModal, setErrorModal] = useState<{ open: boolean; title: string; content: string }>({
         open: false,
@@ -286,10 +287,56 @@ const InputArea: React.FC<Props> = ({
         error: ''
     });
     const [parseRepairBusy, setParseRepairBusy] = useState(false);
+    const parseRepairTextareaRef = useRef<HTMLTextAreaElement>(null);
     const quickActionsRef = useRef<HTMLDivElement | null>(null);
     const dragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
     const suppressClickUntilRef = useRef(0);
     const queueProgressDebugRef = useRef<Record<string, { lastAt: number; phase?: string }>>({});
+
+    const 从错误详情提取问题关键词 = (detail: string): string[] => {
+        const keywords = new Set<string>();
+        const tagPattern = /<\s*\/?\s*(\w+)[^>]*>/g;
+        let match;
+        while ((match = tagPattern.exec(detail)) !== null) {
+            keywords.add(match[0]);
+        }
+        const phrasePatterns = [
+            /缺少[：:]\s*(.+)/,
+            /缺失[：:]\s*(.+)/,
+            /未找到[：:]\s*(.+)/,
+            /未闭合[：:]\s*(.+)/,
+            /不匹配[：:]\s*(.+)/,
+            /格式错误[：:]\s*(.+)/,
+        ];
+        for (const pattern of phrasePatterns) {
+            const m = pattern.exec(detail);
+            if (m?.[1]) {
+                keywords.add(m[1].trim().split(/[,，。；;]/)[0].trim());
+            }
+        }
+        return Array.from(keywords).filter(k => k.length > 1);
+    };
+
+    useEffect(() => {
+        if (!parseRepairModal.open || !parseRepairModal.editedRaw) return;
+        const keywords = 从错误详情提取问题关键词(parseRepairModal.detail);
+        if (keywords.length === 0) return;
+        const text = parseRepairModal.editedRaw;
+        for (const kw of keywords) {
+            const idx = text.indexOf(kw);
+            if (idx >= 0) {
+                const charIndex = idx;
+                const linesBefore = text.substring(0, charIndex).split('\n').length - 1;
+                const lineHeight = 27;
+                const targetScroll = linesBefore * lineHeight - 60;
+                requestAnimationFrame(() => {
+                    const el = parseRepairTextareaRef.current;
+                    if (el) el.scrollTop = Math.max(0, targetScroll);
+                });
+                return;
+            }
+        }
+    }, [parseRepairModal.open, parseRepairModal.detail, parseRepairModal.editedRaw]);
 
     useEffect(() => {
         if (!externalDraft?.text) return;
@@ -1323,7 +1370,7 @@ const InputArea: React.FC<Props> = ({
                 </div>
 
                 {/* Input Field */}
-                <div className={`flex-1 min-w-0 bg-black/40 border border-gray-700/50 rounded-lg transition-all shadow-inner sm:rounded-xl sm:h-11 sm:px-4 sm:flex sm:items-center px-2.5 ${busy ? 'opacity-50 cursor-not-allowed' : 'focus-within:border-wuxia-gold/50 focus-within:bg-black/60'} ${mobileInputExpanded ? 'h-auto' : 'h-9'} sm:h-11`}>
+                <div className={`flex-1 min-w-0 bg-black/40 border border-gray-700/50 rounded-lg transition-all shadow-inner sm:rounded-xl sm:px-4 sm:flex sm:items-center px-2.5 ${busy ? 'opacity-50 cursor-not-allowed' : 'focus-within:border-wuxia-gold/50 focus-within:bg-black/60'} ${mobileInputExpanded ? 'h-auto' : 'h-9'} sm:h-auto sm:min-h-[44px] sm:max-h-[160px] sm:overflow-hidden`}>
                     {/* Mobile: textarea with auto-grow */}
                     <textarea
                         ref={mobileTextareaRef}
@@ -1349,15 +1396,27 @@ const InputArea: React.FC<Props> = ({
                         style={{ height: mobileInputExpanded ? undefined : 36, minHeight: 36, maxHeight: mobileInputExpanded ? 144 : 72 }}
                         onBlur={() => { if (!content.trim()) setMobileInputExpanded(false); }}
                     />
-                    {/* Desktop: input (unchanged) */}
-                    <input
-                        type="text"
-                        className="hidden sm:block w-full bg-transparent text-[15px] text-paper-white font-serif placeholder-gray-600 focus:outline-none"
+                    {/* Desktop: textarea with auto-grow (Enter sends, Shift+Enter newline) */}
+                    <textarea
+                        ref={desktopTextareaRef}
+                        className="hidden sm:block w-full bg-transparent text-[15px] text-paper-white font-serif placeholder-gray-600 focus:outline-none resize-none py-2.5 leading-[1.5]"
                         placeholder={busy ? "等待处理中..." : "输入你的行动..."}
                         value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && !busy && handleSend()}
+                        onChange={(e) => {
+                            setContent(e.target.value);
+                            const el = e.target;
+                            el.style.height = 'auto';
+                            el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey && !busy) {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
                         disabled={busy}
+                        rows={1}
+                        style={{ minHeight: 44, maxHeight: 160 }}
                     />
                 </div>
 
@@ -1416,35 +1475,36 @@ const InputArea: React.FC<Props> = ({
 
             {parseRepairModal.open && typeof document !== 'undefined' && createPortal((
                 <div
-                    className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+                    className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
                 >
                     <div
-                        className="mx-auto w-full max-w-4xl rounded-lg border border-wuxia-cyan/35 bg-black/95 p-5 shadow-[0_0_36px_rgba(0,0,0,0.85)]"
+                        className="mx-auto w-full max-w-5xl rounded-lg border border-wuxia-cyan/35 bg-black/95 p-6 shadow-[0_0_36px_rgba(0,0,0,0.85)]"
                     >
                         <div className="flex items-center justify-between gap-4 mb-4">
-                            <h4 className="text-lg font-serif font-bold text-wuxia-cyan">
+                            <h4 className="text-xl font-serif font-bold text-wuxia-cyan">
                                 {parseRepairModal.title || '恢复本回合'}
                             </h4>
                             <button
                                 type="button"
                                 onClick={() => setParseRepairModal(prev => ({ ...prev, open: false }))}
-                                className="text-gray-400 hover:text-white transition-colors"
+                                className="text-gray-400 hover:text-white transition-colors text-2xl leading-none px-2"
                                 aria-label="关闭解析修复弹窗"
                             >
                                 ✕
                             </button>
                         </div>
-                        <div className="text-xs text-gray-300 whitespace-pre-wrap border border-gray-800 rounded-md bg-black/50 p-3 mb-3">
+                        <div className="text-sm text-gray-300 whitespace-pre-wrap border border-gray-800 rounded-md bg-black/50 p-4 mb-4 leading-relaxed">
                             {parseRepairModal.detail}
                         </div>
-                        <div className="text-[11px] text-gray-500 mb-2">{parseRepairModal.hint || '可直接手动补全文本后恢复，或尝试自动修复恢复。'}</div>
+                        <div className="text-xs text-gray-500 mb-3">{parseRepairModal.hint || '可直接手动补全文本后恢复，或尝试自动修复恢复。'}</div>
                         <textarea
+                            ref={parseRepairTextareaRef}
                             value={parseRepairModal.editedRaw}
                             onChange={(e) => setParseRepairModal(prev => ({ ...prev, editedRaw: e.target.value, error: '' }))}
-                            className="w-full h-56 bg-black/80 border border-gray-700 rounded-md p-3 text-xs text-green-300 font-mono whitespace-pre resize-y outline-none focus:border-wuxia-cyan/60"
+                            className="w-full h-96 bg-black/80 border border-gray-700 rounded-md p-4 text-sm text-green-300 font-mono whitespace-pre resize-y outline-none focus:border-wuxia-cyan/60 leading-[1.7]"
                         />
                         {parseRepairModal.error && (
-                            <div className="mt-3 text-xs text-red-300 border border-red-500/30 bg-red-950/20 rounded p-2 whitespace-pre-wrap">
+                            <div className="mt-3 text-sm text-red-300 border border-red-500/30 bg-red-950/20 rounded p-3 whitespace-pre-wrap">
                                 {parseRepairModal.error}
                             </div>
                         )}
@@ -1453,7 +1513,7 @@ const InputArea: React.FC<Props> = ({
                                 type="button"
                                 onClick={() => { void handleApplyParseRepair('auto'); }}
                                 disabled={parseRepairBusy}
-                                className="px-4 py-2 text-xs font-bold rounded border border-wuxia-cyan/50 text-wuxia-cyan hover:bg-wuxia-cyan/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="px-5 py-2.5 text-sm font-bold rounded border border-wuxia-cyan/50 text-wuxia-cyan hover:bg-wuxia-cyan/10 disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 {parseRepairBusy ? '自动修复中...' : '自动修复并应用'}
                             </button>
@@ -1461,7 +1521,7 @@ const InputArea: React.FC<Props> = ({
                                 type="button"
                                 onClick={() => { void handleApplyParseRepair('manual'); }}
                                 disabled={parseRepairBusy}
-                                className="px-4 py-2 text-xs font-bold rounded border border-wuxia-gold/50 text-wuxia-gold hover:bg-wuxia-gold/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="px-5 py-2.5 text-sm font-bold rounded border border-wuxia-gold/50 text-wuxia-gold hover:bg-wuxia-gold/10 disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 {parseRepairBusy ? '处理中...' : '手动编辑后应用'}
                             </button>
@@ -1479,7 +1539,7 @@ const InputArea: React.FC<Props> = ({
                                         error: ''
                                     });
                                 }}
-                                className="px-4 py-2 text-xs font-bold rounded border border-red-900/60 text-red-300 hover:bg-red-900/20"
+                                className="px-5 py-2.5 text-sm font-bold rounded border border-red-900/60 text-red-300 hover:bg-red-900/20"
                             >
                                 重ROLL
                             </button>
