@@ -288,6 +288,7 @@ const InputArea: React.FC<Props> = ({
     });
     const [parseRepairBusy, setParseRepairBusy] = useState(false);
     const parseRepairTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const parseRepairDidAutoScrollRef = useRef(false);
     const quickActionsRef = useRef<HTMLDivElement | null>(null);
     const dragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
     const suppressClickUntilRef = useRef(0);
@@ -318,7 +319,12 @@ const InputArea: React.FC<Props> = ({
     };
 
     useEffect(() => {
-        if (!parseRepairModal.open || !parseRepairModal.editedRaw) return;
+        if (!parseRepairModal.open) {
+            parseRepairDidAutoScrollRef.current = false;
+            return;
+        }
+        if (parseRepairDidAutoScrollRef.current) return;
+        if (!parseRepairModal.editedRaw) return;
         const keywords = 从错误详情提取问题关键词(parseRepairModal.detail);
         if (keywords.length === 0) return;
         const text = parseRepairModal.editedRaw;
@@ -329,6 +335,7 @@ const InputArea: React.FC<Props> = ({
                 const linesBefore = text.substring(0, charIndex).split('\n').length - 1;
                 const lineHeight = 27;
                 const targetScroll = linesBefore * lineHeight - 60;
+                parseRepairDidAutoScrollRef.current = true;
                 requestAnimationFrame(() => {
                     const el = parseRepairTextareaRef.current;
                     if (el) el.scrollTop = Math.max(0, targetScroll);
@@ -1478,7 +1485,7 @@ const InputArea: React.FC<Props> = ({
                     className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
                 >
                     <div
-                        className="mx-auto w-full max-w-5xl rounded-lg border border-wuxia-cyan/35 bg-black/95 p-6 shadow-[0_0_36px_rgba(0,0,0,0.85)]"
+                        className="mx-auto w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-lg border border-wuxia-cyan/35 bg-black/95 p-6 shadow-[0_0_36px_rgba(0,0,0,0.85)]"
                     >
                         <div className="flex items-center justify-between gap-4 mb-4">
                             <h4 className="text-xl font-serif font-bold text-wuxia-cyan">
