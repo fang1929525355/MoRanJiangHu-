@@ -27,6 +27,8 @@ import { 获取激活小说拆分注入文本 } from '../../services/novelDecomp
 import { 同步剧情小说分解时间校准 } from '../../services/novelDecompositionCalibration';
 import { 提取命中新女性角色姓名黑名单 } from '../../utils/femaleNameSelector';
 import { 检测社交删除风险命令 } from '../../utils/npcRetentionGuard';
+import { 检测NPC境界回退风险命令 } from '../../utils/npcRealmRegressionGuard';
+import { 获取境界配置, type 境界配置 } from '../../utils/realmConfig';
 import { 构建标签缺失补充提示 } from '../../utils/parseErrorHints';
 import { 对AI输出执行酒馆正则 } from '../../utils/tavernRegexEngine';
 import { 提取酒馆选项 } from '../../utils/tavernOptionRenderer';
@@ -704,6 +706,26 @@ export const 校验响应未删除既有NPC = (
     );
     if (issues.length <= 0) return;
     const detail = `${stageLabel}试图删除或整组替换既有 NPC：${issues.join('；')}。请完整重新生成本回合正文和变量命令；未经玩家手动确认，任何 NPC 都只能更新字段、标记死亡或离场，不能从社交变量中删除。`;
+    const error = new textAIService.StoryResponseParseError(detail, rawText, detail);
+    (error as any).parseDetail = detail;
+    throw error;
+};
+
+export const 校验响应未无依据降低NPC境界 = (
+    response: GameResponse,
+    currentSocial: any[],
+    rawText: string,
+    stageLabel = '主剧情',
+    realmConfig?: 境界配置
+) => {
+    const issues = 检测NPC境界回退风险命令(
+        Array.isArray(response?.tavern_commands) ? response.tavern_commands : [],
+        currentSocial,
+        response,
+        realmConfig
+    );
+    if (issues.length <= 0) return;
+    const detail = `${stageLabel}试图无依据降低既有 NPC 境界：${issues.join('；')}。请完整重新生成本回合正文和变量命令；NPC 的境界文案与境界层级是持久真值，只有正文明确发生永久跌境、修为被废或证实旧档案有误时才能同步降低。`;
     const error = new textAIService.StoryResponseParseError(detail, rawText, detail);
     (error as any).parseDetail = detail;
     throw error;
@@ -2017,6 +2039,13 @@ export const 执行主剧情发送工作流 = async (
                     currentState.社交,
                     rawStoryText,
                     "主剧情"
+                );
+                校验响应未无依据降低NPC境界(
+                    reviewedStoryResult.response,
+                    currentState.社交,
+                    rawStoryText,
+                    "主剧情",
+                    获取境界配置(currentState.开局配置?.题材模式, currentState.开局配置?.modeRuntimeProfile)
                 );
                 return reviewedStoryResult;
             }

@@ -19,6 +19,8 @@ import { 结算已完成任务奖励 } from '../../utils/taskRewards';
 import { sanitizeInventoryCommand } from './inventoryCommandGuard';
 import { 姓名含已知中文姓氏 } from '../../utils/chineseName';
 import { 合并保留既有NPC列表, 命令存在社交删除风险, 是否占位名 } from '../../utils/npcRetentionGuard';
+import { 提取NPC境界回退风险命令索引 } from '../../utils/npcRealmRegressionGuard';
+import type { 境界配置 } from '../../utils/realmConfig';
 import { 提取NPC死亡风险命令索引, 状态效果是死亡判定 } from '../../utils/npcDeathGuard';
 import { 构建体内射精记录, 推进社交孕产状态, 规范化孕产时间 } from '../../utils/reproduction';
 
@@ -268,6 +270,7 @@ type 响应命令处理依赖 = {
     规范化同人女主剧情规划状态: (raw?: any) => 同人女主剧情规划结构 | undefined;
     规范化角色物品容器映射: (raw?: any, options?: { 当前时间?: unknown; 事件文本?: string; 启用饱腹口渴系统?: boolean; 题材模式?: unknown }) => 角色数据结构;
     角色规范化选项?: { 启用饱腹口渴系统?: boolean; 题材模式?: unknown };
+    境界配置?: 境界配置;
     战斗结束自动清空: (battle: 战斗状态结构, story?: 剧情系统结构) => 战斗状态结构;
     设置角色?: (value: 角色数据结构) => void;
     设置环境?: (value: 环境信息结构) => void;
@@ -1592,8 +1595,14 @@ export const 执行响应命令处理 = (
     const dialogueSenderKeys = 提取对白发送者集合(response, charBuffer?.姓名);
     if (Array.isArray(response.tavern_commands)) {
         const deathRiskCommandIndices = 提取NPC死亡风险命令索引(response.tavern_commands, socialBuffer, response);
+        const realmRegressionCommandIndices = 提取NPC境界回退风险命令索引(
+            response.tavern_commands,
+            socialBuffer,
+            response,
+            deps.境界配置
+        );
         response.tavern_commands.forEach((cmd, commandIndex) => {
-            if (deathRiskCommandIndices.has(commandIndex)) return;
+            if (deathRiskCommandIndices.has(commandIndex) || realmRegressionCommandIndices.has(commandIndex)) return;
             const safeCmd = 净化新增社交命令(
                 净化越界社交索引命令(
                 净化社交姓名命令(
@@ -1618,6 +1627,10 @@ export const 执行响应命令处理 = (
             if (!safeCmd) return;
             if (!heroinePlanEnabled && 是否女主规划命令(safeCmd.key)) return;
             if (命令存在社交删除风险(safeCmd, socialBuffer)) return;
+            const normalizedSafeKey = normalizeStateCommandKey(typeof safeCmd.key === 'string' ? safeCmd.key : '');
+            const executableCmd = normalizedSafeKey === 'gameState.社交' && safeCmd.action === 'add'
+                ? { ...safeCmd, action: 'push' as const }
+                : safeCmd;
             if (是否游戏初始时间命令(safeCmd.key)) {
                 return;
             }
@@ -1643,9 +1656,9 @@ export const 执行响应命令处理 = (
                 sectBuffer,
                 tasksBuffer,
                 agreementsBuffer,
-                safeCmd.key,
-                safeCmd.value,
-                safeCmd.action
+                executableCmd.key,
+                executableCmd.value,
+                executableCmd.action
             );
             charBuffer = result.char;
             envBuffer = result.env;

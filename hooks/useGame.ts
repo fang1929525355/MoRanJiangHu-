@@ -157,6 +157,7 @@ import { countOpenAIChatMessagesTokens, countOpenAITextTokens } from '../utils/t
 import { 执行游戏后台重计算 } from '../utils/gameHeavyWorkerClient';
 import { 保存NPC变量本地备份, 自动备份NPC变量 } from '../services/npcVariableBackup';
 import { 合并保留既有NPC列表 } from '../utils/npcRetentionGuard';
+import { 获取境界配置 } from '../utils/realmConfig';
 import { 设置默认技艺运行时配置 } from './useGame/stateTransforms';
 import { 最新AI消息可继续变量生成 } from '../utils/chatRecovery';
 
@@ -3200,6 +3201,7 @@ export const useGame = () => {
                     启用饱腹口渴系统: gameConfig?.启用饱腹口渴系统,
                     题材模式: 开局配置?.题材模式
                 },
+                境界配置: 获取境界配置(开局配置?.题材模式, 开局配置?.modeRuntimeProfile),
                 战斗结束自动清空,
                 设置角色,
                 设置环境,
