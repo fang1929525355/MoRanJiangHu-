@@ -44,6 +44,7 @@ import { useGameState } from './useGameState';
 import { isTurnProcessing, shouldPlayTurnNotification } from '../utils/turnNotificationState';
 import { 规范化接口设置, 获取当前接口配置, 获取主剧情接口配置, 获取剧情回忆接口配置, 获取记忆总结接口配置, 获取文章优化接口配置, 获取变量计算接口配置, 获取世界演变接口配置, 获取文生图接口配置, 获取场景文生图接口配置, 获取NSFW文生图接口配置, 获取生图词组转化器接口配置, 获取生图画师串预设, 获取词组转化器预设提示词, 接口配置是否可用, 刷新已发现ComfyUI后端缓存, 变量校准功能已启用 as 变量生成功能已启用 } from '../utils/apiConfig';
 import type { 当前可用接口结构 } from '../utils/apiConfig';
+import { 构建主要角色资源补全配置签名 } from '../utils/npcResourceCompletionSignature';
 import {
     规范化记忆系统,
     规范化记忆配置,
@@ -2755,6 +2756,11 @@ export const useGame = () => {
         if (!missingSignature) return;
 
         const feature = apiConfig?.功能模型占位 as any;
+        const imageFeature = 读取文生图功能配置();
+        const 普通生图接口 = 获取文生图接口配置(apiConfig);
+        const NSFW生图接口 = 获取NSFW文生图接口配置(apiConfig);
+        const 普通生图接口可用 = 接口配置是否可用(普通生图接口);
+        const NSFW生图接口可用 = 接口配置是否可用(NSFW生图接口);
         const resourceSignature = [
             gameConfig?.启用NSFW模式 === true ? 'nsfw:on' : 'nsfw:off',
             gameConfig?.启用男娘NSFW内容 !== false ? 'femboy:on' : 'femboy:off',
@@ -2763,6 +2769,13 @@ export const useGame = () => {
             feature?.NSFW生图后端类型 || feature?.图片后端类型 || '',
             feature?.NSFW生图模型使用模型 || feature?.文生图模型使用模型 || '',
             feature?.NSFW生图模型API地址 || feature?.文生图模型API地址 || '',
+            构建主要角色资源补全配置签名({
+                NPC生图已启用: imageFeature.总开关 && imageFeature.NPC开关,
+                普通生图接口可用,
+                NSFW生图接口可用,
+                普通生图接口,
+                NSFW生图接口
+            }),
             missingSignature
         ].join('__');
         if (主要角色资源补全签名Ref.current === resourceSignature) return;
