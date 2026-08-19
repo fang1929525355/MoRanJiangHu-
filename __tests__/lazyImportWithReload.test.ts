@@ -7,41 +7,50 @@ describe('lazyImportWithReload', () => {
         vi.unstubAllGlobals();
     });
 
-    it('refreshes once when a deployed chunk is no longer available', async () => {
+    it('refreshes only once for repeated failures in the same session', async () => {
         const reload = vi.fn();
+        const values = new Map<string, string>();
+        const sessionStorage = {
+            getItem: vi.fn((key: string) => values.get(key) ?? null),
+            setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+            removeItem: vi.fn((key: string) => values.delete(key))
+        };
         vi.stubGlobal('window', {
             location: { reload },
-            sessionStorage: {
-                getItem: vi.fn().mockReturnValue(null),
-                setItem: vi.fn(),
-                removeItem: vi.fn()
-            }
+            sessionStorage
         });
 
-        await expect(lazyImportWithReload('game-panel', async () => {
+        const loader = async () => {
             throw new TypeError('Failed to fetch dynamically imported module');
-        })).rejects.toMatchObject({
+        };
+        await expect(lazyImportWithReload('game-panel', loader)).rejects.toMatchObject({
+            name: 'DynamicImportDeferredReloadError'
+        });
+        await expect(lazyImportWithReload('game-panel', loader)).rejects.toMatchObject({
             name: 'DynamicImportDeferredReloadError'
         });
 
+        expect(sessionStorage.setItem).toHaveBeenCalledOnce();
+        expect(sessionStorage.setItem).toHaveBeenCalledWith('moranjianghu:lazy-import-reload:game-panel', '1');
         expect(reload).toHaveBeenCalledOnce();
     });
 
-    it('does not refresh repeatedly after the same chunk failure', async () => {
-        const reload = vi.fn();
+    it('clears the reload marker after the module loads successfully', async () => {
+        const values = new Map([['moranjianghu:lazy-import-reload:game-panel', '1']]);
+        const sessionStorage = {
+            getItem: vi.fn((key: string) => values.get(key) ?? null),
+            setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+            removeItem: vi.fn((key: string) => values.delete(key))
+        };
         vi.stubGlobal('window', {
-            location: { reload },
-            sessionStorage: {
-                getItem: vi.fn().mockReturnValue('1'),
-                setItem: vi.fn(),
-                removeItem: vi.fn()
-            }
+            location: { reload: vi.fn() },
+            sessionStorage
         });
 
-        await expect(lazyImportWithReload('game-panel', async () => {
-            throw new TypeError('Failed to fetch dynamically imported module');
-        })).rejects.toMatchObject({ name: 'DynamicImportDeferredReloadError' });
-        expect(reload).not.toHaveBeenCalled();
+        await expect(lazyImportWithReload('game-panel', async () => ({ default: 'loaded' })))
+            .resolves.toEqual({ default: 'loaded' });
+        expect(sessionStorage.removeItem).toHaveBeenCalledWith('moranjianghu:lazy-import-reload:game-panel');
+        expect(values.has('moranjianghu:lazy-import-reload:game-panel')).toBe(false);
     });
 
     it('treats Safari text/html module MIME errors as deployed chunk failures', async () => {
