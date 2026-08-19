@@ -7,12 +7,12 @@ describe('lazyImportWithReload', () => {
         vi.unstubAllGlobals();
     });
 
-    it('does not refresh the page when a deployed chunk is no longer available', async () => {
+    it('refreshes once when a deployed chunk is no longer available', async () => {
         const reload = vi.fn();
         vi.stubGlobal('window', {
             location: { reload },
             sessionStorage: {
-                getItem: vi.fn(),
+                getItem: vi.fn().mockReturnValue(null),
                 setItem: vi.fn(),
                 removeItem: vi.fn()
             }
@@ -24,6 +24,23 @@ describe('lazyImportWithReload', () => {
             name: 'DynamicImportDeferredReloadError'
         });
 
+        expect(reload).toHaveBeenCalledOnce();
+    });
+
+    it('does not refresh repeatedly after the same chunk failure', async () => {
+        const reload = vi.fn();
+        vi.stubGlobal('window', {
+            location: { reload },
+            sessionStorage: {
+                getItem: vi.fn().mockReturnValue('1'),
+                setItem: vi.fn(),
+                removeItem: vi.fn()
+            }
+        });
+
+        await expect(lazyImportWithReload('game-panel', async () => {
+            throw new TypeError('Failed to fetch dynamically imported module');
+        })).rejects.toMatchObject({ name: 'DynamicImportDeferredReloadError' });
         expect(reload).not.toHaveBeenCalled();
     });
 
