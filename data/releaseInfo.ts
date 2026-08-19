@@ -755,7 +755,7 @@ export const RELEASE_INFO = {
         "备用站：https://msjh.bacon.de5.net/"
     ],
     "notes": "大型存档与旧存档谱系处理更省内存：减少一次性读取完整存档造成的卡顿、内存不足和闪退风险。\n物品图库改为分页加载：打开图库不再扫描整份存档，支持继续加载、读取失败提示与一键重试；本地图片缺失或损坏时可回退到远程图片。\n修复模型列表与连接测试的并发覆盖问题：切换接口、地址、密钥或模型后，旧请求结果不会再覆盖当前选择，校验提示也会正确保留。\n恢复“双人成行 v11.0 墨染江湖适配版”酒馆预设，并完整保留提示词顺序、启用状态、正则脚本和生成参数。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-    "releasePublishedAt": "2026-08-19T13:50:38.986+08:00"
+    "releasePublishedAt": "2026-08-19T14:07:57.214+08:00"
 } as const;
 
 export type ReleaseInfo = typeof RELEASE_INFO;
