@@ -22,14 +22,30 @@ export const lazyImportWithReload = async <T>(
     loader: () => Promise<T>
 ): Promise<T> => {
     try {
-        return await loader();
+        const result = await loader();
+        try {
+            window.sessionStorage.removeItem(`moranjianghu:lazy-import-reload:${importKey}`);
+        } catch {
+            // Storage cleanup is best-effort.
+        }
+        return result;
     } catch (error) {
         if (typeof window === 'undefined' || !isDynamicImportFetchError(error)) {
             throw error;
         }
 
+        const reloadKey = `moranjianghu:lazy-import-reload:${importKey}`;
+        try {
+            if (window.sessionStorage.getItem(reloadKey) !== '1') {
+                window.sessionStorage.setItem(reloadKey, '1');
+                window.location.reload();
+            }
+        } catch {
+            // Storage/reload is best-effort; preserve the actionable error below.
+        }
+
         const reloadSafeError = new Error(
-            `功能模块 ${importKey} 暂时无法加载。可能是版本刚更新导致旧页面仍在运行；为避免打断当前游玩，系统不会自动刷新页面。请先手动保存进度，方便时再刷新进入新版本。`
+            `功能模块 ${importKey} 暂时无法加载。系统已尝试刷新页面；请先手动保存进度，稍后重新进入新版本。`
         );
         reloadSafeError.name = 'DynamicImportDeferredReloadError';
         (reloadSafeError as Error & { cause?: unknown }).cause = error;

@@ -44,6 +44,7 @@ import { useGameState } from './useGameState';
 import { isTurnProcessing, shouldPlayTurnNotification } from '../utils/turnNotificationState';
 import { 规范化接口设置, 获取当前接口配置, 获取主剧情接口配置, 获取剧情回忆接口配置, 获取记忆总结接口配置, 获取文章优化接口配置, 获取变量计算接口配置, 获取世界演变接口配置, 获取文生图接口配置, 获取场景文生图接口配置, 获取NSFW文生图接口配置, 获取生图词组转化器接口配置, 获取生图画师串预设, 获取词组转化器预设提示词, 接口配置是否可用, 刷新已发现ComfyUI后端缓存, 变量校准功能已启用 as 变量生成功能已启用 } from '../utils/apiConfig';
 import type { 当前可用接口结构 } from '../utils/apiConfig';
+import { 构建主要角色资源补全配置签名 } from '../utils/npcResourceCompletionSignature';
 import {
     规范化记忆系统,
     规范化记忆配置,
@@ -2565,6 +2566,7 @@ export const useGame = () => {
     const 自动补齐NPC香闺秘档部位 = async (npc: any) => {
         const npcKey = 获取NPC唯一标识(npc);
         if (npcKey && NPC生图进行中Ref.current.has(npcKey)) return;
+        if (!接口配置是否可用(获取NSFW文生图接口配置(apiConfig))) return;
         const missingParts = 读取NPC香闺秘档缺失部位(npc);
         for (const part of missingParts) {
             try {
@@ -2710,6 +2712,8 @@ export const useGame = () => {
         if (npcList.length === 0) return;
         const config = 读取文生图功能配置();
         const 自动补图已启用 = config.总开关 && config.NPC开关;
+        const 普通生图接口可用 = 接口配置是否可用(获取文生图接口配置(apiConfig));
+        const NSFW生图接口可用 = 接口配置是否可用(获取NSFW文生图接口配置(apiConfig));
 
         for (const npc of npcList) {
             const npcId = typeof npc?.id === 'string' ? npc.id.trim() : '';
@@ -2718,7 +2722,7 @@ export const useGame = () => {
             await 确保NPC生图前角色锚点(npc);
             if (!自动补图已启用) continue;
 
-            if (!NPC是否已有成功构图(npc, ['头像'])) {
+            if (普通生图接口可用 && !NPC是否已有成功构图(npc, ['头像'])) {
                 if (全部NPC头像补全进行中Ref.current) {
                     输出NPC自动生图调试('跳过主要角色头像补全：全部 NPC 头像补全仍在进行中', { npcId });
                     continue;
@@ -2730,7 +2734,7 @@ export const useGame = () => {
                 }
             }
 
-            if ((NPC是否女性(npc) || (男娘NSFW内容已启用() && NPC是否男性或男娘(npc))) && !NPC是否已有成功构图(npc, ['半身', '立绘'])) {
+            if (普通生图接口可用 && (NPC是否女性(npc) || (男娘NSFW内容已启用() && NPC是否男性或男娘(npc))) && !NPC是否已有成功构图(npc, ['半身', '立绘'])) {
                 if (全部NPC头像补全进行中Ref.current) {
                     输出NPC自动生图调试('跳过主要角色展示图补全：全部 NPC 头像补全仍在进行中', { npcId });
                     continue;
@@ -2742,7 +2746,7 @@ export const useGame = () => {
                 }
             }
 
-            await 自动补齐NPC香闺秘档部位(npc);
+            if (NSFW生图接口可用) await 自动补齐NPC香闺秘档部位(npc);
         }
 
     };
@@ -2752,6 +2756,11 @@ export const useGame = () => {
         if (!missingSignature) return;
 
         const feature = apiConfig?.功能模型占位 as any;
+        const imageFeature = 读取文生图功能配置();
+        const 普通生图接口 = 获取文生图接口配置(apiConfig);
+        const NSFW生图接口 = 获取NSFW文生图接口配置(apiConfig);
+        const 普通生图接口可用 = 接口配置是否可用(普通生图接口);
+        const NSFW生图接口可用 = 接口配置是否可用(NSFW生图接口);
         const resourceSignature = [
             gameConfig?.启用NSFW模式 === true ? 'nsfw:on' : 'nsfw:off',
             gameConfig?.启用男娘NSFW内容 !== false ? 'femboy:on' : 'femboy:off',
@@ -2760,6 +2769,13 @@ export const useGame = () => {
             feature?.NSFW生图后端类型 || feature?.图片后端类型 || '',
             feature?.NSFW生图模型使用模型 || feature?.文生图模型使用模型 || '',
             feature?.NSFW生图模型API地址 || feature?.文生图模型API地址 || '',
+            构建主要角色资源补全配置签名({
+                NPC生图已启用: imageFeature.总开关 && imageFeature.NPC开关,
+                普通生图接口可用,
+                NSFW生图接口可用,
+                普通生图接口,
+                NSFW生图接口
+            }),
             missingSignature
         ].join('__');
         if (主要角色资源补全签名Ref.current === resourceSignature) return;
