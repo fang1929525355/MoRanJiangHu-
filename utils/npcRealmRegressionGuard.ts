@@ -1,9 +1,7 @@
 import type { GameResponse, TavernCommand } from '../types';
-import { 获取境界配置, 获取境界层级 } from './realmConfig';
+import { 获取境界配置, 获取境界层级, type 境界配置 } from './realmConfig';
 import { 命令存在社交删除风险 } from './npcRetentionGuard';
 import { applyStateCommand, normalizeStateCommandKey } from './stateHelpers';
-
-const 题材模式列表 = ['武侠', '仙侠', '西方奇幻', '灵气复苏', '都市修仙', '现代都市', '末日丧尸', '无限流'] as const;
 
 const 深拷贝 = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -50,16 +48,16 @@ const 提取响应事实文本 = (response?: GameResponse): string => {
 };
 
 const 拆分事实句 = (text: string): string[] => text
-    .split(/[。！？!?\n\r]+/u)
+    .split(/[。！？!?；;\n\r]+/u)
     .map((sentence) => sentence.trim())
     .filter(Boolean);
 
-const 永久跌境事实正则 = /修为(?:[^。！？\n\r]{0,10})?(?:被废|废去|废除|尽废|全废)|(?:废去|废除|自废)(?:了)?(?:全部|一身)?修为|功力(?:尽失|全失|被废)|散功|道基(?:彻底)?(?:破碎|崩毁)|金丹(?:破碎|被毁)|境界(?:永久|彻底|不可逆)?(?:跌落|跌境|下降)|永久跌境/u;
-const 永久跌境否定正则 = /(?:并未|并非|不是|没有|并没有|未曾|尚未|不曾|险些|差点|几乎)(?:[^。！？\n\r]{0,18})?(?:散功|修为[^。！？\n\r]{0,8}(?:被废|废去|尽废)|功力尽失|境界[^。！？\n\r]{0,8}(?:跌落|跌境|下降))|(?:修为|功力|境界)(?:[^。！？\n\r]{0,8})?(?:并未|并非|不是|没有|未曾|尚未|不曾)(?:[^。！？\n\r]{0,8})?(?:被废|废去|尽废|尽失|跌落|跌境|下降)|(?:散功|修为[^。！？\n\r]{0,8}(?:被废|废去|尽废)|功力尽失|境界[^。！？\n\r]{0,8}(?:跌落|跌境|下降))(?:[^。！？\n\r]{0,18})?(?:并未发生|没有发生|不成立|只是临时|仅是临时|并非永久|不是永久|可以恢复|可恢复|会恢复)/u;
+const 永久跌境事实正则 = /修为(?:[^。！？；;\n\r]{0,10})?(?:被废|废去|废除|尽废|全废)|(?:废去|废除|自废)(?:了)?(?:全部|一身)?修为|功力(?:尽失|全失|被废)|散功|道基(?:彻底)?(?:破碎|崩毁)|金丹(?:破碎|被毁)|境界(?:永久|彻底|不可逆)?(?:跌落|跌境|下降)|永久跌境/u;
+const 永久跌境否定正则 = /(?:并未|并非|不是|没有|并没有|未曾|尚未|不曾|险些|差点|几乎)(?:[^。！？；;\n\r]{0,18})?(?:散功|修为[^。！？；;\n\r]{0,8}(?:被废|废去|尽废)|功力尽失|境界[^。！？；;\n\r]{0,8}(?:跌落|跌境|下降))|(?:修为|功力|境界)(?:[^。！？；;\n\r]{0,8})?(?:并未|并非|不是|没有|未曾|尚未|不曾)(?:[^。！？；;\n\r]{0,8})?(?:被废|废去|尽废|尽失|跌落|跌境|下降)|(?:散功|修为[^。！？；;\n\r]{0,8}(?:被废|废去|尽废)|功力尽失|境界[^。！？；;\n\r]{0,8}(?:跌落|跌境|下降))(?:[^。！？；;\n\r]{0,18})?(?:并未发生|没有发生|不成立|只是临时|仅是临时|并非永久|不是永久|可以恢复|可恢复|会恢复)/u;
 const 临时境界影响正则 = /临时|暂时|短暂|一时|封印|压制|受伤|重伤|战败|力竭|虚弱|休养后|恢复后|即可恢复/u;
 const 境界纠错事实正则 = /(?:境界|修为)(?:记录|档案|记载|判断|判定)?(?:有误|错误|错记|误判)|此前(?:境界|修为)(?:记录|档案|记载)?(?:有误|错误|错记|误判)/u;
 const 境界纠错确认正则 = /确认|证实|核对|查明|查证|纠正|更正|实际|原来/u;
-const 境界纠错否定正则 = /(?:尚未|未曾|并未|没有|未能|无法|待核实|有待核实)(?:[^。！？\n\r]{0,12})?(?:确认|证实|核对|查明|查证|纠正|更正|实际|原来)/u;
+const 境界纠错否定正则 = /(?:尚未|未曾|并未|没有|未能|无法|待核实|有待核实)(?:[^。！？；;\n\r]{0,12})?(?:确认|证实|核对|查明|查证|纠正|更正|实际|原来)/u;
 const 非现实跌境语境正则 = /如果|若是|若非|倘若|假如|一旦|可能|或许|也许|打算|计划|企图|想要|梦见|梦中|幻觉|幻象|假装|谎称|传闻|据说/u;
 
 const 事实正则明确指向NPC = (sentence: string, name: string, pattern: RegExp): boolean => {
@@ -112,15 +110,11 @@ const 境界文本匹配配置 = (text: string, config: ReturnType<typeof 获取
     });
 };
 
-const 解析已知境界文本层级 = (value: unknown): number | null => {
+const 解析已知境界文本层级 = (value: unknown, realmConfig: 境界配置): number | null => {
     const text = 读取文本(value);
-    if (!text) return null;
-    const levels = 题材模式列表
-        .map((mode) => 获取境界配置(mode, null))
-        .filter((config) => 境界文本匹配配置(text, config))
-        .map((config) => 获取境界层级(text, config))
-        .filter((level) => Number.isFinite(level) && level >= 1);
-    return levels.length > 0 ? Math.max(...levels) : null;
+    if (!text || !境界文本匹配配置(text, realmConfig)) return null;
+    const level = 获取境界层级(text, realmConfig);
+    return Number.isFinite(level) && level >= 1 ? level : null;
 };
 
 const 读取有效境界层级 = (value: unknown): number | null => {
@@ -130,9 +124,9 @@ const 读取有效境界层级 = (value: unknown): number | null => {
 
 const 境界占位文本正则 = /^(?:未知|未明|未定|不详|未知境界|未明境界|未定境界|境界未知|境界未定)$/u;
 
-const 计算NPC当前境界层级 = (npc: any): number => (
+const 计算NPC当前境界层级 = (npc: any, realmConfig: 境界配置): number => (
     读取有效境界层级(npc?.境界层级)
-    || 解析已知境界文本层级(npc?.境界)
+    || 解析已知境界文本层级(npc?.境界, realmConfig)
     || 1
 );
 
@@ -165,20 +159,24 @@ const 创建NPC境界命令状态 = (): NPC境界命令状态 => ({
     realmLevelCommandIndices: new Set<number>()
 });
 
+// 仅使用 social 槽；其余位置按 applyStateCommand 契约占位：
+// 角色/环境/社交/世界/战斗/剧情/剧情规划/女主规划/同人剧情规划/同人女主规划/门派/任务/约定
+// 当前响应命令净化器对社交命令只放行或丢弃，不改写内容、不改列表长度/顺序；
+// 若后续净化器改变这些语义，这里的模拟也必须同步。
 const 模拟社交命令 = (social: any[], cmd: any): any[] => applyStateCommand(
-    {} as any,
-    {} as any,
-    social as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    undefined,
-    undefined,
-    undefined,
-    {} as any,
-    [],
-    [],
+    {} as any, // 角色
+    {} as any, // 环境
+    social as any, // 社交
+    {} as any, // 世界
+    {} as any, // 战斗
+    {} as any, // 剧情
+    {} as any, // 剧情规划
+    undefined, // 女主规划
+    undefined, // 同人剧情规划
+    undefined, // 同人女主规划
+    {} as any, // 门派
+    [], // 任务
+    [], // 约定
     cmd.key,
     cmd.value,
     cmd.action || 'set'
@@ -187,7 +185,8 @@ const 模拟社交命令 = (social: any[], cmd: any): any[] => applyStateCommand
 const 分析NPC境界回退 = (
     commands: TavernCommand[] | any[],
     currentSocial: any[],
-    response?: GameResponse
+    response?: GameResponse,
+    realmConfig: 境界配置 = 获取境界配置('武侠', null)
 ): Array<{ npcIndex: number; issue: string; commandIndices: Set<number> }> => {
     if (!Array.isArray(commands) || !Array.isArray(currentSocial) || currentSocial.length <= 0) return [];
 
@@ -243,12 +242,13 @@ const 分析NPC境界回退 = (
                     if (affected.realmLevel) state.realmLevelCommandIndices.add(commandIndex);
                 }
             }
-            if (normalizedKey === 'gameState.社交' && action === 'push') {
+            if (normalizedKey === 'gameState.社交' && (action === 'push' || action === 'add')) {
                 socialOrigins.push(null);
             }
         }
 
-        socialBuffer = 模拟社交命令(socialBuffer, { ...cmd, action });
+        const simulatedAction = normalizedKey === 'gameState.社交' && action === 'add' ? 'push' : action;
+        socialBuffer = 模拟社交命令(socialBuffer, { ...cmd, action: simulatedAction });
     });
 
     const issues: Array<{ npcIndex: number; issue: string; commandIndices: Set<number> }> = [];
@@ -258,12 +258,12 @@ const 分析NPC境界回退 = (
         const targetNpc = targetBufferIndex >= 0 ? socialBuffer[targetBufferIndex] : undefined;
         if (!targetNpc || NPC存在明确永久跌境依据(currentNpc, response)) return;
 
-        const currentLevel = 计算NPC当前境界层级(currentNpc);
+        const currentLevel = 计算NPC当前境界层级(currentNpc, realmConfig);
         const currentNumericLevel = 读取有效境界层级(currentNpc?.境界层级);
         const currentRealmText = 读取文本(currentNpc?.境界);
         const targetRealmText = 读取文本(targetNpc?.境界);
         const targetNumericLevel = 读取有效境界层级(targetNpc?.境界层级);
-        const targetTextLevel = 解析已知境界文本层级(targetNpc?.境界);
+        const targetTextLevel = 解析已知境界文本层级(targetNpc?.境界, realmConfig);
         const finalLevel = Math.max(targetNumericLevel || 0, targetTextLevel || 0, 1);
         const numericRegression = state.realmLevelCommandIndices.size > 0
             && (
@@ -299,16 +299,18 @@ const 分析NPC境界回退 = (
 export const 检测NPC境界回退风险命令 = (
     commands: TavernCommand[] | any[],
     currentSocial: any[],
-    response?: GameResponse
-): string[] => 分析NPC境界回退(commands, currentSocial, response).map(({ issue }) => issue);
+    response?: GameResponse,
+    realmConfig?: 境界配置
+): string[] => 分析NPC境界回退(commands, currentSocial, response, realmConfig).map(({ issue }) => issue);
 
 export const 提取NPC境界回退风险命令索引 = (
     commands: TavernCommand[] | any[],
     currentSocial: any[],
-    response?: GameResponse
+    response?: GameResponse,
+    realmConfig?: 境界配置
 ): Set<number> => {
     const indices = new Set<number>();
-    分析NPC境界回退(commands, currentSocial, response).forEach(({ commandIndices }) => {
+    分析NPC境界回退(commands, currentSocial, response, realmConfig).forEach(({ commandIndices }) => {
         commandIndices.forEach((index) => indices.add(index));
     });
     return indices;

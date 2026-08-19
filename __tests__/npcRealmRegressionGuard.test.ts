@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameResponse, TavernCommand } from '../types';
+import type { 境界配置 } from '../utils/realmConfig';
 import {
     检测NPC境界回退风险命令,
     提取NPC境界回退风险命令索引
@@ -20,8 +21,13 @@ const 构建响应 = (text: string): GameResponse => ({
     tavern_commands: []
 });
 
-const 检测 = (commands: TavernCommand[], text = '谢斌与众人继续赶路，本回合没有发生境界变化。') => (
-    检测NPC境界回退风险命令(commands, existingSocial, 构建响应(text))
+const 检测 = (
+    commands: TavernCommand[],
+    text = '谢斌与众人继续赶路，本回合没有发生境界变化。',
+    social = existingSocial,
+    realmConfig?: 境界配置
+) => (
+    检测NPC境界回退风险命令(commands, social, 构建响应(text), realmConfig)
 );
 
 describe('NPC realm regression guard', () => {
@@ -137,6 +143,53 @@ describe('NPC realm regression guard', () => {
             .toHaveLength(1);
     });
 
+    it('keeps origin tracking aligned after an add-style whole-social append', () => {
+        const commands: TavernCommand[] = [
+            { action: 'add', key: '社交', value: { id: 'npc_new', 姓名: '林岳', 境界: '开脉境一重', 境界层级: 1 } },
+            { action: 'set', key: '社交[0].境界层级', value: 1 }
+        ];
+
+        expect(检测NPC境界回退风险命令(commands, existingSocial, 构建响应('林岳加入队伍，谢斌境界未变。')))
+            .toHaveLength(1);
+    });
+
+    it('uses the active topic realm config instead of cross-topic maximum aliases', () => {
+        const westernConfig: 境界配置 = {
+            levelNames: Array.from({ length: 24 }, (_, index) => `西幻境界${index + 1}`),
+            stageNames: ['见习', '初阶', '中阶', '高阶', '大师'],
+            tierAliases: { 一: '一', 二: '二', 三: '三', 四: '四' },
+            format: '{stage}{tier}阶',
+            parseRules: [
+                { pattern: '大师', level: 17 },
+                { pattern: '英雄|传奇', level: 21 }
+            ]
+        };
+        const social = [{ id: 'npc_west', 姓名: '艾琳', 境界: '英雄级', 境界层级: 20 }];
+        const commands: TavernCommand[] = [
+            { action: 'set', key: '社交[0].境界', value: '大师级' }
+        ];
+
+        expect(检测NPC境界回退风险命令(commands, social, 构建响应('艾琳继续赶路。'), westernConfig))
+            .toHaveLength(1);
+    });
+
+    it('uses custom runtime realm level names for regression detection', () => {
+        const customConfig: 境界配置 = {
+            levelNames: ['纸境', '木境', '石境', '铁境'],
+            stageNames: ['纸', '木', '石', '铁'],
+            parseRules: [],
+            tierAliases: {},
+            format: '{stage}境'
+        };
+        const social = [{ id: 'npc_custom', 姓名: '墨离', 境界: '铁境', 境界层级: 4 }];
+        const commands: TavernCommand[] = [
+            { action: 'set', key: '社交[0].境界', value: '木境' }
+        ];
+
+        expect(检测NPC境界回退风险命令(commands, social, 构建响应('墨离没有境界变化。'), customConfig))
+            .toHaveLength(1);
+    });
+
     it('allows new NPC initialization, unchanged realms, and normal breakthroughs', () => {
         const commands: TavernCommand[] = [
             {
@@ -192,6 +245,8 @@ describe('NPC realm regression guard', () => {
         ];
 
         expect(检测(commands, '谢斌扶住修为被废的林岳，自己并未受损。')).toHaveLength(1);
+        expect(检测(commands, '谢斌扶起同伴；林岳修为被废。')).toHaveLength(1);
+        expect(检测(commands, '谢斌扶起同伴; 林岳修为被废。')).toHaveLength(1);
     });
 
     it('does not accept an unconfirmed historical-record claim as a correction fact', () => {

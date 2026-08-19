@@ -1534,6 +1534,41 @@ describe('responseCommandProcessor NPC death fallback', () => {
         expect(JSON.stringify(result.社交)).not.toMatch(/角色9/);
     });
 
+    it('把整体 add 社交对象按追加命令执行，并保持既有 NPC 境界守卫索引', () => {
+        const state = 构建基础状态();
+        state.社交 = 规范化社交列表([
+            {
+                id: 'npc_xie_bin',
+                姓名: '谢斌',
+                性别: '男',
+                境界: '聚息境四重',
+                境界层级: 8,
+                是否队友: true,
+                是否在场: true
+            }
+        ], { 合并同名: false });
+
+        const result = 执行响应命令处理({
+            logs: [
+                { sender: '林岳', text: '“我与诸位同行。”' },
+                { sender: '旁白', text: '林岳加入队伍，谢斌境界没有变化。' }
+            ],
+            tavern_commands: [
+                {
+                    action: 'add',
+                    key: '社交',
+                    value: { id: 'npc_lin_yue', 姓名: '林岳', 性别: '男', 境界: '开脉境一重', 境界层级: 1 }
+                },
+                { action: 'set', key: '社交[0].境界层级', value: 1 }
+            ]
+        } as any, state, deps, undefined, { applyState: false });
+
+        expect(result.社交).toHaveLength(2);
+        expect(result.社交[0].姓名).toBe('谢斌');
+        expect(result.社交[0].境界层级).toBe(8);
+        expect(result.社交[1].姓名).toBe('林岳');
+    });
+
     it('丢弃同一 NPC 的整组无依据境界回退命令，但保留同回合其他合法更新', () => {
         const state = 构建基础状态();
         state.社交 = 规范化社交列表([

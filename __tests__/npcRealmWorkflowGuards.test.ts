@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { 校验响应未无依据降低NPC境界 } from '../hooks/useGame/sendWorkflow';
 import { 执行变量模型校准工作流 } from '../hooks/useGame/variableModelWorkflow';
 import * as textAIService from '../services/ai/text';
@@ -54,6 +54,10 @@ const baseState = {
 } as any;
 
 describe('NPC realm workflow guards', () => {
+    beforeEach(() => {
+        vi.mocked(textAIService.generateVariableCalibrationUpdate).mockReset();
+    });
+
     it('makes the main-story validation throw a retryable parse error for an unsupported realm regression', () => {
         const response = {
             logs: [{ sender: '旁白', text: '谢斌与众人继续赶路，本回合没有发生境界变化。' }],
@@ -63,6 +67,7 @@ describe('NPC realm workflow guards', () => {
             ]
         } as any;
 
+        expect.assertions(4);
         expect(() => 校验响应未无依据降低NPC境界(
             response,
             social,

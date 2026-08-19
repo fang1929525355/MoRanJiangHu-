@@ -18,6 +18,7 @@ import { 提取命中新女性角色姓名黑名单 } from '../../utils/femaleNa
 import { 提取命中模板姓名黑名单, 构建模板姓名黑名单提示词 } from '../../utils/templateNameBlacklist';
 import { 检测社交删除风险命令 } from '../../utils/npcRetentionGuard';
 import { 检测NPC境界回退风险命令 } from '../../utils/npcRealmRegressionGuard';
+import { 获取境界配置 } from '../../utils/realmConfig';
 import { 检测NPC死亡判定风险命令 } from '../../utils/npcDeathGuard';
 
 export { 检测NPC死亡判定风险命令 } from '../../utils/npcDeathGuard';
@@ -827,7 +828,8 @@ export const 执行变量模型校准工作流 = async (
         const realmRegressionIssues = 检测NPC境界回退风险命令(
             dedupedCommands,
             params.baseState.社交,
-            params.parsedResponse
+            params.parsedResponse,
+            获取境界配置(params.openingConfig?.题材模式, params.openingConfig?.modeRuntimeProfile)
         );
         if (realmRegressionIssues.length > 0) {
             const message = `变量生成试图无依据降低既有 NPC 境界：${realmRegressionIssues.join('；')}。NPC 的境界文案与境界层级是持久真值；只有正文明确发生永久跌境、修为被废或证实旧档案有误时才能同步降低。请重新生成变量命令。`;
