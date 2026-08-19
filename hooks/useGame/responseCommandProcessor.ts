@@ -19,6 +19,7 @@ import { 结算已完成任务奖励 } from '../../utils/taskRewards';
 import { sanitizeInventoryCommand } from './inventoryCommandGuard';
 import { 姓名含已知中文姓氏 } from '../../utils/chineseName';
 import { 合并保留既有NPC列表, 命令存在社交删除风险, 是否占位名 } from '../../utils/npcRetentionGuard';
+import { 提取NPC境界回退风险命令索引 } from '../../utils/npcRealmRegressionGuard';
 import { 提取NPC死亡风险命令索引, 状态效果是死亡判定 } from '../../utils/npcDeathGuard';
 import { 构建体内射精记录, 推进社交孕产状态, 规范化孕产时间 } from '../../utils/reproduction';
 
@@ -1592,8 +1593,13 @@ export const 执行响应命令处理 = (
     const dialogueSenderKeys = 提取对白发送者集合(response, charBuffer?.姓名);
     if (Array.isArray(response.tavern_commands)) {
         const deathRiskCommandIndices = 提取NPC死亡风险命令索引(response.tavern_commands, socialBuffer, response);
+        const realmRegressionCommandIndices = 提取NPC境界回退风险命令索引(
+            response.tavern_commands,
+            socialBuffer,
+            response
+        );
         response.tavern_commands.forEach((cmd, commandIndex) => {
-            if (deathRiskCommandIndices.has(commandIndex)) return;
+            if (deathRiskCommandIndices.has(commandIndex) || realmRegressionCommandIndices.has(commandIndex)) return;
             const safeCmd = 净化新增社交命令(
                 净化越界社交索引命令(
                 净化社交姓名命令(
