@@ -104,4 +104,28 @@ describe('scripted money reconciliation vs variable model', () => {
         } as any, state, deps as any, undefined, { applyState: false }) as any;
         expect(计算金钱BaseAmount总值(result.角色.金钱)).toBe(150);
     });
+
+    it('模拟(applyState:false)只预览不消费增量，真实落地(applyState:true)才消费——修复 CodeRabbit 指出的 High 风险', () => {
+        addScriptedMoneyDelta(50);
+        const resp = {
+            logs: [{ sender: '旁白', text: '账房结算寄售。' }],
+            tavern_commands: [
+                // AI 变量模型基于旧快照给出绝对金额（未包含本回合拍卖收入）
+                { action: 'set', key: '角色.金钱', value: { 底层货币: 100 } }
+            ]
+        } as any;
+        const 造状态 = () => {
+            const s = 构建基础状态();
+            s.角色 = { 姓名: '杨培强', 金钱: { 底层货币: 100 } } as any;
+            return s;
+        };
+        // 模拟/预览阶段：结果应叠加增量，但累加器不被消费，供后续真实落地使用
+        const simResult = 执行响应命令处理(resp, 造状态(), deps as any, undefined, { applyState: false }) as any;
+        expect(计算金钱BaseAmount总值(simResult.角色.金钱)).toBe(150);
+        expect(peekScriptedMoneyDelta()).toBe(50);
+        // 真实落地阶段：再次叠加并消费累加器
+        const realResult = 执行响应命令处理(resp, 造状态(), deps as any, undefined, { applyState: true }) as any;
+        expect(计算金钱BaseAmount总值(realResult.角色.金钱)).toBe(150);
+        expect(peekScriptedMoneyDelta()).toBe(0);
+    });
 });

@@ -24,7 +24,7 @@ import type { 境界配置 } from '../../utils/realmConfig';
 import { 提取NPC死亡风险命令索引, 状态效果是死亡判定 } from '../../utils/npcDeathGuard';
 import { 构建体内射精记录, 推进社交孕产状态, 规范化孕产时间 } from '../../utils/reproduction';
 import { 自动增加BaseAmount } from '../../services/auctionHouse';
-import { consumeScriptedMoneyDelta } from '../../utils/scriptedMoneyReconciler';
+import { consumeScriptedMoneyDelta, peekScriptedMoneyDelta } from '../../utils/scriptedMoneyReconciler';
 
 /** 判断是否为具体地点变更命令（多货币汇率系统用） */
 const 是否具体地点变更命令 = (key: string): boolean => {
@@ -1565,13 +1565,19 @@ const 过滤玩家本人门派成员 = (sect: any, playerName?: string): any => 
 
 /**
  * 脚本化金钱增量对账：
- * 取出本回合脚本/系统侧（拍卖行寄售结算等）登记的金钱增量并叠加到角色底层金额，
+ * 取出（或预览）本回合脚本/系统侧（拍卖行寄售结算等）登记的金钱增量并叠加到角色底层金额，
  * 保证它不会被 AI 变量模型基于旧快照的绝对 `set 角色.金钱` 命令覆盖掉。
  * 必须在所有 AI 命令应用完毕、且 `结算已完成任务奖励` 之后调用，落地前最后一步叠加。
+ *
+ * 关键：仅在「真正落地」(shouldApplyState=true) 时消费增量；
+ * 模拟/预览 (applyState:false) 只预览、不消费，避免增量在真实状态更新前被提前吞掉，
+ * 否则会出现 CodeRabbit 指出的「模拟阶段消费掉收入、真实落地时再次丢失」问题。
+ *
+ * @param 是否落地 为 true 时消费并清零累加器；为 false 时仅读取（peek）不消费。
  */
-const 应用脚本化金钱对账 = (角色: 角色数据结构 | undefined): 角色数据结构 => {
+const 应用脚本化金钱对账 = (角色: 角色数据结构 | undefined, 是否落地: boolean): 角色数据结构 => {
     if (!角色 || typeof 角色 !== 'object') return 角色 as 角色数据结构;
-    const delta = consumeScriptedMoneyDelta();
+    const delta = 是否落地 ? consumeScriptedMoneyDelta() : peekScriptedMoneyDelta();
     if (delta > 0) {
         return 自动增加BaseAmount(角色, delta);
     }
@@ -1863,7 +1869,8 @@ export const 执行响应命令处理 = (
         }
 
         // 脚本化金钱增量对账：在 `设置角色` 落地前叠加，避免被 AI 绝对 set 覆盖
-        finalState = { ...finalState, 角色: 应用脚本化金钱对账(finalState.角色) };
+        // 模拟/预览(shouldApplyState=false)只预览不消费，仅真实落地时消费增量（修复 CodeRabbit High 风险）
+        finalState = { ...finalState, 角色: 应用脚本化金钱对账(finalState.角色, shouldApplyState) };
 
         if (shouldApplyState) {
             deps.设置角色?.(finalState.角色);
@@ -1976,7 +1983,8 @@ export const 执行响应命令处理 = (
         finalState = 'state' in calibrated ? calibrated.state : calibrated;
     };
     // 脚本化金钱增量对账：在 `设置角色` 落地前叠加，避免被 AI 绝对 set 覆盖
-    finalState = { ...finalState, 角色: 应用脚本化金钱对账(finalState.角色) };
+    // 模拟/预览(shouldApplyState=false)只预览不消费，仅真实落地时消费增量（修复 CodeRabbit High 风险）
+    finalState = { ...finalState, 角色: 应用脚本化金钱对账(finalState.角色, shouldApplyState) };
 
     if (shouldApplyState) {
         deps.设置角色?.(finalState.角色);
