@@ -13,7 +13,7 @@ import { ModalErrorBoundary } from './components/ui/ModalErrorBoundary';
 import { useGame } from './hooks/useGame';
 import { use图片资源回源预取 } from './hooks/useImageAssetPrefetch';
 import { normalizeCanonicalGameTime, 环境时间转标准串 } from './hooks/useGame/timeUtils';
-import { 获取主剧情接口配置, 获取文生图接口配置, 获取生图词组转化器接口配置, 获取记忆精炼接口配置, 接口配置是否可用 } from './utils/apiConfig';
+import { 获取主剧情接口配置, 获取文生图接口配置, 获取生图词组转化器接口配置, 获取记忆精炼接口配置, 接口配置是否可用, 获取变量计算接口配置, 变量校准功能已启用 as 变量生成功能已启用 } from './utils/apiConfig';
 import { 请求模型文本 } from './services/ai/chatCompletionClient';
 import { 记忆精炼系统提示词 } from './prompts/runtime/memoryRefine';
 import { 获取内置世界书槽位内容 } from './utils/worldbook';
@@ -32,8 +32,9 @@ import { checkForAppUpdate, downloadLatestApkPackage, subscribeAppUpdateProgress
 import { APK仅手动更新已启用 } from './utils/appUpdatePreferences';
 import { RELEASE_INFO } from './data/releaseInfo';
 import { fetchRuntimeReleaseInfo, type RuntimeReleaseInfo } from './services/runtimeReleaseInfo';
-import { 读取拍卖行状态, 保存拍卖行状态, 清理并补货, 投放事件拍卖品, 构建拍卖行存储作用域, 上架背包物品, 创建交易记录, 结算玩家寄售, 从势力互动投放拍卖品, type 拍卖行状态 } from './services/auctionHouse';
+import { 读取拍卖行状态, 保存拍卖行状态, 清理并补货, 投放事件拍卖品, 构建拍卖行存储作用域, 上架背包物品, 创建交易记录, 结算玩家寄售, 从势力互动投放拍卖品, 自动增加BaseAmount, type 拍卖行状态 } from './services/auctionHouse';
 import { 获取货币显示模式, 规范化角色金钱 } from './utils/currencyDisplay';
+import { addScriptedMoneyDelta } from './utils/scriptedMoneyReconciler';
 import { 获取题材界面文案 } from './utils/resourceLabels';
 import { 获取题材顶部时间显示格式 } from './utils/modeRuntimeProfile';
 import { 计算游戏历程天数 } from './utils/gameTimeJourney';
@@ -1265,16 +1266,25 @@ const App: React.FC = () => {
         const signature = `${latestAssistantMessage.timestamp || 0}-${latestAssistantMessage.gameTime || ''}`;
         if (auctionSettlementHandledRef.current.has(signature)) return;
         auctionSettlementHandledRef.current.add(signature);
-        setAuctionHouseState((prev) => {
-            const settled = 结算玩家寄售(prev, state.角色, latestAssistantMessage.timestamp || Date.now(), auctionCurrencyOptions);
-            if (!settled.settledCount) return prev;
-            保存拍卖行状态(settled.nextState, auctionHouseScope);
-            setters.setCharacter(settled.nextCharacter);
-            void actions.performAutoSave?.({ role: settled.nextCharacter, force: true });
-            actions.pushNotification({ title: '寄售成交', message: settled.message, tone: 'success' });
-            return settled.nextState;
-        });
-    }, [actions, auctionCurrencyOptions, auctionHouseScope, latestAssistantMessage, setters, state.角色]);
+        // 在 effect 体内（而非 setState updater 内）计算与落地：React StrictMode 会双调用 updater，
+        // 把累加型副作用 addScriptedMoneyDelta 放进 updater 会导致金额翻倍。
+        const settled = 结算玩家寄售(auctionHouseState, state.角色, latestAssistantMessage.timestamp || Date.now(), auctionCurrencyOptions);
+        if (!settled.settledCount) return;
+        保存拍卖行状态(settled.nextState, auctionHouseScope);
+        const 变量生成启用 = 变量生成功能已启用(state.apiConfig) && 接口配置是否可用(获取变量计算接口配置(state.apiConfig));
+        if (!变量生成启用) {
+            // 变量模型不启用时，没有命令处理器代为落地，这里直接把拍卖收入叠加到底层金额并立即存档。
+            const 加钱后角色 = 自动增加BaseAmount(state.角色, settled.totalBaseAmount, auctionCurrencyOptions);
+            setters.setCharacter(加钱后角色);
+            void actions.performAutoSave?.({ role: 加钱后角色, force: true });
+        } else if (settled.totalBaseAmount > 0) {
+            // 变量模型启用时，只登记增量到全局累加器，由变量命令处理器在应用 AI 命令后、落地前叠加，
+            // 避免被变量模型基于旧快照的「绝对 set 角色.金钱」命令覆盖（玩家反馈：下回合脚本加的钱被变量更新吞了）。
+            addScriptedMoneyDelta(settled.totalBaseAmount);
+        }
+        actions.pushNotification({ title: '寄售成交', message: settled.message, tone: 'success' });
+        setAuctionHouseState(settled.nextState);
+    }, [actions, auctionCurrencyOptions, auctionHouseScope, latestAssistantMessage, setters, state.角色, auctionHouseState]);
     // [已移除] 拍卖行物品不再从主角剧情正文中提取，改为从世界势力互动事件中自然流出。
     // 旧逻辑：从剧情响应构建拍卖行投放参数列表 → 投放事件拍卖品
     // 新逻辑：世界演化 → 势力互动 → 世界.拍卖行待投放物品 → 从势力互动投放拍卖品

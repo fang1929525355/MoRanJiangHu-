@@ -30,6 +30,7 @@ import { 检测社交删除风险命令 } from '../../utils/npcRetentionGuard';
 import { 检测NPC境界回退风险命令 } from '../../utils/npcRealmRegressionGuard';
 import { 获取境界配置, type 境界配置 } from '../../utils/realmConfig';
 import { 构建标签缺失补充提示 } from '../../utils/parseErrorHints';
+import { resetScriptedMoneyDelta } from '../../utils/scriptedMoneyReconciler';
 import { 对AI输出执行酒馆正则 } from '../../utils/tavernRegexEngine';
 import { 提取酒馆选项 } from '../../utils/tavernOptionRenderer';
 import { 获取预设已分类正则脚本 } from '../../utils/tavernPreset';
@@ -2234,6 +2235,9 @@ export const 执行主剧情发送工作流 = async (
             return simulatedState;
         };
         await 让出主线程();
+        // 回合主流程命令应用前：清空上一轮（可能中断未消费）残留的脚本化金钱增量，
+        // 避免污染本轮。拍卖结算增量会由 App.tsx 的结算 effect 在本回合稍后登记进来。
+        resetScriptedMoneyDelta();
         const immediateState = 计时同步队列步骤(
             "main.applyImmediateResponseCommands",
             () => deps.processResponseCommands(finalParsedResponse, mainCommandBaseState),
