@@ -23,6 +23,8 @@ import { 提取NPC境界回退风险命令索引 } from '../../utils/npcRealmReg
 import type { 境界配置 } from '../../utils/realmConfig';
 import { 提取NPC死亡风险命令索引, 状态效果是死亡判定 } from '../../utils/npcDeathGuard';
 import { 构建体内射精记录, 推进社交孕产状态, 规范化孕产时间 } from '../../utils/reproduction';
+import { 自动增加BaseAmount } from '../../services/auctionHouse';
+import { consumeScriptedMoneyDelta } from '../../utils/scriptedMoneyReconciler';
 
 /** 判断是否为具体地点变更命令（多货币汇率系统用） */
 const 是否具体地点变更命令 = (key: string): boolean => {
@@ -1561,6 +1563,21 @@ const 过滤玩家本人门派成员 = (sect: any, playerName?: string): any => 
         : { ...sect, 重要成员: nextMembers };
 };
 
+/**
+ * 脚本化金钱增量对账：
+ * 取出本回合脚本/系统侧（拍卖行寄售结算等）登记的金钱增量并叠加到角色底层金额，
+ * 保证它不会被 AI 变量模型基于旧快照的绝对 `set 角色.金钱` 命令覆盖掉。
+ * 必须在所有 AI 命令应用完毕、且 `结算已完成任务奖励` 之后调用，落地前最后一步叠加。
+ */
+const 应用脚本化金钱对账 = (角色: 角色数据结构 | undefined): 角色数据结构 => {
+    if (!角色 || typeof 角色 !== 'object') return 角色 as 角色数据结构;
+    const delta = consumeScriptedMoneyDelta();
+    if (delta > 0) {
+        return 自动增加BaseAmount(角色, delta);
+    }
+    return 角色;
+};
+
 export const 执行响应命令处理 = (
     response: GameResponse,
     currentState: 响应命令处理状态,
@@ -1845,6 +1862,9 @@ export const 执行响应命令处理 = (
             finalState = 'state' in calibrated ? calibrated.state : calibrated;
         }
 
+        // 脚本化金钱增量对账：在 `设置角色` 落地前叠加，避免被 AI 绝对 set 覆盖
+        finalState = { ...finalState, 角色: 应用脚本化金钱对账(finalState.角色) };
+
         if (shouldApplyState) {
             deps.设置角色?.(finalState.角色);
             deps.设置环境?.(finalState.环境);
@@ -1955,6 +1975,9 @@ export const 执行响应命令处理 = (
     if (calibrated) {
         finalState = 'state' in calibrated ? calibrated.state : calibrated;
     };
+    // 脚本化金钱增量对账：在 `设置角色` 落地前叠加，避免被 AI 绝对 set 覆盖
+    finalState = { ...finalState, 角色: 应用脚本化金钱对账(finalState.角色) };
+
     if (shouldApplyState) {
         deps.设置角色?.(finalState.角色);
         deps.设置环境?.(finalState.环境);
