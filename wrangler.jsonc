@@ -33,14 +33,14 @@
   "kv_namespaces": [
     {
       "binding": "RELEASE_MANIFEST",
-      "id": "2f7acc9527d046e58f314ea992cb6241"
+      "id": "3ddd8970a16746fbba800eaec6edc3cd"
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "moranjianghu-db",
-      "database_id": "0a9c1910-5203-4e7e-a425-e600dc56a6af"
+      "database_id": "d72fe8c8-c46d-4e16-9594-67beaeab7592"
     }
   ],
   "durable_objects": {
@@ -51,12 +51,6 @@
       }
     ]
   },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["OnlineSessionsDO"]
-    }
-  ],
   "observability": {
     "enabled": true
   }
