@@ -12,7 +12,7 @@ export const RELEASE_INFO = {
         {
             "versionName": "1.0.655",
             "versionCode": 655,
-            "releasePublishedAt": "2026-08-27T21:59:05+08:00",
+            "releasePublishedAt": "2026-08-27T22:17:50+08:00",
             "releaseNotes": [
                 "修复生成商人类 NPC 时，其人物档案被错误写进女主角档案的问题：现在通过正文自动生成的新商人 NPC 会作为独立人物正确建档，不会污染女主角的资料。",
                 "官网：https://msjh.bacon159.pp.ua/",
@@ -783,7 +783,7 @@ export const RELEASE_INFO = {
         "备用站：https://msjh.bacon.de5.net/"
     ],
     "notes": "修复生成商人类 NPC 时，其人物档案被错误写进女主角档案的问题：现在通过正文自动生成的新商人 NPC 会作为独立人物正确建档，不会污染女主角的资料。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-    "releasePublishedAt": "2026-08-27T21:59:05+08:00"
+    "releasePublishedAt": "2026-08-27T22:17:50+08:00"
 } as const;
 
 export type ReleaseInfo = typeof RELEASE_INFO;
