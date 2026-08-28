@@ -397,6 +397,9 @@ const 同行确认事实正则 = /(同行|随行|随队|随我|随主角|跟随|
 // 或以主角为目标的追随（追随主角/追随我）。一次性护送、引路带路、短暂跟随、并肩不再入队；
 // 真实入队主要靠变量模型的显式 `set 社交[i].是否队友 = true` 命令与这些强语义短语。
 const 同行强确认事实正则 = /(同行|随行|随队|随我|随主角|同去|同往|同来|队友|同伴|结伴|追随主角|追随我)/;
+// 短暂/临时/被拒绝的同行不是入队：即便句中出现了 强确认词（如"短暂同行一段路""婉拒了结伴同行的邀请"），
+// 也要先被这里排除，避免与提示词"短暂同行保持 是否队友=false"自相矛盾。
+const 同行临时或否定事实正则 = /(短暂|暂时|临时|片刻|一程|一段路|婉拒|拒绝|谢绝|推辞|回绝|不曾|并未)/;
 const 同行离队事实正则 = /(离队|退队|不再同行|不再随行|分道扬镳|各自行动|分头行动|留守|待命|退下|退走|离开|散去|走远|留在|驻守)/;
 const 敌对或阻拦事实正则 = /(敌方|敌人|敌军|敌阵|敌手|对手|贼人|杀手|守卫|护院|拦路|拦住|阻拦|围住|围攻|袭击|攻击|交战|厮杀|追杀|堵截|拔刀相向|兵刃相向)/;
 const 随行者占位名正则 = /^随行者([1-9]\d*)$/;
@@ -523,6 +526,7 @@ const 是否明确同行实名 = (name: string, responseFactText: string): boole
     return 拆分事实句(responseFactText).some((sentence) => (
         sentence.includes(name)
         && 同行强确认事实正则.test(sentence)
+        && !同行临时或否定事实正则.test(sentence)
         && !同行离队事实正则.test(sentence)
         && !敌对或阻拦事实正则.test(sentence)
     ));
@@ -631,6 +635,8 @@ const 应用同行事实到队伍 = (
             return { ...npc, 是否队友: false };
         }
         if (!relatedSentences.some((sentence) => 同行强确认事实正则.test(sentence))) return npc;
+        // 短暂/临时/被拒绝的同行不是入队
+        if (relatedSentences.some((sentence) => 同行临时或否定事实正则.test(sentence))) return npc;
         // 敌对或阻拦事实不应设为队友
         if (relatedSentences.some((sentence) => 敌对或阻拦事实正则.test(sentence))) return npc;
         if (npc.是否队友 === true && npc.是否在场 === true) return npc;
