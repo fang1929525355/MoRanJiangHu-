@@ -15,7 +15,8 @@ import { 补齐自动丹药预设, 古风丹药预设名称集合, 生存补给�
 import type { ModeRuntimeProfile, 题材模式类型, ExpandedCurrencySystem } from '../../models/system';
 import { 获取展开货币系统 } from '../../utils/apiConfig';
 import { 获取境界配置, 规范化境界显示文本 as 规范化境界显示文本共享, 获取境界层级, 获取境界名称列表 } from '../../utils/realmConfig';
-import { 确保角色金钱BaseAmount, 规范化角色金钱 } from '../../utils/currencyDisplay';
+import { 确保角色金钱BaseAmount, 规范化角色金钱, 题材货币字段别名, 底层总值转角色金钱, 计算角色货币底层总值 } from '../../utils/currencyDisplay';
+import { normalizeStateCommandKey } from '../../utils/stateHelpers';
 import type { 境界配置 } from '../../utils/realmConfig';
 import { NPC调试日志已启用 } from '../../utils/debugFlags';
 
@@ -287,6 +288,137 @@ const 构建背景货币实体物品 = (entry: 背景货币展开结果) => ({
     价值: entry.货币键 === '上层货币' ? 10000 : entry.货币键 === '中层货币' ? 100 : 1,
     词条列表: [],
 } as any);
+const 货币层级旧别名: Record<货币层级键, string> = {
+    上层货币: '金元宝',
+    中层货币: '银子',
+    底层货币: '铜钱'
+};
+
+/** 单个金钱字段 → 所属三层货币层级；非金钱记账字段返回 null。 */
+const 金钱字段所属层级 = (field: string): 货币层级键 | null => {
+    if (field === '上层货币' || field === '中层货币' || field === '底层货币') return field;
+    if (field === '金元宝') return '上层货币';
+    if (field === '银子') return '中层货币';
+    if (field === '铜钱') return '底层货币';
+    for (const [tier, aliases] of Object.entries(题材货币字段别名)) {
+        if ((aliases as string[]).includes(field)) return tier as 货币层级键;
+    }
+    return null;
+};
+
+/**
+ * 提取本回合 AI 命令触碰过的 `角色.金钱.*` 记账字段名。
+ * 整对象 `set 角色.金钱 = {...}` 时收集 value 对象里出现过的字段。
+ */
+export const 提取金钱命令字段 = (commands: unknown): Set<string> => {
+    const touched = new Set<string>();
+    if (!Array.isArray(commands)) return touched;
+    commands.forEach((cmd: any) => {
+        const action = cmd?.action || 'set';
+        if (action !== 'set' && action !== 'add' && action !== 'sub') return;
+        if (typeof cmd?.key !== 'string') return;
+        const normalizedKey = normalizeStateCommandKey(cmd.key);
+        const 单字段匹配 = normalizedKey.match(/^gameState\.角色\.金钱\.([^.[\]]+)$/);
+        if (单字段匹配) {
+            const field = 单字段匹配[1].trim();
+            if (field && field !== '货币桶') touched.add(field);
+            return;
+        }
+        if (normalizedKey === 'gameState.角色.金钱'
+            && cmd?.value && typeof cmd.value === 'object' && !Array.isArray(cmd.value)) {
+            Object.keys(cmd.value).forEach((field) => {
+                if (field !== '货币桶') touched.add(field);
+            });
+        }
+    });
+    return touched;
+};
+
+/**
+ * 金钱命令写穿透同步：
+ * 变量提示词要求 AI 用旧别名（金元宝/银子/铜钱/题材别名）和 baseAmount 记账，
+ * 但归一化读取与左栏/变量面板显示都优先认三层货币字段。AI 只写别名时，陈旧的
+ * 三层字段会在随后的金钱归一化里反向覆盖刚写入的值——玩家反馈的
+ * 「只有 baseAmount 生效、银子被吞回旧值」就是这里来的。
+ * 因此在命令应用后、归一化前，以 AI 本回合写过的字段为权威互相同步：
+ * 写别名/层级 → 层级为权威并重算 baseAmount；只写 baseAmount → 分解为三层。
+ */
+export const 同步金钱命令写入 = (role: any, touchedFields: Set<string>): any => {
+    if (!role || typeof role !== 'object') return role;
+    const money = role.金钱;
+    if (!money || typeof money !== 'object') return role;
+    const touchedTiers = new Set<货币层级键>();
+    let touchedBaseAmount = false;
+    touchedFields.forEach((field) => {
+        if (field === 'baseAmount') {
+            touchedBaseAmount = true;
+            return;
+        }
+        const tier = 金钱字段所属层级(field);
+        if (tier) touchedTiers.add(tier);
+    });
+    if (touchedTiers.size === 0 && !touchedBaseAmount) return role;
+
+    const profile = _当前运行时配置;
+    const mode = (profile?.economy?.currencyDisplayMode as any) || undefined;
+    const next: Record<string, unknown> = { ...money };
+
+    // 把存档中已存在的题材货币别名字段（灵石/现金/存款/银两等）对齐到所属层级现值。
+    // 只覆盖已存在的字段、不新增键；否则归一化虽优先读三层，但残留旧别名仍是矛盾数据，
+    // 手动删层字段或后续按别名读数时会复活旧值。
+    const 同步已存在题材别名 = () => {
+        (['上层货币', '中层货币', '底层货币'] as 货币层级键[]).forEach((tier) => {
+            const tierValue = Number(next[tier]);
+            if (!Number.isFinite(tierValue)) return;
+            (题材货币字段别名[tier] || []).forEach((alias) => {
+                if (Object.prototype.hasOwnProperty.call(next, alias)) {
+                    next[alias] = Math.max(0, Math.trunc(tierValue));
+                }
+            });
+        });
+    };
+
+    if (touchedTiers.size > 0) {
+        touchedTiers.forEach((tier) => {
+            const legacyAlias = 货币层级旧别名[tier];
+            let value: number | null = null;
+            // AI 本回合写过的别名优先（旧别名在前、题材别名其次），避免陈旧层级字段抢先
+            const aliasCandidates = [legacyAlias, ...(题材货币字段别名[tier] || [])];
+            for (const alias of aliasCandidates) {
+                if (!touchedFields.has(alias)) continue;
+                const aliasValue = Number(next[alias]);
+                if (Number.isFinite(aliasValue)) {
+                    value = Math.max(0, Math.trunc(aliasValue));
+                    break;
+                }
+            }
+            if (value === null && touchedFields.has(tier)) {
+                const directValue = Number(next[tier]);
+                if (Number.isFinite(directValue)) value = Math.max(0, Math.trunc(directValue));
+            }
+            if (value === null) return;
+            next[tier] = value;
+            next[legacyAlias] = value;
+        });
+        next.baseAmount = 计算角色货币底层总值(next as any, profile, mode);
+        同步已存在题材别名();
+    } else if (touchedBaseAmount) {
+        const baseValue = Number(next.baseAmount);
+        if (!Number.isFinite(baseValue)) return role;
+        const total = Math.max(0, Math.trunc(baseValue));
+        const 分解 = 底层总值转角色金钱(total, profile, mode);
+        next.上层货币 = 分解.上层货币;
+        next.中层货币 = 分解.中层货币;
+        next.底层货币 = 分解.底层货币;
+        next.金元宝 = 分解.金元宝;
+        next.银子 = 分解.银子;
+        next.铜钱 = 分解.铜钱;
+        next.baseAmount = total;
+        同步已存在题材别名();
+    }
+    return { ...role, 金钱: next };
+};
+
 const 从物品列表汇总角色货币 = (items: any[], fallbackMoney: Record<string, number>) => {
     const hasCurrencyItems = items.some((item: any) => {
         const name = 规范化文本(item?.名称);
