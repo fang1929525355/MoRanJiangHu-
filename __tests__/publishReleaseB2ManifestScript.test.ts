@@ -5,11 +5,12 @@ import { describe, expect, it } from 'vitest';
 const scriptPath = path.join(process.cwd(), 'scripts', 'publish-release-b2.mjs');
 
 describe('release publish manifest script', () => {
-    it('verifies VPS before publishing a VPS-first manifest', () => {
+    it('verifies the preferred provider before publishing a github-first manifest (VPS 已失联，默认改 github)', () => {
         const source = readFileSync(scriptPath, 'utf8');
 
         expect(source).not.toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'hi168')");
-        expect(source).toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'vps')");
+        expect(source).not.toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'vps')");
+        expect(source).toContain("readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'github')");
         expect(source).toContain("MORAN_VPS_APK_BASE_URL || 'https://moranjianghu.bacon159.pp.ua'");
         expect(source).toContain('vpsUrl: providerApkUrls.vps');
         expect(source).toContain('vpsApkUrl: providerApkUrls.vps');
