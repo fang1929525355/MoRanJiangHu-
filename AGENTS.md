@@ -984,3 +984,11 @@ When onboarding another AI assistant (Cursor, Claude, etc.) to work on this proj
 ## Notes
 
 - AGENTS.md
+
+## 2026-08-29 Party Join Tightening (v1.0.658)
+
+- Player report (Xxx): "只要是主线人物，就会自动加入到队伍当中" — main-storyline characters auto-joined the party.
+- Root cause (two layers, PR #77): local `同行强确认事实正则` treated pure narrative movement verbs (跟随/跟着/带着/领着/护送/压阵/随身/并肩/并行) as join evidence; `prompts/stats/npc.ts` rule 48 additionally instructed the AI to set `是否队友=true` for 随主角同行/护送主角/并肩作战, which mass-matches narration.
+- Fix: join evidence narrowed to durable companionship semantics (同行/随行/随队/随我/随主角/同去/同往/同来/队友/同伴/结伴/追随主角/追随我); prompts now carry explicit evidence + counter-example lists and "主要角色/主线人物绝不因戏份多自动入队". Real joins still flow through explicit `set 社交[i].是否队友` commands.
+- CodeRabbit Major follow-up: added `同行临时或否定事实正则` (短暂/暂时/临时/片刻/一程/一段路/婉拒/拒绝/谢绝/推辞/回绝/不曾/并未) — checked in BOTH `是否明确同行实名` and `应用同行事实到队伍`, so "短暂同行一段路" or "婉拒了结伴同行" never joins. A second CodeRabbit Minor (rewrite NPC `位置路径` format to the six-layer tree) was skipped with reason: `位置路径` is built from environment fields (构建环境位置路径: 大/中/小地点+具体地点), not the map tree.
+- Tests: `__tests__/responseCommandProcessor.test.ts` +4 cases (narrative escort/lead/follow-crowd no-join; 结伴/追随主角 join; 短暂同行 no-join; 拒绝结伴 no-join). Existing scenes ("带着…随队听令", "明确跟随…同行") unaffected.

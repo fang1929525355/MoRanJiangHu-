@@ -969,3 +969,11 @@ B2 APK 分发已于 2026-07-13 废弃。部分遗留辅助代码和环境变量�
   - `apk-dist` 分支自 v1.0.646 起就未同步（github-raw 渠道对新版本 404）。已用 `node scripts/publish-apk-github-raw.mjs` 同步到 v1.0.657 并端到端验证（cloudflare-proxy pages → raw → SHA-256 一致）。
   - v1.0.657 三个 APK 渠道均以 SHA-256 `c9ab9fc4...` 验证通过：OneDrive、GitHub Release（gh-proxy 加速）、GitHub raw（apk-dist + pages 加速）。
 - 关键 Cloudflare 部署认证发现：本地 wrangler 存储的登录是旧账户（`648558021@qq.com`），无法操作新账户（`1524640484@qq.com`）——`kv put`/`deploy` 报 `Authentication error [code: 10000]`；且清空代理变量后 wrangler 会静默失败（退出码 0、无任何输出）。生产 Cloudflare 操作必须从 Windows 用户级环境变量 `CF_MIGRATE_TARGET_GLOBAL_API_EMAIL` / `CF_MIGRATE_TARGET_GLOBAL_API_KEY` / `CF_MIGRATE_TARGET_ACCOUNT_ID` 读取（PowerShell `[Environment]::GetEnvironmentVariable(...,'User')`），注入为 `CLOUDFLARE_EMAIL` / `CLOUDFLARE_API_KEY` / `CLOUDFLARE_ACCOUNT_ID`，并保留代理保证网络可达。`release:manifest` 输出若出现 `[KV] manifest write failed (non-fatal)`，说明 KV 清单没有更新——脚本仍会"完成"，必须当成失败处理。
+
+## 2026-08-29 自动入队收紧（v1.0.658）
+
+- 玩家反馈（Xxx）：只要是主线人物，就会自动加入队伍。
+- 根因（PR #77，两层）：本地 `同行强确认事实正则` 把纯叙事移动动词（跟随/跟着/带着/领着/护送/压阵/随身/并肩/并行）当入队证据；`prompts/stats/npc.ts` 第 48 条又要求 AI 对"随主角同行/护送主角/并肩作战"写 `是否队友=true`，与叙事语言大面积误命中。
+- 修复：入队证据收窄为耐久同伴语义（同行/随行/随队/随我/随主角/同去/同往/同来/队友/同伴/结伴/追随主角/追随我）；提示词补充明确证据清单 + 反例清单 + "主要角色/主线人物绝不因戏份多自动入队"。真实入队仍由显式 `set 社交[i].是否队友` 命令承载。
+- CodeRabbit Major 跟进：新增 `同行临时或否定事实正则`（短暂/暂时/临时/片刻/一程/一段路/婉拒/拒绝/谢绝/推辞/回绝/不曾/并未），在 `是否明确同行实名` 与 `应用同行事实到队伍` 两处生效——"短暂同行一段路""婉拒了结伴同行"不再入队。另一条 Minor（要求 NPC `位置路径` 改六层地图树格式）已说明原因跳过：`位置路径` 由环境字段（大/中/小地点+具体地点）拼接，与地图树是两条数据链。
+- 测试：`__tests__/responseCommandProcessor.test.ts` 新增 4 例（叙事带路/护送/跟人群不入队；结伴/追随主角入队；短暂同行不入队；拒绝结伴不入队）。既有"带着…随队听令""明确跟随…同行"场景不受影响。
