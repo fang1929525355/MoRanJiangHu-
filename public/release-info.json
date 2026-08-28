@@ -1,13 +1,23 @@
 {
-  "versionCode": 657,
-  "versionName": "1.0.657",
+  "versionCode": 658,
+  "versionName": "1.0.658",
   "releaseChannel": "stable",
   "releaseNotes": [
-    "修复钱财更新不同步：AI 更新银子、金元宝、铜钱等货币后，左侧「钱财」面板与变量面板会立即显示正确金额，不再出现金额卡在旧值、被悄悄改回或与实际余额对不上的情况。",
+    "修复自动入队过于宽松的问题：主线人物、路人镖师等只是带路、护送一程、短暂同行或跟着人群，不会再被自动拉进队伍；明确答应入队、结伴同行、追随主角的角色仍会正常入队。队伍列表从此只保留真正的长期同伴，不想让某人跟队也可以随时在队伍页移除。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
   "releaseHistory": [
+    {
+      "versionName": "1.0.658",
+      "versionCode": 658,
+      "releasePublishedAt": "2026-08-29T00:01:09+08:00",
+      "releaseNotes": [
+        "修复自动入队过于宽松的问题：主线人物、路人镖师等只是带路、护送一程、短暂同行或跟着人群，不会再被自动拉进队伍；明确答应入队、结伴同行、追随主角的角色仍会正常入队。队伍列表从此只保留真正的长期同伴，不想让某人跟队也可以随时在队伍页移除。",
+        "官网：https://msjh.bacon159.pp.ua/",
+        "备用站：https://msjh.bacon.de5.net/"
+      ]
+    },
     {
       "versionName": "1.0.657",
       "versionCode": 657,
@@ -799,10 +809,10 @@
   "multiDeviceSyncGuideUrl": "https://msjh.bacon159.pp.ua/tutorials.html#sync",
   "tutorialsUrl": "https://msjh.bacon159.pp.ua/tutorials.html",
   "changes": [
-    "修复钱财更新不同步：AI 更新银子、金元宝、铜钱等货币后，左侧「钱财」面板与变量面板会立即显示正确金额，不再出现金额卡在旧值、被悄悄改回或与实际余额对不上的情况。",
+    "修复自动入队过于宽松的问题：主线人物、路人镖师等只是带路、护送一程、短暂同行或跟着人群，不会再被自动拉进队伍；明确答应入队、结伴同行、追随主角的角色仍会正常入队。队伍列表从此只保留真正的长期同伴，不想让某人跟队也可以随时在队伍页移除。",
     "官网：https://msjh.bacon159.pp.ua/",
     "备用站：https://msjh.bacon.de5.net/"
   ],
-  "notes": "修复钱财更新不同步：AI 更新银子、金元宝、铜钱等货币后，左侧「钱财」面板与变量面板会立即显示正确金额，不再出现金额卡在旧值、被悄悄改回或与实际余额对不上的情况。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-08-28T22:29:44+08:00"
+  "notes": "修复自动入队过于宽松的问题：主线人物、路人镖师等只是带路、护送一程、短暂同行或跟着人群，不会再被自动拉进队伍；明确答应入队、结伴同行、追随主角的角色仍会正常入队。队伍列表从此只保留真正的长期同伴，不想让某人跟队也可以随时在队伍页移除。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
+  "releasePublishedAt": "2026-08-29T00:01:09+08:00"
 }
