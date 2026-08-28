@@ -9,18 +9,79 @@ import type {
 } from '../types';
 import type { 当前可用接口结构 } from '../utils/apiConfig';
 import { 过滤疑似目录章节, 重排章节序号, 规范化标题, 识别TXT章节标题行 } from './novelStructureHeuristics';
-import { 默认小说时间线起点, 尝试规范化小说时间锚点, 规范化小说时间锚点, 小说时间锚点转分钟序数 } from './novelDecompositionTime';
+import { 增加小说时间线天数, 默认小说时间线起点, 尝试规范化小说时间锚点, 规范化小说时间锚点, 小说时间锚点转分钟序数 } from './novelDecompositionTime';
 import { 构建小说拆分跨世界时间线规则 } from './novelDecompositionTimelineConstraints';
 
 const 时间锚点格式正则 = /^\d{4,6}:\d{2}:\d{2}:\d{2}:\d{2}$/;
 const 读取文本 = (value: unknown): string => (typeof value === 'string' ? value : '');
 const 去空白 = (value: string): string => value.replace(/\r\n/g, '\n').replace(/\uFEFF/g, '').trim();
 const 生成ID = (prefix: string): string => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const 修复明确跨午夜时间 = (candidate: string, reference?: string): string => {
+    if (!时间锚点格式正则.test(candidate) || !reference || !时间锚点格式正则.test(reference)) return candidate;
+    const candidateParts = candidate.split(':').map(Number);
+    const referenceParts = reference.split(':').map(Number);
+    const sameDate = candidateParts[0] === referenceParts[0]
+        && candidateParts[1] === referenceParts[1]
+        && candidateParts[2] === referenceParts[2];
+    const candidateMinutes = 小说时间锚点转分钟序数(candidate);
+    const referenceMinutes = 小说时间锚点转分钟序数(reference);
+    if (
+        sameDate
+        && referenceParts[3] >= 18
+        && candidateParts[3] <= 12
+        && candidateMinutes !== null
+        && referenceMinutes !== null
+        && candidateMinutes < referenceMinutes
+    ) {
+        return 增加小说时间线天数(candidate, 1);
+    }
+    return candidate;
+};
 const 规范化信息可见性 = (value: any) => ({
     谁知道: 去重文本列表(Array.isArray(value?.谁知道) ? value.谁知道 : [], 12),
     谁不知道: 去重文本列表(Array.isArray(value?.谁不知道) ? value.谁不知道 : [], 12),
     是否仅读者视角可见: value?.是否仅读者视角可见 === true
 });
+
+const 从内容恢复信息可见性 = (value: unknown): {
+    内容: string;
+    信息可见性: ReturnType<typeof 规范化信息可见性>;
+    已识别读者视角: boolean;
+} => {
+    const raw = 读取文本(value).trim();
+    const labelPattern = /(?:谁知道|谁不知道|是否仅读者视角可见)\s*[:：]/gu;
+    const firstLabel = labelPattern.exec(raw);
+    if (!firstLabel) {
+        return {
+            内容: raw,
+            信息可见性: 规范化信息可见性(undefined),
+            已识别读者视角: false
+        };
+    }
+
+    const fieldPatterns = {
+        谁知道: /谁知道\s*[:：]\s*([\s\S]*?)(?=\s*(?:\/\s*(?:谁知道|谁不知道|是否仅读者视角可见)\s*[:：]|[\n）)])|\s*$)/u,
+        谁不知道: /谁不知道\s*[:：]\s*([\s\S]*?)(?=\s*(?:\/\s*(?:谁知道|谁不知道|是否仅读者视角可见)\s*[:：]|[\n）)])|\s*$)/u,
+        是否仅读者视角可见: /是否仅读者视角可见\s*[:：]\s*([\s\S]*?)(?=\s*(?:\/\s*(?:谁知道|谁不知道|是否仅读者视角可见)\s*[:：]|[\n）)])|\s*$)/u
+    } as const;
+    const 读取字段 = (label: keyof typeof fieldPatterns): string => raw.match(fieldPatterns[label])?.[1]?.trim() || '';
+    const 拆分人员 = (text: string): string[] => 去重文本列表(
+        text.split(/[、，,；;/]/u).map((item) => item.trim()).filter(Boolean),
+        12
+    );
+    const readerOnlyText = 读取字段('是否仅读者视角可见');
+
+    return {
+        内容: raw.slice(0, firstLabel.index).replace(/[\\/\s（(]+$/u, '').trim(),
+        信息可见性: {
+            谁知道: 拆分人员(读取字段('谁知道')),
+            谁不知道: 拆分人员(读取字段('谁不知道')),
+            是否仅读者视角可见: /^(?:是|true)$/iu.test(readerOnlyText)
+        },
+        已识别读者视角: /^(?:是|否|true|false)$/iu.test(readerOnlyText)
+    };
+};
 
 const 合并信息可见性 = (
     left: 小说拆分分段结构['关键事件'][number]['信息可见性'],
@@ -31,10 +92,21 @@ const 合并信息可见性 = (
     是否仅读者视角可见: left?.是否仅读者视角可见 === true || right?.是否仅读者视角可见 === true
 });
 
-const 规范化可见信息条目 = (value: any): 小说拆分分段结构['原著硬约束'][number] => ({
-    内容: 清理章节编号文本(读取文本(value?.内容).trim()),
-    信息可见性: 规范化信息可见性(value?.信息可见性)
-});
+const 规范化可见信息条目 = (value: any): 小说拆分分段结构['原著硬约束'][number] => {
+    const recovered = 从内容恢复信息可见性(value?.内容);
+    const structured = 规范化信息可见性(value?.信息可见性);
+    const hasStructuredReaderOnly = typeof value?.信息可见性?.是否仅读者视角可见 === 'boolean';
+    return {
+        内容: 清理章节编号文本(recovered.内容),
+        信息可见性: {
+            谁知道: structured.谁知道.length > 0 ? structured.谁知道 : recovered.信息可见性.谁知道,
+            谁不知道: structured.谁不知道.length > 0 ? structured.谁不知道 : recovered.信息可见性.谁不知道,
+            是否仅读者视角可见: hasStructuredReaderOnly
+                ? structured.是否仅读者视角可见
+                : recovered.已识别读者视角 && recovered.信息可见性.是否仅读者视角可见
+        }
+    };
+};
 
 const 去重可见信息条目 = (
     items: 小说拆分分段结构['原著硬约束'],
@@ -662,16 +734,41 @@ const 规范化AI结果到分段 = (
     const 原著硬约束 = 去重可见信息条目(result.hardConstraints || [], 12);
     const 可提前铺垫 = 去重可见信息条目(result.foreshadowing || [], 12);
     const 时间线起点 = 规范化AI时间锚点(result.timelineStart, options.referenceStart);
-    const 时间线终点 = 规范化AI时间锚点(result.timelineEnd, 时间线起点 || options.referenceStart);
+    const 时间线终点 = 修复明确跨午夜时间(
+        规范化AI时间锚点(result.timelineEnd, 时间线起点 || options.referenceStart),
+        时间线起点 || options.referenceStart
+    );
 
     const 关键事件: 小说拆分分段结构['关键事件'] = [];
     if (Array.isArray(result.keyEvents)) {
         let 上一事件时间参考 = 时间线起点 || options.referenceStart;
         result.keyEvents.forEach((event) => {
-            const 开始时间 = 规范化AI时间锚点(event.开始时间, 上一事件时间参考);
-            const 最早开始时间 = 规范化AI时间锚点(event.最早开始时间, 开始时间 || 上一事件时间参考);
-            const 最迟开始时间 = 规范化AI时间锚点(event.最迟开始时间, 最早开始时间 || 开始时间 || 上一事件时间参考);
-            const 结束时间 = 规范化AI时间锚点(event.结束时间, 最迟开始时间 || 开始时间 || 上一事件时间参考);
+            const 跨午夜参考 = 上一事件时间参考;
+            const 原始开始时间 = 规范化AI时间锚点(event.开始时间, 跨午夜参考);
+            const 开始时间 = 修复明确跨午夜时间(原始开始时间, 跨午夜参考);
+            const 开始时间已跨日 = 开始时间 !== 原始开始时间;
+            const 与原始开始同日 = (candidate: string): boolean => candidate.slice(0, candidate.lastIndexOf(':', candidate.lastIndexOf(':') - 1))
+                === 原始开始时间.slice(0, 原始开始时间.lastIndexOf(':', 原始开始时间.lastIndexOf(':') - 1));
+            const 同步开始时间跨日 = (candidate: string): string => (
+                开始时间已跨日 && candidate && 与原始开始同日(candidate)
+                    ? 增加小说时间线天数(candidate, 1)
+                    : candidate
+            );
+            const 最早开始时间 = 同步开始时间跨日(
+                规范化AI时间锚点(event.最早开始时间, 开始时间 || 跨午夜参考)
+            );
+            const 最迟开始时间候选 = 同步开始时间跨日(
+                规范化AI时间锚点(event.最迟开始时间, 最早开始时间 || 开始时间 || 跨午夜参考)
+            );
+            const 最迟开始时间 = 开始时间已跨日
+                ? 最迟开始时间候选
+                : 修复明确跨午夜时间(最迟开始时间候选, 开始时间 || 跨午夜参考);
+            const 结束时间候选 = 同步开始时间跨日(
+                规范化AI时间锚点(event.结束时间, 最迟开始时间 || 开始时间 || 跨午夜参考)
+            );
+            const 结束时间 = 开始时间已跨日
+                ? 结束时间候选
+                : 修复明确跨午夜时间(结束时间候选, 开始时间 || 跨午夜参考);
             const normalizedEvent = 补齐关键事件时间字段({
                 事件名: 清理章节编号文本(event.事件名 || ''),
                 事件说明: 清理章节编号文本(event.事件说明 || ''),
