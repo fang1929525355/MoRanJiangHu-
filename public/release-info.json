@@ -11,7 +11,7 @@
     {
       "versionName": "1.0.657",
       "versionCode": 657,
-      "releasePublishedAt": "2026-08-28T21:50:03+08:00",
+      "releasePublishedAt": "2026-08-28T22:29:44+08:00",
       "releaseNotes": [
         "修复钱财更新不同步：AI 更新银子、金元宝、铜钱等货币后，左侧「钱财」面板与变量面板会立即显示正确金额，不再出现金额卡在旧值、被悄悄改回或与实际余额对不上的情况。",
         "官网：https://msjh.bacon159.pp.ua/",
@@ -804,5 +804,5 @@
     "备用站：https://msjh.bacon.de5.net/"
   ],
   "notes": "修复钱财更新不同步：AI 更新银子、金元宝、铜钱等货币后，左侧「钱财」面板与变量面板会立即显示正确金额，不再出现金额卡在旧值、被悄悄改回或与实际余额对不上的情况。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-  "releasePublishedAt": "2026-08-28T21:50:03+08:00"
+  "releasePublishedAt": "2026-08-28T22:29:44+08:00"
 }

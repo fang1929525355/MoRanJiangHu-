@@ -247,7 +247,9 @@ const githubRawAcceleratedApkUrl = githubRawAccelerator && /^https:\/\/[^/]+$/i.
   : '';
 // VPS 和 GitHub Raw 只有通过远端完整性校验后才允许成为首选。
 // 如需强制其他通道，用环境变量 MORAN_RELEASE_PREFERRED_APK_PROVIDER 覆盖。
-const requestedPreferredApkProvider = readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'vps');
+// 默认改为 github：VPS 域（moranjianghu.bacon159.pp.ua）2026-08-28 起失联，
+// 且请求时路由不校验 VPS 存活、静默 302 到死链，github 通道最稳。
+const requestedPreferredApkProvider = readEnv('MORAN_RELEASE_PREFERRED_APK_PROVIDER', 'github');
 const fallbackPreferredApkProvider = await resolvePreferredApkProvider({
   requestedProvider: requestedPreferredApkProvider,
   vpsUrl: providerApkUrls.vps,

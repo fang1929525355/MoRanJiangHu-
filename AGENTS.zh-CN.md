@@ -957,3 +957,15 @@ B2 APK 分发已于 2026-07-13 废弃。部分遗留辅助代码和环境变量�
   - 新端点 `functions/api/ai-relay/[[path]].ts`：为被浏览器跨域拦截的第三方 AI 请求做同域中转（直连报 TypeError/Failed to fetch 时使用）。SSE 流式响应原样透传。防护：仅 http/https、仅 80/443 端口、禁止指向自家域名、禁止私有/回环 IP 字面量（SSRF）、上游路径白名单（`chat/completions`、`completions`、`messages`、`models`、`embeddings`、`responses`、`images/generations`、`images/edits`、`audio/speech`、`count_tokens`）、请求体上限 2MB、不跟随重定向。Authorization 仅透传，不落盘不记录。
   - 前端 `services/ai/corsRelay.ts`：仅网页环境（APK 原生不启用）；直连优先，网络层失败时自动经同域中转重试一次。`请求模型文本` 失败时附带跨域引导文案。模型列表拉取在 `构建OpenAI兼容模型列表候选地址` 中于直连候选之后追加中转候选（全部 10+ 个设置组件自动继承）。开关在接口设置中（`网页版跨域自动中转`，默认开启，存 localStorage `msjh_ai_cors_relay_mode`）。
   - 测试：`__tests__/aiRelayCors.test.ts`（12 用例：端点防护、转发、错误透传、corsRelay 逻辑）。`__tests__/apiModelSelection.test.ts` 断言已更新以包含追加的中转候选。
+
+## 2026-08-28 金钱别名写穿透修复与 v1.0.657 发布记忆
+
+- 玩家反馈（darkvanmaster）：AI 下发 `set 角色.金钱.银子 = 6270` + `set 角色.金钱.baseAmount = 6270000`，但只有 `baseAmount` 生效；JSON 里保留陈旧的 `中层货币: 3500`，面板（经 `规范化角色金钱` 读三层字段）金额不动。与创意工坊预设无关，原版存档同样复现。
+- 根因：金钱对象同时存在两套字段——三层货币（`上层货币/中层货币/底层货币`）与旧别名（`金元宝/银子/铜钱` + 题材别名）+ `baseAmount`。变量提示词让 AI 写旧别名；但 `读取货币数值` 优先取三层字段，每回合金钱归一化（`规范化角色物品容器映射` → `从物品列表汇总角色货币` → `规范化角色金钱`）会用陈旧三层字段把刚写入的别名值反向覆盖。`baseAmount` 读取是"有现成值就保留"，所以它"生效"。
+- 修复（PR #76，随 v1.0.657 发布）：`hooks/useGame/stateTransforms.ts` 新增 `提取金钱命令字段` + `同步金钱命令写入`；`hooks/useGame/responseCommandProcessor.ts` 在 tavern_commands 应用完、金钱归一化前执行写穿透：以 AI 本回合写过的字段为权威——写别名/层级 → 同步三层并重算 `baseAmount`；只写 `baseAmount` → 分解为三层；已存在的题材别名字段（灵石/现金/存款/灵晶…）对齐到所属层级现值（只覆盖已存在键，绝不新增）。回归测试：`__tests__/moneyCommandWriteThrough.test.ts`（13 例）。
+- CodeRabbit 评审（PR #76，CHILL 档）：1 条 Major——只写 baseAmount 时必须同步刷新题材货币别名字段；已在 commit 2d80723 修复并补测试。该计划评审额度为每小时 1 次，增量复审可能滞后。
+- 发布面发现（2026-08-28）：
+  - VPS 域名 `moranjianghu.bacon159.pp.ua` 已失联（DNS 可解析、TCP 443 不通）。APK provider 路由（`functions/api/apk/_providerRouter.ts`）请求时不校验存活，quark/fullstack 失败时会把默认 `/api/apk/latest.apk` 302 到该死链。`scripts/publish-release-b2.mjs` 的 `MORAN_RELEASE_PREFERRED_APK_PROVIDER` 默认值已由 `vps` 改为 `github`（环境变量覆盖仍可用）。
+  - `apk-dist` 分支自 v1.0.646 起就未同步（github-raw 渠道对新版本 404）。已用 `node scripts/publish-apk-github-raw.mjs` 同步到 v1.0.657 并端到端验证（cloudflare-proxy pages → raw → SHA-256 一致）。
+  - v1.0.657 三个 APK 渠道均以 SHA-256 `c9ab9fc4...` 验证通过：OneDrive、GitHub Release（gh-proxy 加速）、GitHub raw（apk-dist + pages 加速）。
+- 关键 Cloudflare 部署认证发现：本地 wrangler 存储的登录是旧账户（`648558021@qq.com`），无法操作新账户（`1524640484@qq.com`）——`kv put`/`deploy` 报 `Authentication error [code: 10000]`；且清空代理变量后 wrangler 会静默失败（退出码 0、无任何输出）。生产 Cloudflare 操作必须从 Windows 用户级环境变量 `CF_MIGRATE_TARGET_GLOBAL_API_EMAIL` / `CF_MIGRATE_TARGET_GLOBAL_API_KEY` / `CF_MIGRATE_TARGET_ACCOUNT_ID` 读取（PowerShell `[Environment]::GetEnvironmentVariable(...,'User')`），注入为 `CLOUDFLARE_EMAIL` / `CLOUDFLARE_API_KEY` / `CLOUDFLARE_ACCOUNT_ID`，并保留代理保证网络可达。`release:manifest` 输出若出现 `[KV] manifest write failed (non-fatal)`，说明 KV 清单没有更新——脚本仍会"完成"，必须当成失败处理。
