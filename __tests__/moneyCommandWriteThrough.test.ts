@@ -69,6 +69,30 @@ describe('同步金钱命令写入（纯函数）', () => {
         expect(计算金钱BaseAmount总值(next.金钱)).toBe(6270000);
     });
 
+    it('只写 baseAmount 时，存档中残留的题材别名（灵石）也对齐到分解后的层级值', () => {
+        const money = { ...构建双重字段金钱({ baseAmount: 3501234 }), 灵石: 3500 };
+        const next = 同步金钱命令写入({ 金钱: money } as any, new Set(['baseAmount'])) as any;
+        // 默认武侠汇率分解 3,501,234 = 35 上层 + 1 中层 + 234 底层
+        expect(next.金钱.底层货币).toBe(234);
+        expect(next.金钱.灵石).toBe(234);
+        expect(next.金钱.铜钱).toBe(234);
+        expect(next.金钱.baseAmount).toBe(3501234);
+    });
+
+    it('写别名路径同样对齐已存在的题材别名（灵晶 为中层别名）', () => {
+        const money = { ...构建双重字段金钱({ 银子: 4000 }), 灵晶: 3500 };
+        const next = 同步金钱命令写入({ 金钱: money } as any, new Set(['银子'])) as any;
+        expect(next.金钱.中层货币).toBe(4000);
+        expect(next.金钱.灵晶).toBe(4000);
+    });
+
+    it('题材别名同步只覆盖已存在字段，不为无关题材新增键', () => {
+        const money = 构建双重字段金钱({ 银子: 4000 });
+        const next = 同步金钱命令写入({ 金钱: money } as any, new Set(['银子'])) as any;
+        expect(Object.prototype.hasOwnProperty.call(next.金钱, '灵晶')).toBe(false);
+        expect(Object.prototype.hasOwnProperty.call(next.金钱, '灵石')).toBe(false);
+    });
+
     it('题材别名（灵石）写入 → 底层货币同步', () => {
         const money = 构建双重字段金钱({ 灵石: 500 });
         const next = 同步金钱命令写入({ 金钱: money } as any, new Set(['灵石'])) as any;

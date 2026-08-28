@@ -363,6 +363,21 @@ export const 同步金钱命令写入 = (role: any, touchedFields: Set<string>):
     const mode = (profile?.economy?.currencyDisplayMode as any) || undefined;
     const next: Record<string, unknown> = { ...money };
 
+    // 把存档中已存在的题材货币别名字段（灵石/现金/存款/银两等）对齐到所属层级现值。
+    // 只覆盖已存在的字段、不新增键；否则归一化虽优先读三层，但残留旧别名仍是矛盾数据，
+    // 手动删层字段或后续按别名读数时会复活旧值。
+    const 同步已存在题材别名 = () => {
+        (['上层货币', '中层货币', '底层货币'] as 货币层级键[]).forEach((tier) => {
+            const tierValue = Number(next[tier]);
+            if (!Number.isFinite(tierValue)) return;
+            (题材货币字段别名[tier] || []).forEach((alias) => {
+                if (Object.prototype.hasOwnProperty.call(next, alias)) {
+                    next[alias] = Math.max(0, Math.trunc(tierValue));
+                }
+            });
+        });
+    };
+
     if (touchedTiers.size > 0) {
         touchedTiers.forEach((tier) => {
             const legacyAlias = 货币层级旧别名[tier];
@@ -386,6 +401,7 @@ export const 同步金钱命令写入 = (role: any, touchedFields: Set<string>):
             next[legacyAlias] = value;
         });
         next.baseAmount = 计算角色货币底层总值(next as any, profile, mode);
+        同步已存在题材别名();
     } else if (touchedBaseAmount) {
         const baseValue = Number(next.baseAmount);
         if (!Number.isFinite(baseValue)) return role;
@@ -398,6 +414,7 @@ export const 同步金钱命令写入 = (role: any, touchedFields: Set<string>):
         next.银子 = 分解.银子;
         next.铜钱 = 分解.铜钱;
         next.baseAmount = total;
+        同步已存在题材别名();
     }
     return { ...role, 金钱: next };
 };
