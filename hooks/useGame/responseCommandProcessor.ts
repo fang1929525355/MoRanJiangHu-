@@ -25,6 +25,7 @@ import { 提取NPC死亡风险命令索引, 状态效果是死亡判定 } from '
 import { 构建体内射精记录, 推进社交孕产状态, 规范化孕产时间 } from '../../utils/reproduction';
 import { 自动增加BaseAmount } from '../../services/auctionHouse';
 import { consumeScriptedMoneyDelta, peekScriptedMoneyDelta } from '../../utils/scriptedMoneyReconciler';
+import { 提取金钱命令字段, 同步金钱命令写入 } from './stateTransforms';
 
 /** 判断是否为具体地点变更命令（多货币汇率系统用） */
 const 是否具体地点变更命令 = (key: string): boolean => {
@@ -1706,6 +1707,14 @@ export const 执行响应命令处理 = (
             fandomStoryPlanBuffer = result.fandomStoryPlan;
             fandomHeroinePlanBuffer = result.fandomHeroinePlan;
         });
+
+        // 金钱命令写穿透：AI 本回合写过的金钱字段为权威，同步三层/旧别名/baseAmount，
+        // 防止随后的金钱归一化用陈旧三层字段把刚写入的别名值反向吞掉
+        // （面板读三层字段、提示词却让 AI 写 金元宝/银子/铜钱 别名，见变量提示词 13 条）
+        const 金钱命令字段 = 提取金钱命令字段(response?.tavern_commands);
+        if (金钱命令字段.size > 0) {
+            charBuffer = 同步金钱命令写入(charBuffer, 金钱命令字段);
+        }
 
         envBuffer = deps.规范化环境信息(envBuffer);
         socialBuffer = deps.规范化社交列表(socialBuffer, { 合并同名: false });
