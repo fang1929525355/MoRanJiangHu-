@@ -105,13 +105,59 @@ const 读取货币类型分类名 = (value: unknown): string => {
 
 const 归一化货币键 = (key: 兼容货币键): 货币层级键 => 旧货币键映射[key] || '底层货币';
 
+/**
+ * 题材专属货币字段 → 统一三层货币的别名表。
+ *
+ * 角色初始化模板按题材给的是 灵石/灵玉、现金/存款、通用点数/稀缺物资、金币/银币/铜币，
+ * AI 也会按题材语义直接往这些字段里写钱；但显示层只认 上层/中层/底层货币 与
+ * 金元宝/银子/铜钱，于是一切非武侠题材的左栏"钱财"恒为 0 —— 变量面板里明明有钱。
+ * 这里补齐别名；按顺序取第一个存在且为有限数的字段，避免重复计数。
+ */
+export const 题材货币字段别名: Record<货币层级键, string[]> = {
+    上层货币: ['金元宝', '元宝', '灵玉', '上品灵石', '金币', '存款', '稀缺物资', '研究额度'],
+    中层货币: ['银子', '银两', '中品灵石', '银币', '灵晶'],
+    底层货币: ['铜钱', '灵石', '下品灵石', '铜币', '现金', '通用点数', '信用点', '奖励点', '人民币']
+};
+
 const 读取货币数值 = (money: Partial<角色金钱> | null | undefined, key: 货币层级键): number => {
     const direct = Number(money?.[key]);
     if (Number.isFinite(direct)) return Math.max(0, Math.trunc(direct));
     const legacyKey = 默认旧别名标签[key] as '金元宝' | '银子' | '铜钱';
-    const legacy = Number(money?.[legacyKey]);
-    return Number.isFinite(legacy) ? Math.max(0, Math.trunc(legacy)) : 0;
+    const candidates = [legacyKey, ...题材货币字段别名[key]];
+    for (const alias of candidates) {
+        const value = Number((money as Record<string, unknown> | null | undefined)?.[alias]);
+        if (Number.isFinite(value)) return Math.max(0, Math.trunc(value));
+    }
+    return 0;
 };
+
+const 已知货币字段集合 = new Set<string>([
+    '上层货币', '中层货币', '底层货币',
+    '金元宝', '银子', '铜钱',
+    'baseAmount', '货币桶',
+    ...题材货币字段别名.上层货币,
+    ...题材货币字段别名.中层货币,
+    ...题材货币字段别名.底层货币
+]);
+
+export type 角色金钱补充字段 = { key: string; value: number };
+
+/**
+ * 读取既不在三层货币、也不在题材别名表里的其余正数字段。
+ * 兜底用途：万一 AI 用了自定义币种名（如"香火""情报额度"），
+ * 左栏也至少能把真实余额显示出来，而不是一律 0。
+ */
+export const 获取角色金钱补充字段 = (money?: Partial<角色金钱> | null): 角色金钱补充字段[] => {
+    if (!money || typeof money !== 'object') return [];
+    return Object.entries(money as Record<string, unknown>)
+        .filter(([key]) => !已知货币字段集合.has(key))
+        .map(([key, value]) => ({ key, value: 读取非负整数金额(value) }))
+        .filter((item) => item.value > 0);
+};
+
+export const 格式化角色金钱补充字段 = (fields: 角色金钱补充字段[]): string => (
+    fields.map((item) => `${item.key} ${item.value.toLocaleString('zh-CN')}`).join(' / ')
+);
 
 const 读取BaseAmount数值 = (money: Partial<角色金钱> | null | undefined): number | null => {
     const value = Number((money as any)?.baseAmount);
@@ -551,12 +597,16 @@ export const 构建角色金钱显示快照 = (
 
     const mode = 获取货币显示模式(openingConfig, character);
     const baseAmount = 获取角色金钱BaseAmount(money, openingConfig?.modeRuntimeProfile, mode);
+    // 三层货币与题材别名都没解析出余额时，退回显示 角色.金钱 里的其余正数字段，
+    // 避免"变量里有钱、界面全是 0"。AI 侧也读这份快照，显示成 0 会让它误判主角身无分文。
+    const 补充字段 = 获取角色金钱补充字段(money);
+    const 补充文本 = 格式化角色金钱补充字段(补充字段);
     const explicitSystem = 获取显式世界观货币系统(openingConfig, character);
     if (explicitSystem) {
         const baseUnit = 获取CurrencyUnit(explicitSystem.baseUnitId, explicitSystem);
         return {
             baseAmount,
-            显示: 格式化世界观BaseAmount(baseAmount, openingConfig, character),
+            显示: (baseAmount <= 0 && 补充文本) ? 补充文本 : 格式化世界观BaseAmount(baseAmount, openingConfig, character),
             货币体系: explicitSystem.name,
             基础单位: baseUnit.symbol || baseUnit.name,
             单位列表: explicitSystem.units.map((unit) => ({
@@ -571,9 +621,10 @@ export const 构建角色金钱显示快照 = (
 
     const normalizedMoney = 规范化角色金钱(money);
     const slots = 获取世界观货币槽位(openingConfig, character);
+    const 层级显示 = slots.map((slot) => `${slot.label} ${读取非负整数金额((normalizedMoney as any)[slot.key])}`).join(' / ');
     const result: 角色金钱世界观显示快照 = {
         baseAmount,
-        显示: slots.map((slot) => `${slot.label} ${读取非负整数金额((normalizedMoney as any)[slot.key])}`).join(' / ')
+        显示: (baseAmount <= 0 && 补充文本) ? 补充文本 : 层级显示
     };
     slots.forEach((slot) => {
         result[slot.label] = 读取非负整数金额((normalizedMoney as any)[slot.key]);

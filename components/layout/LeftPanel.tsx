@@ -4,7 +4,7 @@ import { use图片资源回源预取 } from '../../hooks/useImageAssetPrefetch';
 import { 构建区域文字样式 } from '../../utils/visualSettings';
 import { 注册受保护图片资源, 取消受保护图片资源, 是否图片资源引用 } from '../../utils/imageAssets';
 import { 计算角色总气血 } from '../../utils/characterVitals';
-import { 格式化世界观BaseAmount, 获取世界观简短货币汇率说明, 获取世界观货币槽位, 获取角色金钱BaseAmount, 获取货币显示模式, 获取货币兼容字段路径, 规范化角色金钱 } from '../../utils/currencyDisplay';
+import { 格式化世界观BaseAmount, 格式化角色金钱补充字段, 获取角色金钱补充字段, 获取世界观简短货币汇率说明, 获取世界观货币槽位, 获取角色金钱BaseAmount, 获取货币显示模式, 获取货币兼容字段路径, 规范化角色金钱 } from '../../utils/currencyDisplay';
 import { 获取题材资源文案 } from '../../utils/resourceLabels';
 import { 提取人物头像地址, 提取人物头像资源引用 } from '../../utils/personAvatar';
 
@@ -233,6 +233,12 @@ const LeftPanel: React.FC<Props> = ({ 角色, onOpenCharacter, onOpenVariableMan
             角色
         )
         : '';
+    // 兜底：三层货币/题材别名都解析不出余额时，直接显示 角色.金钱 里其余的正数字段，
+    // 避免仙侠(灵石)、现代(现金)、末世(通用点数)等题材下"变量里有钱、左栏全是 0"。
+    const 钱财全部为零 = 使用动态货币系统显示
+        ? 获取角色金钱BaseAmount(角色.金钱, openingConfig?.modeRuntimeProfile, 货币模式) <= 0
+        : 货币槽位.every((slot) => Number((金钱 as any)[slot.key] ?? 0) <= 0);
+    const 补充钱财文本 = 钱财全部为零 ? 格式化角色金钱补充字段(获取角色金钱补充字段(角色.金钱)) : '';
     const 金钱变化 = React.useMemo(() => Object.fromEntries(
         货币槽位.map((slot) => [
             slot.key,
@@ -361,7 +367,7 @@ const LeftPanel: React.FC<Props> = ({ 角色, onOpenCharacter, onOpenVariableMan
             <div className="mb-2 shrink-0 border border-gray-800/60 bg-black/30 px-2 py-1 flex items-center justify-between gap-2 overflow-hidden font-mono" style={{ color: 'rgba(209,213,219,1)', fontSize: 缩放字号(1, 14) }}>
                 <span className="shrink-0 whitespace-nowrap text-gray-500">钱财</span>
                 <span className="min-w-0 flex-1 whitespace-normal break-words text-right text-[10px] leading-4 sm:text-[11px]">
-                    {使用动态货币系统显示 ? 世界观货币文本 : 货币槽位.map((slot, index) => (
+                    {补充钱财文本 ? 补充钱财文本 : 使用动态货币系统显示 ? 世界观货币文本 : 货币槽位.map((slot, index) => (
                         <React.Fragment key={slot.key}>
                             {index > 0 ? ' / ' : ''}
                             {slot.label} {(金钱变化 as any)[slot.key] !== null && <span className={(金钱变化 as any)[slot.key] >= 0 ? 'text-emerald-200' : 'text-red-200'}>({(金钱变化 as any)[slot.key] > 0 ? '+' : ''}{(金钱变化 as any)[slot.key]})</span>} {(金钱 as any)[slot.key]}

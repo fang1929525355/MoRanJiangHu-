@@ -76,14 +76,56 @@ const 是否游戏机制文案 = (text: string): boolean => {
 };
 
 /**
- * 清洗描述文本：移除无用前缀和用途说明，保留核心视觉描述。
+ * 描述里典型的"游戏效果"句式开头：只要从句以这些词起头，整句都在讲数值收益，
+ * 与外观无关，必须整句剔除（历史事故："提供微弱的身体防护"被塞进披风生图 prompt）。
+ */
+const 强效果从句开头 = /^(提供|给予|带来|产生|造成|减少|降低|增加|提升|增强|恢复|回复|免疫|抵挡|抵御|抵抗|防止|避免|减免|抵消|便于|有助|有助于|以便)/;
+/**
+ * 弱效果标记：只有"可/能/会/用于…"后面确实接效果语义时才判定为机制从句，
+ * 避免误删"可折叠的斗笠""会发光的玉佩"这类纯外观描述。
+ */
+const 弱效果从句开头 = /^(可|可以|能|能够|会|适合|适用于|用于|用来|可用于|可以用于|使用后|使用时|装备后|穿戴后|携带时|需|需要)/;
+const 效果语义模式 = /遮挡|防护|防御|抵御|抵挡|减免|抵消|恢复|回复|增加|减少|提升|降低|伤害|气血|生命|内力|精力|体力|属性|经验|概率|几率|持续|冷却|回合|翻倍|加成|buff|debuff/i;
+
+/**
+ * 判断单个从句是否属于"游戏机制/效果"文案，属于则不应进入生图 prompt。
+ */
+const 是否效果从句 = (clause: string): boolean => {
+    if (!clause) return false;
+    if (强效果从句开头.test(clause)) return true;
+    if (弱效果从句开头.test(clause) && 效果语义模式.test(clause)) return true;
+    return 是否游戏机制文案(clause);
+};
+
+/**
+ * 去掉"李方文用野麻叶……制成的简易披风"这类句子里的人名/制作者前缀，
+ * 只保留制作工艺与物品本身。仅当"…而成/制成…的<物品>"结构成立时才剥离，
+ * 避免把"青钢剑用玄铁打造而成"里的物品名本身误删。
+ */
+export const 移除制作者前缀 = (text: string): string => {
+    if (!text) return text;
+    if (!/(而成|制成|做成|织成|编成|扎成|串成|缝制|打造|锻造|雕琢|缝成)[^，。；]*的[\u4e00-\u9fff]+$/.test(text)) return text;
+    return text.replace(/^[\u4e00-\u9fff]{2,4}(?=用|由|以|将|把|拿|采|取)/, '');
+};
+
+/**
+ * 清洗描述文本：按句读切分后逐条剔除效果/用途/数值从句，移除人称与量词前缀，
+ * 只保留可用于生图的外观描述。
  */
 export const 清洗描述文本 = (text: string): string => {
-    const 清洗后 = text
-        .replace(/^(这是一个|这是|是一个|是|有一个|有)\s*/g, '')
-        .replace(/[，。；]?\s*(可以用于|用于|用来|适合|适用于|能够|可用于)[^，。；]+/g, '')
-        .trim();
-    return 清洗后.length > 0 ? 清洗后 : text.trim();
+    const 原文 = (text || '').trim();
+    if (!原文) return '';
+    const 从句列表 = 原文
+        .split(/[，。；、\n]/)
+        .map((part) => 移除制作者前缀(part.trim()))
+        .map((part) => part.replace(/^(这是一个|这是|是一个|是|有一个|有)\s*/, '').trim())
+        .filter(Boolean)
+        .filter((part) => !是否效果从句(part));
+    const 清洗后 = (从句列表.length > 0
+        ? 从句列表.join('，')
+        : 移除制作者前缀(原文).replace(/^(这是一个|这是|是一个|是|有一个|有)\s*/, '').trim()
+    ).trim();
+    return 清洗后.length > 0 ? 清洗后 : 原文;
 };
 
 export const 物品无文字正向约束 = `${全局无文字正向提示词}, blank unmarked object surface, plain empty panels, clean material texture where markings would appear`;
@@ -123,15 +165,20 @@ const 获取物品正向无文字约束 = (item: any): string => (
     物品是否符纸符箓(item) ? 物品符箓正向约束 : 物品无文字正向约束
 );
 
+/**
+ * 按物品名称链查结构化物品库，供生图主体与调用方共用同一套匹配口径。
+ */
+export const 查找物品结构化定义 = (item: any) => 查找结构化物品(
+    读取文本(item?.规范物品名称)
+    || 读取文本(item?.预设物品名称)
+    || 读取文本(item?.标准物品名称)
+    || 读取文本(item?.基础物品名称)
+    || 读取文本(item?.图片匹配名称)
+    || 读取文本(item?.名称)
+);
+
 export const 构建物品视觉描述 = (item: any): string => {
-    const structured = 查找结构化物品(
-        读取文本(item?.规范物品名称)
-        || 读取文本(item?.预设物品名称)
-        || 读取文本(item?.标准物品名称)
-        || 读取文本(item?.基础物品名称)
-        || 读取文本(item?.图片匹配名称)
-        || 读取文本(item?.名称)
-    );
+    const structured = 查找物品结构化定义(item);
     if (structured?.生图描述) {
         const parts: string[] = [structured.生图描述];
         if (Array.isArray(structured.视觉标签) && structured.视觉标签.length > 0) {
@@ -944,6 +991,21 @@ export const 物品规则主体是否弱 = (item: any): boolean => {
     return true;
 };
 
+/**
+ * 判断是否需要调用文本模型重写视觉主体。
+ *
+ * 修复前只有"弱主体"才走 AI 中译英，于是披风/斗笠这类命中"柔性服装"类目的物品
+ * 会跳过重写，把 `描述` 原文（"李方文用野麻叶和粗麻绳穿扎固定而成的简易披风，
+ * 能遮挡小雨，提供微弱的身体防护。"）整段塞进 prompt，模型照着简介生图。
+ * 只要最终要进 prompt 的视觉描述仍是中文整句，就说明规则侧没有可用的英文主体锚点，
+ * 必须交给模型重写成纯外观短语；重写失败时再退回已清洗过的中文描述。
+ */
+export const 物品主体需要AI重写 = (item: any): boolean => {
+    const 视觉描述 = 读取文本(item?.视觉描述);
+    if (视觉描述 && /[\u4e00-\u9fff]/.test(视觉描述)) return true;
+    return 物品规则主体是否弱(item);
+};
+
 const 物品英文主体缓存 = new Map<string, string>();
 export const 清洗物品英文主体 = (raw: string): string => {
     let text = (raw || '').replace(/\r/g, ' ').trim();
@@ -966,8 +1028,9 @@ const 生成物品英文视觉主体 = async (
 ): Promise<string> => {
     if (!apiConfig) return '';
     const name = 读取文本(item?.名称);
-    const rawDesc = 读取文本(item?.视觉描述)
-        || (!是否游戏机制文案(读取文本(item?.描述)) ? 读取文本(item?.描述) : '');
+    // 视觉描述缺失时才回落到 `描述`，且必须走同一套清洗流程，
+    // 否则"能遮挡小雨，提供微弱的身体防护"这类效果文案会一起被译成 prompt。
+    const rawDesc = 读取文本(item?.视觉描述) || 构建物品视觉描述(item);
     if (!name && !rawDesc) return '';
     const cacheKey = `${name}|${rawDesc}`.slice(0, 200);
     const cached = 物品英文主体缓存.get(cacheKey);
@@ -985,6 +1048,8 @@ const 生成物品英文视觉主体 = async (
         'You convert a Chinese game item into a concise English visual subject phrase for a product-photography image generator.',
         'Output ONLY the English phrase describing the physical object appearance: what it is, its shape, material, color and notable physical features.',
         'Rules: describe a single tangible physical object; keep it under 40 words; no game mechanics, no stats, no lore, no proper names.',
+        'Ignore any clause about gameplay benefit, protection value, damage, cooldown, duration, drop source or who made or owned the item.',
+        'If the source text mixes appearance with gameplay effects, keep only the appearance.',
         'Never include any text/label/logo/number to be drawn on the object. No Chinese characters. No quotes. No explanation. No preamble.',
         'If the item is a container holding something (bag/sack/pouch of grain, jar of pills), describe both the container and its visible contents.'
     ].join('\n');
@@ -1081,7 +1146,8 @@ export const 生成物品图标 = async (
     const renderStyle = feature?.自动物品生图渲染风格 || '写实道具';
     const size = 读取文本(options?.size || feature?.自动物品生图分辨率, '1024x1024') || '1024x1024';
     const sourceLocation = options?.sourceLocation || '背包';
-    const structuredItem = 查找结构化物品(读取文本((item as any)?.名称));
+    const structuredItem = 查找物品结构化定义(item);
+    const 结构化生图描述 = 读取文本(structuredItem?.生图描述);
     const enrichedItem: 游戏物品 = {
         ...(item as any),
         ...(structuredItem ? {
@@ -1094,10 +1160,13 @@ export const 生成物品图标 = async (
         } : {}),
         视觉描述: 读取文本((item as any)?.视觉描述) || 构建物品视觉描述(item),
     };
-    // 弱主体兜底：规则映射无法产出明确英文主体时（如“百斤灵谷”这类中文自由描述物品），
-    // 调用文本模型把中文视觉描述译成英文物品外观短语，补回主体语义，避免退化成空白塑料板。
+    // 主体兜底分两种：① 规则映射无法产出明确英文主体（如“百斤灵谷”这类中文自由描述物品）；
+    // ② 视觉描述仍是中文整句（如“简易披风：李方文用野麻叶和粗麻绳穿扎固定而成，能遮挡小雨，
+    // 提供微弱的身体防护。”）。两者都必须交给文本模型重写成纯外观短语，
+    // 否则中文简介会被原样塞进 prompt，模型照着简介而不是外观生图。
+    // 结构化物品库自带 `生图描述` 时说明文案已是清洗过的外观描述，无需重写。
     let 物品主体已AI补强 = false;
-    if (物品规则主体是否弱(enrichedItem)) {
+    if (!结构化生图描述 && 物品主体需要AI重写(enrichedItem)) {
         const aiSubject = await 生成物品英文视觉主体(enrichedItem, apiConfig, options?.signal);
         if (aiSubject) {
             (enrichedItem as any).视觉描述 = aiSubject;
@@ -1122,7 +1191,7 @@ export const 生成物品图标 = async (
     const isChineseSupported = /grok|imagine|gpt|image/i.test(imageApi.model || '');
     // 弱主体且 AI 未能补强时，收敛无文字模板：去掉“空白面板/空白表面”这类会诱导塑料板的措辞，
     // 只保留基础的“无文字/无标签”约束，避免空白约束在缺乏主体锚点时占主导。
-    const 主体仍然薄弱 = 物品规则主体是否弱(enrichedItem) && !物品主体已AI补强;
+    const 主体仍然薄弱 = 物品主体需要AI重写(enrichedItem) && !物品主体已AI补强;
     const noTextGuard = 主体仍然薄弱
         ? 全局无文字正向提示词
         : 获取物品正向无文字约束(enrichedItem);
@@ -1130,10 +1199,12 @@ export const 生成物品图标 = async (
     // 本地/CNB 模型：用完整的英文描述堆砌（原有逻辑）
     const prompt = isChineseSupported
         ? (() => {
-            const 结构化描述 = structuredItem?.生图描述 || '';
-            const 原始描述 = 读取文本(enrichedItem?.描述) || '';
+            const 结构化描述 = 结构化生图描述;
+            // 兜底不能再用 `描述` 原文：那是一段带人名和数值收益的装备简介，
+            // 必须走同一套清洗（剔效果从句、去制作者前缀、过机制文案过滤）。
+            const 清洗后描述 = 构建物品视觉描述(enrichedItem) || '';
             const 视觉描述 = 读取文本(enrichedItem?.视觉描述) || '';
-            const 主体描述 = 结构化描述 || 视觉描述 || 原始描述 || `${读取文本(enrichedItem?.名称)}，${读取文本(enrichedItem?.类型)}`;
+            const 主体描述 = 结构化描述 || 视觉描述 || 清洗后描述 || `${读取文本(enrichedItem?.名称)}，${读取文本(enrichedItem?.类型)}`;
             const 画风约束: Record<string, string> = {
                 '写实': '写实风格', '卡通': '卡通风格', '水墨': '水墨画风格', '像素': '像素风格',
                 '油画': '油画风格', '素描': '素描风格', '国风': '中国风', '赛博朋克': '赛博朋克风格',
