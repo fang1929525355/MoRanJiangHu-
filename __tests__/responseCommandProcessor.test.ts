@@ -569,6 +569,79 @@ describe('responseCommandProcessor team companion fallback', () => {
         expect(result.社交.find((npc: any) => npc.id === 'npc_enemy_guard')?.是否队友).toBe(false);
         expect(result.社交.find((npc: any) => npc.id === 'npc_companion_old_1')?.是否队友).toBe(true);
     });
+
+    it('主线人物叙事性带路/护送/跟随不再自动入队（玩家反馈：主线人物全被拉进队伍）', () => {
+        const state = 构建基础状态();
+        state.社交 = 规范化社交列表([
+            { id: 'npc_murong', 姓名: '慕容雪', 性别: '女', 是否主要角色: true, 是否在场: false, 是否队友: false },
+            { id: 'npc_zhaosihai', 姓名: '赵四海', 性别: '男', 身份: '镖头', 是否在场: false, 是否队友: false },
+            { id: 'npc_liuxu', 姓名: '柳絮', 性别: '女', 是否在场: false, 是否队友: false }
+        ], { 合并同名: false });
+
+        const result = 执行响应命令处理({
+            logs: [
+                { sender: '旁白', text: '慕容雪领着杨培强穿过月门，在前厅回身行礼。' },
+                { sender: '旁白', text: '赵四海护送杨培强前往渡口，随后拱手作别。' },
+                { sender: '旁白', text: '柳絮跟着人群涌向码头看热闹。' }
+            ],
+            tavern_commands: []
+        } as any, state, deps, undefined, { applyState: false });
+
+        expect(result.社交.find((npc: any) => npc.姓名 === '慕容雪')?.是否队友).toBe(false);
+        expect(result.社交.find((npc: any) => npc.姓名 === '赵四海')?.是否队友).toBe(false);
+        expect(result.社交.find((npc: any) => npc.姓名 === '柳絮')?.是否队友).toBe(false);
+    });
+
+    it('明确入队证据（结伴同行/追随主角）仍然自动入队', () => {
+        const state = 构建基础状态();
+        state.社交 = 规范化社交列表([
+            { id: 'npc_suyingxue', 姓名: '苏映雪', 性别: '女', 是否在场: false, 是否队友: false },
+            { id: 'npc_qinfeng', 姓名: '秦峰', 性别: '男', 是否在场: false, 是否队友: false }
+        ], { 合并同名: false });
+
+        const result = 执行响应命令处理({
+            logs: [
+                { sender: '旁白', text: '苏映雪答应与杨培强结伴同行，共赴金陵。' },
+                { sender: '旁白', text: '秦峰抱拳道：愿追随主角左右，共创一番事业。' }
+            ],
+            tavern_commands: []
+        } as any, state, deps, undefined, { applyState: false });
+
+        expect(result.社交.find((npc: any) => npc.姓名 === '苏映雪')?.是否队友).toBe(true);
+        expect(result.社交.find((npc: any) => npc.姓名 === '秦峰')?.是否队友).toBe(true);
+    });
+
+    it('短暂同行一段路不入队（CodeRabbit：排除短暂/临时同行事实）', () => {
+        const state = 构建基础状态();
+        state.社交 = 规范化社交列表([
+            { id: 'npc_murong2', 姓名: '慕容雪', 性别: '女', 是否主要角色: true, 是否在场: false, 是否队友: false }
+        ], { 合并同名: false });
+
+        const result = 执行响应命令处理({
+            logs: [
+                { sender: '旁白', text: '慕容雪只与杨培强短暂同行一段路，随后各自办事。' }
+            ],
+            tavern_commands: []
+        } as any, state, deps, undefined, { applyState: false });
+
+        expect(result.社交.find((npc: any) => npc.姓名 === '慕容雪')?.是否队友).toBe(false);
+    });
+
+    it('拒绝结伴同行的邀请不入队（CodeRabbit：排除否定/拒绝语义）', () => {
+        const state = 构建基础状态();
+        state.社交 = 规范化社交列表([
+            { id: 'npc_liuying2', 姓名: '柳莺莺', 性别: '女', 是否在场: false, 是否队友: false }
+        ], { 合并同名: false });
+
+        const result = 执行响应命令处理({
+            logs: [
+                { sender: '旁白', text: '柳莺莺婉拒了结伴同行的邀请，转身独自下山。' }
+            ],
+            tavern_commands: []
+        } as any, state, deps, undefined, { applyState: false });
+
+        expect(result.社交.find((npc: any) => npc.姓名 === '柳莺莺')?.是否队友).toBe(false);
+    });
 });
 
 describe('responseCommandProcessor corpse death fallback', () => {
