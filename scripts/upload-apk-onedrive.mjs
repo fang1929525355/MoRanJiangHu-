@@ -136,15 +136,31 @@ export const verifyOpenListApkFiles = async ({
   }
 
   const requiredNames = ['latest.apk', `MoRanJiangHu-v${versionName}.apk`];
-  const files = requiredNames.map((name) => {
-    const item = payload.data.content.find((entry) => entry?.name === name && !entry?.is_dir);
+  // OpenList 的目录列表有缓存（refresh:true 也可能返回旧索引），刚上传的文件
+  // 可能短暂不出现在列表里。列表缺失时用 /api/fs/get 逐个兜底确认。
+  const fetchFileInfo = async (name) => {
+    const response = await fetchImpl(`${normalizedBaseUrl}/api/fs/get`, {
+      method: 'POST',
+      headers: { Authorization: authToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: `${normalizedRoot}/${name}`, password: '' }),
+      signal: AbortSignal.timeout(30_000)
+    });
+    const payload = await response.json().catch(() => null);
+    if (response.ok && payload?.code === 200 && payload?.data && !payload.data.is_dir) {
+      return { size: Number(payload.data.size), sign: payload.data.sign ? String(payload.data.sign) : '' };
+    }
+    return null;
+  };
+  const files = await Promise.all(requiredNames.map(async (name) => {
+    let item = payload.data.content.find((entry) => entry?.name === name && !entry?.is_dir);
+    if (!item) item = await fetchFileInfo(name);
     if (!item) throw new Error(`OpenList verification missing ${name}`);
     if (Number(item.size) !== expectedSize) {
       throw new Error(`OpenList verification size mismatch for ${name}: ${item.size}`);
     }
     if (!item.sign) throw new Error(`OpenList verification missing sign for ${name}`);
     return { name, size: Number(item.size), sign: String(item.sign) };
-  });
+  }));
 
   return { ok: true, root: normalizedRoot, files };
 };
