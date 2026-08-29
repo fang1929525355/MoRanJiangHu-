@@ -250,6 +250,45 @@ const 解析请求协议类型 = (apiConfig: 当前可用接口结构): 请求�
     return 'openai';
 };
 
+export const 是否Gemini系模型 = (model: string): boolean => /gemini/i.test(标准化模型名(model));
+
+// Gemini 原生 API 不允许请求以 model 回合结尾（400: Requests ending with a model turn
+// are not supported）。开局各阶段（世界观/境界/变量等）会在消息尾部追加 CoT 伪装历史
+// assistant 回合做格式预填充，DeepSeek/GLM 协议各自有清理或原生支持，openai 协议需要
+// 这里兜底：弹出尾部非 prefix 的 assistant，转换为"续写基准"user 回合收尾。
+export const 应用Gemini尾部Model回合修正 = (
+    messages: 通用消息[],
+    apiConfig: 当前可用接口结构
+): 通用消息[] => {
+    if (解析请求协议类型(apiConfig) !== 'openai') return messages;
+    if (!是否Gemini系模型(apiConfig.model)) return messages;
+    const normalized = [...messages];
+    const trailingAssistant: string[] = [];
+    let removedTrailingAssistant = false;
+    while (normalized.length > 0) {
+        const tail = normalized[normalized.length - 1];
+        if (tail.role !== 'assistant' || tail.prefix === true) break;
+        const content = tail.content.trim();
+        if (content) trailingAssistant.unshift(content);
+        normalized.pop();
+        removedTrailingAssistant = true;
+    }
+    // 空白 assistant 尾回合虽不产生续写基准，但同样必须从请求中移除，
+    // 否则 Gemini 仍会收到以 model 回合结尾的请求。
+    if (!removedTrailingAssistant) return messages;
+    if (trailingAssistant.length === 0) return normalized;
+    const anchor = trailingAssistant.join('\n\n');
+    normalized.push({
+        role: 'user',
+        content: [
+            '【续写基准】你在上文已经确认了如下的输出开场与格式约定：',
+            anchor,
+            '请把它当作你已经说过的话，直接从这里继续输出完整回复；不要重复这段开场文字，也不要改变既定输出格式。'
+        ].join('\n')
+    });
+    return normalized;
+};
+
 const 读取自定义最大输出Token = (apiConfig: 当前可用接口结构): number | undefined => {
     const raw = apiConfig.maxTokens;
     if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
@@ -1888,12 +1927,15 @@ export const 请求模型文本 = async (
         ? requestedResponseFormat
         : undefined;
     const normalizedMessages = 应用Claude兼容末尾User修正(
-        应用GLM消息兼容修正(
-            应用DeepSeek消息兼容修正(
-                应用强制JSON消息修正(messages, effectiveResponseFormat),
+        应用Gemini尾部Model回合修正(
+            应用GLM消息兼容修正(
+                应用DeepSeek消息兼容修正(
+                    应用强制JSON消息修正(messages, effectiveResponseFormat),
+                    protocol
+                ),
                 protocol
             ),
-            protocol
+            apiConfig
         ),
         apiConfig
     );

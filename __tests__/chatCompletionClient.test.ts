@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { __测试__清除已触发上下文截断警告, 应用Claude兼容末尾User修正, 请求模型文本, 是否流式连接中断错误消息, 规范化流式连接错误提示, 规范化请求模型名称, type 通用消息 } from '../services/ai/chatCompletionClient';
+import { __测试__清除已触发上下文截断警告, 应用Claude兼容末尾User修正, 应用Gemini尾部Model回合修正, 是否Gemini系模型, 请求模型文本, 是否流式连接中断错误消息, 规范化流式连接错误提示, 规范化请求模型名称, type 通用消息 } from '../services/ai/chatCompletionClient';
 import type { 当前可用接口结构 } from '../utils/apiConfig';
 
 const baseConfig: 当前可用接口结构 = {
@@ -505,5 +505,101 @@ describe('chatCompletionClient Claude compatible message normalization', () => {
         expect(是否流式连接中断错误消息(raw)).toBe(true);
         expect(规范化流式连接错误提示(raw)).toContain('模型流式连接中途断开');
         expect(规范化流式连接错误提示(raw)).not.toContain('com.android.okhttp.Address');
+    });
+});
+
+describe('chatCompletionClient Gemini trailing model turn normalization', () => {
+    afterEach(() => {
+        __测试__清除已触发上下文截断警告();
+        vi.restoreAllMocks();
+    });
+
+    it('converts trailing CoT pseudo-history assistant turn into a continuation user turn for Gemini models', () => {
+        const pseudoHistory = '<think>\n思考已结束\n</think>\n好的，将先以<thinking></thinking>输出思考：';
+        const messages: 通用消息[] = [
+            { role: 'system', content: '规则' },
+            { role: 'user', content: '生成世界观' },
+            { role: 'assistant', content: pseudoHistory }
+        ];
+
+        const normalized = 应用Gemini尾部Model回合修正(messages, {
+            ...baseConfig,
+            model: 'gemini-3.6-flash-high'
+        });
+
+        expect(normalized).toHaveLength(3);
+        expect(normalized.at(-1)?.role).toBe('user');
+        expect(normalized.at(-1)?.content).toContain('【续写基准】');
+        expect(normalized.at(-1)?.content).toContain(pseudoHistory);
+        expect(normalized[1].role).toBe('user');
+        expect(normalized.some(msg => msg.role === 'assistant')).toBe(false);
+    });
+
+    it('keeps explicit prefix assistant turns untouched for Gemini models', () => {
+        const messages: 通用消息[] = [
+            { role: 'user', content: '继续' },
+            { role: 'assistant', content: '<thinking>\n', prefix: true }
+        ];
+
+        expect(应用Gemini尾部Model回合修正(messages, { ...baseConfig, model: 'gemini-3.6-flash-high' })).toBe(messages);
+    });
+
+    it('leaves non-Gemini models unchanged', () => {
+        const messages: 通用消息[] = [
+            { role: 'user', content: '生成世界观' },
+            { role: 'assistant', content: '伪历史' }
+        ];
+
+        expect(应用Gemini尾部Model回合修正(messages, { ...baseConfig, model: 'gpt-4.1' })).toBe(messages);
+    });
+
+    it('folds multiple trailing assistant turns into one continuation note', () => {
+        const messages: 通用消息[] = [
+            { role: 'user', content: '开局' },
+            { role: 'assistant', content: '开场一' },
+            { role: 'assistant', content: '开场二' }
+        ];
+
+        const normalized = 应用Gemini尾部Model回合修正(messages, {
+            ...baseConfig,
+            model: '流式抗截断/gemini-3.1-pro-preview'
+        });
+
+        expect(normalized).toHaveLength(2);
+        expect(normalized.at(-1)?.role).toBe('user');
+        expect(normalized.at(-1)?.content).toContain('开场一');
+        expect(normalized.at(-1)?.content).toContain('开场二');
+    });
+
+    it('synthesizes a user turn when only a trailing assistant exists', () => {
+        const normalized = 应用Gemini尾部Model回合修正(
+            [{ role: 'assistant', content: '开场' }],
+            { ...baseConfig, model: 'gemini-3.6-flash-high' }
+        );
+
+        expect(normalized).toHaveLength(1);
+        expect(normalized[0].role).toBe('user');
+        expect(normalized[0].content).toContain('开场');
+    });
+
+    it('drops whitespace-only trailing assistant turns instead of returning the original sequence', () => {
+        const messages: 通用消息[] = [
+            { role: 'user', content: '生成世界观' },
+            { role: 'assistant', content: '   ' }
+        ];
+
+        const normalized = 应用Gemini尾部Model回合修正(messages, {
+            ...baseConfig,
+            model: 'gemini-3.6-flash-high'
+        });
+
+        expect(normalized).toHaveLength(1);
+        expect(normalized[0].role).toBe('user');
+    });
+
+    it('detects gemini models behind supplier prefixes', () => {
+        expect(是否Gemini系模型('gemini-3.6-flash-high')).toBe(true);
+        expect(是否Gemini系模型('流式抗截断/gemini-3.1-pro-preview')).toBe(true);
+        expect(是否Gemini系模型('deepseek-v4-pro')).toBe(false);
     });
 });
