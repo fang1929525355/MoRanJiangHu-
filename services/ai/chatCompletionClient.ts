@@ -766,6 +766,7 @@ const 错误可重试 = (error: unknown): boolean => {
     const message = 读取错误消息(error).toLowerCase();
     if (!message) return false;
     if (message.includes('aborted') || message.includes('abort') || message.includes('取消')) return false;
+    if (message.includes('模型返回了空内容')) return true;
     if (是否流式连接中断错误消息(message)) return true;
     if (message.includes('service unavailable')) return true;
     if (message.includes('timeout') || message.includes('timed out') || message.includes('network error') || message.includes('fetch failed')) {
@@ -1944,7 +1945,7 @@ export const 请求模型文本 = async (
     let result: string;
     try {
         result = await 带重试执行(`请求模型文本(${protocol})`, async () => {
-            return 请求OpenAI家族文本(
+            const attemptResult = await 请求OpenAI家族文本(
                 apiConfig,
                 protocol,
                 injectedMessages,
@@ -1960,6 +1961,13 @@ export const 请求模型文本 = async (
                     prefixMode: options.prefixMode
                 }
             );
+            // HTTP 200 但零正文增量（Gemini 桥接偶发：安全拦截/思考未产出正文）：
+            // 视为可重试失败，交给既有重试机制；重试耗尽后向上抛出明确原因，
+            // 避免调用方拿到空字符串只能报"输出为空"。
+            if (!attemptResult.trim()) {
+                throw new Error('模型返回了空内容（HTTP 200 但未收到任何正文增量）。常见原因：上游安全策略拦截了本次生成、思考型模型未产出正文，或桥接服务瞬时异常。建议重试或更换渠道/模型。');
+            }
+            return attemptResult;
         }, {
             signal: options.signal,
             retries: 2,

@@ -499,6 +499,48 @@ describe('chatCompletionClient Claude compatible message normalization', () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    it('retries when a 200 response carries empty content and succeeds on the next attempt', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'stop' }]
+            }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' }
+            }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                choices: [{ message: { content: 'filled-after-retry' } }]
+            }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' }
+            }));
+
+        const result = await 请求模型文本(baseConfig, [{ role: 'user', content: 'ping' }], {
+            temperature: 0.7,
+            signal: undefined,
+            streamOptions: { stream: false },
+            errorDetailLimit: 500
+        });
+
+        expect(result).toBe('filled-after-retry');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws a descriptive error when every attempt returns empty content', async () => {
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'stop' }]
+        }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+        }));
+
+        await expect(请求模型文本(baseConfig, [{ role: 'user', content: 'ping' }], {
+            temperature: 0.7,
+            signal: undefined,
+            streamOptions: { stream: false },
+            errorDetailLimit: 500
+        })).rejects.toThrow(/模型返回了空内容/);
+    });
+
     it('normalizes Android stream truncation into a user-readable message', () => {
         const raw = 'unexpected end of stream on com.android.okhttp.Address@4ea9fa8e';
 
