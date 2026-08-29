@@ -499,6 +499,48 @@ describe('chatCompletionClient Claude compatible message normalization', () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    it('retries when a 200 response carries empty content and succeeds on the next attempt', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'stop' }]
+            }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' }
+            }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                choices: [{ message: { content: 'filled-after-retry' } }]
+            }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' }
+            }));
+
+        const result = await 请求模型文本(baseConfig, [{ role: 'user', content: 'ping' }], {
+            temperature: 0.7,
+            signal: undefined,
+            streamOptions: { stream: false },
+            errorDetailLimit: 500
+        });
+
+        expect(result).toBe('filled-after-retry');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws a descriptive error when every attempt returns empty content', async () => {
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'stop' }]
+        }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+        }));
+
+        await expect(请求模型文本(baseConfig, [{ role: 'user', content: 'ping' }], {
+            temperature: 0.7,
+            signal: undefined,
+            streamOptions: { stream: false },
+            errorDetailLimit: 500
+        })).rejects.toThrow(/模型返回了空内容/);
+    });
+
     it('normalizes Android stream truncation into a user-readable message', () => {
         const raw = 'unexpected end of stream on com.android.okhttp.Address@4ea9fa8e';
 
@@ -595,6 +637,33 @@ describe('chatCompletionClient Gemini trailing model turn normalization', () => 
 
         expect(normalized).toHaveLength(1);
         expect(normalized[0].role).toBe('user');
+    });
+
+    it('fires onStreamEnd exactly once with final info when an empty stream attempt is retried', async () => {
+        const emptySse = 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+        const goodSse = 'data: {"choices":[{"delta":{"content":"世界正文"}}]}\n\ndata: [DONE]\n\n';
+        let calls = 0;
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+            calls += 1;
+            return new Response(calls === 1 ? emptySse : goodSse, {
+                status: 200,
+                headers: { 'content-type': 'text/event-stream' }
+            });
+        });
+        const endSpy = vi.fn();
+        const deltaSpy = vi.fn();
+
+        const result = await 请求模型文本(baseConfig, [{ role: 'user', content: 'ping' }], {
+            temperature: 0.7,
+            signal: undefined,
+            streamOptions: { stream: true, onDelta: deltaSpy, onStreamEnd: endSpy },
+            errorDetailLimit: 500
+        });
+
+        expect(result).toContain('世界正文');
+        expect(calls).toBe(2);
+        expect(endSpy).toHaveBeenCalledTimes(1);
+        expect(endSpy.mock.calls[0][0].accumulatedLength).toBeGreaterThan(0);
     });
 
     it('detects gemini models behind supplier prefixes', () => {
