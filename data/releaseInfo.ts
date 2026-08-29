@@ -12,7 +12,7 @@ export const RELEASE_INFO = {
         {
             "versionName": "1.0.661",
             "versionCode": 661,
-            "releasePublishedAt": "2026-08-29T23:59:00+08:00",
+            "releasePublishedAt": "2026-08-30T00:45:55+08:00",
             "releaseNotes": [
                 "修复开局偶发\"世界观生成解析失败: 输出为空\"：部分 Gemini 桥接渠道会偶发返回 200 空内容，现在会自动重试（最多 3 次），仍失败时给出明确原因提示（安全拦截/思考模型无正文/服务瞬时异常），方便判断与换渠道。",
                 "官网：https://msjh.bacon159.pp.ua/",
@@ -847,7 +847,7 @@ export const RELEASE_INFO = {
         "备用站：https://msjh.bacon.de5.net/"
     ],
     "notes": "修复开局偶发\"世界观生成解析失败: 输出为空\"：部分 Gemini 桥接渠道会偶发返回 200 空内容，现在会自动重试（最多 3 次），仍失败时给出明确原因提示（安全拦截/思考模型无正文/服务瞬时异常），方便判断与换渠道。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-    "releasePublishedAt": "2026-08-29T23:59:00+08:00"
+    "releasePublishedAt": "2026-08-30T00:45:55+08:00"
 } as const;
 
 export type ReleaseInfo = typeof RELEASE_INFO;
