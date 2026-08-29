@@ -582,6 +582,21 @@ describe('chatCompletionClient Gemini trailing model turn normalization', () => 
         expect(normalized[0].content).toContain('开场');
     });
 
+    it('drops whitespace-only trailing assistant turns instead of returning the original sequence', () => {
+        const messages: 通用消息[] = [
+            { role: 'user', content: '生成世界观' },
+            { role: 'assistant', content: '   ' }
+        ];
+
+        const normalized = 应用Gemini尾部Model回合修正(messages, {
+            ...baseConfig,
+            model: 'gemini-3.6-flash-high'
+        });
+
+        expect(normalized).toHaveLength(1);
+        expect(normalized[0].role).toBe('user');
+    });
+
     it('detects gemini models behind supplier prefixes', () => {
         expect(是否Gemini系模型('gemini-3.6-flash-high')).toBe(true);
         expect(是否Gemini系模型('流式抗截断/gemini-3.1-pro-preview')).toBe(true);

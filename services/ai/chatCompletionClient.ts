@@ -264,14 +264,19 @@ export const 应用Gemini尾部Model回合修正 = (
     if (!是否Gemini系模型(apiConfig.model)) return messages;
     const normalized = [...messages];
     const trailingAssistant: string[] = [];
+    let removedTrailingAssistant = false;
     while (normalized.length > 0) {
         const tail = normalized[normalized.length - 1];
         if (tail.role !== 'assistant' || tail.prefix === true) break;
         const content = tail.content.trim();
         if (content) trailingAssistant.unshift(content);
         normalized.pop();
+        removedTrailingAssistant = true;
     }
-    if (trailingAssistant.length === 0) return messages;
+    // 空白 assistant 尾回合虽不产生续写基准，但同样必须从请求中移除，
+    // 否则 Gemini 仍会收到以 model 回合结尾的请求。
+    if (!removedTrailingAssistant) return messages;
+    if (trailingAssistant.length === 0) return normalized;
     const anchor = trailingAssistant.join('\n\n');
     normalized.push({
         role: 'user',
