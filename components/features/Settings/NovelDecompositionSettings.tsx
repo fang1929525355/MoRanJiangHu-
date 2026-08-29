@@ -3513,7 +3513,7 @@ const NovelDecompositionSettings: React.FC<Props> = ({ settings, onSave, request
                                             <div className={`text-sm font-medium truncate ${selectedSegment?.id === segment.id ? 'text-wuxia-gold' : 'text-gray-200'}`}>
                                                 {segment.标题 || `分段 ${index + 1}`}
                                             </div>
-                                            <div className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${segment.启用注入 === false ? 'bg-gray-800 text-gray-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
+                                            <div className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${segment.启用注入 === false ? 'bg-black/50 text-gray-400' : 'bg-emerald-950/50 text-emerald-400'}`}>
                                                 {segment.启用注入 === false ? '注入关' : '注入开'}
                                             </div>
                                         </div>

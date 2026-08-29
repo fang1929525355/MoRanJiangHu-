@@ -14,6 +14,8 @@ type InlineSelectProps<T extends string = string> = {
     buttonClassName?: string;
     panelClassName?: string;
     optionClassName?: string;
+    /** Label wraps onto multiple lines instead of being truncated with an ellipsis. */
+    wrapLabel?: boolean;
 };
 
 const InlineSelect = <T extends string>({
@@ -24,7 +26,8 @@ const InlineSelect = <T extends string>({
     disabled = false,
     buttonClassName = '',
     panelClassName = '',
-    optionClassName = ''
+    optionClassName = '',
+    wrapLabel = false
 }: InlineSelectProps<T>) => {
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -73,7 +76,7 @@ const InlineSelect = <T extends string>({
                             : 'bg-black/40 border-gray-600 text-white hover:border-gray-500')
                 } ${buttonClassName}`}
             >
-                <span className={`truncate ${selected ? '' : 'text-gray-400'}`}>
+                <span className={`${wrapLabel ? 'whitespace-normal break-all text-left' : 'truncate'} ${selected ? '' : 'text-gray-400'}`}>
                     {selected?.label || placeholder}
                 </span>
                 <svg
@@ -114,7 +117,7 @@ const InlineSelect = <T extends string>({
                                             : 'text-gray-200 hover:bg-white/5'
                                     }`}
                                 >
-                                    <span className="truncate">{option.label}</span>
+                                    <span className={wrapLabel ? 'whitespace-normal break-all' : 'truncate'}>{option.label}</span>
                                     {active && <span className="text-[10px] text-wuxia-gold/80 shrink-0">当前</span>}
                                 </button>
                             );

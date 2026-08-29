@@ -234,6 +234,25 @@ html[data-theme="day"] [class*="to-ink-black"] {
   background-color: rgb(var(--c-ink-black)) !important;
 }
 
+/* Day mode: emerald/green and indigo/purple-family colored backgrounds were
+   missing from the tint rules above, so their dark chips (bg-*-950/xx, e.g. the
+   tavern preset status badge) kept a dark fill while the text rules darkened
+   the light text, producing dark-on-dark chips. Give them the same light
+   tint treatment as the amber/cyan/red rules. */
+html[data-theme="day"] [class*="bg-emerald-"],
+html[data-theme="day"] [class*="bg-green-"],
+html[data-theme="day"] [class*="bg-lime-"] {
+  background-color: rgba(22, 101, 52, 0.10) !important;
+}
+
+html[data-theme="day"] [class*="bg-indigo-"],
+html[data-theme="day"] [class*="bg-violet-"],
+html[data-theme="day"] [class*="bg-purple-"],
+html[data-theme="day"] [class*="bg-fuchsia-"],
+html[data-theme="day"] [class*="bg-pink-"] {
+  background-color: rgba(134, 25, 143, 0.10) !important;
+}
+
 html[data-theme="day"] [class*="text-white"],
 html[data-theme="day"] [class*="text-gray-100"],
 html[data-theme="day"] [class*="text-gray-200"],
