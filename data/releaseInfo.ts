@@ -12,7 +12,7 @@ export const RELEASE_INFO = {
         {
             "versionName": "1.0.660",
             "versionCode": 660,
-            "releasePublishedAt": "2026-08-29T23:20:00+08:00",
+            "releasePublishedAt": "2026-08-29T23:34:40+08:00",
             "releaseNotes": [
                 "修复开局失败：使用 Gemini 系模型（含各类 Gemini 直通渠道）开局时，不再报 \"Requests ending with a model turn are not supported\" 400 错误。开局请求现在会自动把格式预填充转换为 Gemini 兼容的续写指令，世界观与开局剧情可正常生成。",
                 "官网：https://msjh.bacon159.pp.ua/",
@@ -837,7 +837,7 @@ export const RELEASE_INFO = {
         "备用站：https://msjh.bacon.de5.net/"
     ],
     "notes": "修复开局失败：使用 Gemini 系模型（含各类 Gemini 直通渠道）开局时，不再报 \"Requests ending with a model turn are not supported\" 400 错误。开局请求现在会自动把格式预填充转换为 Gemini 兼容的续写指令，世界观与开局剧情可正常生成。\n官网：https://msjh.bacon159.pp.ua/\n备用站：https://msjh.bacon.de5.net/",
-    "releasePublishedAt": "2026-08-29T23:20:00+08:00"
+    "releasePublishedAt": "2026-08-29T23:34:40+08:00"
 } as const;
 
 export type ReleaseInfo = typeof RELEASE_INFO;
