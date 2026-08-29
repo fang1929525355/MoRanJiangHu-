@@ -639,6 +639,33 @@ describe('chatCompletionClient Gemini trailing model turn normalization', () => 
         expect(normalized[0].role).toBe('user');
     });
 
+    it('fires onStreamEnd exactly once with final info when an empty stream attempt is retried', async () => {
+        const emptySse = 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+        const goodSse = 'data: {"choices":[{"delta":{"content":"世界正文"}}]}\n\ndata: [DONE]\n\n';
+        let calls = 0;
+        vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+            calls += 1;
+            return new Response(calls === 1 ? emptySse : goodSse, {
+                status: 200,
+                headers: { 'content-type': 'text/event-stream' }
+            });
+        });
+        const endSpy = vi.fn();
+        const deltaSpy = vi.fn();
+
+        const result = await 请求模型文本(baseConfig, [{ role: 'user', content: 'ping' }], {
+            temperature: 0.7,
+            signal: undefined,
+            streamOptions: { stream: true, onDelta: deltaSpy, onStreamEnd: endSpy },
+            errorDetailLimit: 500
+        });
+
+        expect(result).toContain('世界正文');
+        expect(calls).toBe(2);
+        expect(endSpy).toHaveBeenCalledTimes(1);
+        expect(endSpy.mock.calls[0][0].accumulatedLength).toBeGreaterThan(0);
+    });
+
     it('detects gemini models behind supplier prefixes', () => {
         expect(是否Gemini系模型('gemini-3.6-flash-high')).toBe(true);
         expect(是否Gemini系模型('流式抗截断/gemini-3.1-pro-preview')).toBe(true);

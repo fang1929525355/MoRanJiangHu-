@@ -1672,6 +1672,24 @@ const 请求OpenAI家族文本 = async (
 ): Promise<string> => {
     if (!apiConfig.apiKey) throw new Error('Missing API Key');
     const enableStream = !!streamOptions?.stream;
+    // onStreamEnd 推迟到"逻辑请求成功收尾"时才触发：空结果重试期间只记录结束信息，
+    // 避免调用方先收到 accumulatedLength:0 的结束事件而提前收尾。
+    const callerOnStreamEnd = streamOptions?.onStreamEnd;
+    let deferredStreamEnd: 通用流式结束信息 | null = null;
+    const effectiveStreamOptions: 通用流式选项 = callerOnStreamEnd
+        ? { ...streamOptions, onStreamEnd: (info: 通用流式结束信息) => { deferredStreamEnd = info; } }
+        : streamOptions;
+    const 校验非空结果 = (text: string): string => {
+        if (!text.trim()) {
+            throw new Error('模型返回了空内容（HTTP 200 但未收到任何正文增量）。常见原因：上游安全策略拦截了本次生成、思考型模型未产出正文，或桥接服务瞬时异常。建议重试或更换渠道/模型。');
+        }
+        return text;
+    };
+    const 收尾流式结果 = (text: string): string => {
+        校验非空结果(text);
+        callerOnStreamEnd?.(deferredStreamEnd ?? { sawDone: false, accumulatedLength: text.length });
+        return text;
+    };
     let useStream = enableStream;
     let downgradedFromStream = false;
     let usePrefixMode = requestOptions?.prefixMode === true && (protocol === 'deepseek' || protocol === 'glm');
@@ -1742,15 +1760,15 @@ const 请求OpenAI家族文本 = async (
                 supplier: apiConfig.供应商
             });
             try {
-                return await 解析SSE文本原生(
+                return 收尾流式结果(await 解析SSE文本原生(
                     endpoint,
                     requestHeaders,
                     requestBody,
                     signal,
                     创建OpenAI流增量提取器({ includeReasoning: requestOptions?.includeReasoning }),
                     streamOptions?.onDelta,
-                    streamOptions?.onStreamEnd
-                );
+                    effectiveStreamOptions?.onStreamEnd
+                ));
             } catch (error) {
                 console.warn('[native.stream.failed]', {
                     endpoint,
@@ -1791,15 +1809,15 @@ const 请求OpenAI家族文本 = async (
                 supplier: apiConfig.供应商
             });
             try {
-                return await 解析SSE文本XHR(
+                return 收尾流式结果(await 解析SSE文本XHR(
                     endpoint,
                     requestHeaders,
                     requestBody,
                     signal,
                     创建OpenAI流增量提取器({ includeReasoning: requestOptions?.includeReasoning }),
                     streamOptions?.onDelta,
-                    streamOptions?.onStreamEnd
-                );
+                    effectiveStreamOptions?.onStreamEnd
+                ));
             } catch (error) {
                 写入流式诊断日志('xhr stream failed', {
                     message: 读取错误消息(error)
@@ -1848,7 +1866,7 @@ const 请求OpenAI家族文本 = async (
             const content = json ? 提取OpenAI完整文本(json) : rawText;
             const finalText = (typeof content === 'string' ? content : '').trim();
             非流式回填流式回调(finalText, streamOptions);
-            return finalText;
+            return 校验非空结果(finalText);
         }
 
         const contentType = (response.headers.get('content-type') || '').toLowerCase();
@@ -1868,7 +1886,7 @@ const 请求OpenAI家族文本 = async (
                 supplier: apiConfig.供应商,
                 contentType
             });
-            return await 解析SSE文本(response, 创建OpenAI流增量提取器({ includeReasoning: requestOptions?.includeReasoning }), streamOptions?.onDelta, 'Stream body is empty', streamOptions?.onStreamEnd);
+            return 收尾流式结果(await 解析SSE文本(response, 创建OpenAI流增量提取器({ includeReasoning: requestOptions?.includeReasoning }), streamOptions?.onDelta, 'Stream body is empty', effectiveStreamOptions?.onStreamEnd));
         } catch (error) {
             if (!downgradedFromStream && 错误疑似不支持流式(error)) {
                 useStream = false;
